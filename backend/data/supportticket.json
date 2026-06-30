@@ -1,0 +1,54 @@
+[
+  {
+    "id": "TKT-3021",
+    "userId": "USR-1001",
+    "name": "Abdifatah Hassan",
+    "email": "abdifatah@gmail.com",
+    "subject": "Sariirta midabka Arch Bed",
+    "status": "Open",
+    "lastMessageText": "I need help with my order",
+    "lastMessageAt": "2026-06-30T06:27:32.666Z",
+    "date": "2026-06-22",
+    "createdAt": "2026-06-30T08:27:32.666Z",
+    "updatedAt": "2026-06-30T08:27:32.666Z"
+  },
+  {
+    "id": "TKT-3022",
+    "userId": "USR-1001",
+    "name": "Abdifatah Hassan",
+    "email": "abdifatah@gmail.com",
+    "subject": "Cilad bixinta lacagta",
+    "status": "Open",
+    "lastMessageText": "Payment not confirmed",
+    "lastMessageAt": "2026-06-30T04:27:32.666Z",
+    "date": "2026-06-21",
+    "createdAt": "2026-06-30T08:27:32.669Z",
+    "updatedAt": "2026-06-30T08:27:32.669Z"
+  },
+  {
+    "id": "TKT-3023",
+    "userId": "USR-1002",
+    "name": "Mohamed Nur",
+    "email": "mohamed@gmail.com",
+    "subject": "Hagaha cabirka Kursiga",
+    "status": "Replied",
+    "lastMessageText": "Our support team has replied to your message.",
+    "lastMessageAt": "2026-06-30T02:27:32.666Z",
+    "date": "2026-06-20",
+    "createdAt": "2026-06-30T08:27:32.672Z",
+    "updatedAt": "2026-06-30T08:27:32.673Z"
+  },
+  {
+    "id": "TKT-3024",
+    "userId": "USR-1003",
+    "name": "Amina Yusuf",
+    "email": "amina@gmail.com",
+    "subject": "Address Change",
+    "status": "Closed",
+    "lastMessageText": "Change delivery address",
+    "lastMessageAt": "2026-06-30T00:27:32.666Z",
+    "date": "2026-06-19",
+    "createdAt": "2026-06-30T08:27:32.674Z",
+    "updatedAt": "2026-06-30T08:27:32.674Z"
+  }
+]

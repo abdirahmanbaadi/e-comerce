@@ -1,0 +1,67 @@
+[
+  {
+    "id": "USR-001",
+    "firstName": "Abdirahman",
+    "lastName": "Hassan",
+    "email": "admin@gmail.com",
+    "phone": "+252615000000",
+    "address": "Mogadishu, Somalia",
+    "password": "$2a$10$fxFwI6uSmJK.WucZc3Z5luZcXD7RgRp16KET/igs3JS924gVlOxsG",
+    "role": "admin",
+    "avatar": "https://ui-avatars.com/api/?name=Abdirahman&background=073D35&color=ffffff&bold=true&size=128",
+    "createdAt": "2026-06-30T08:27:31.759Z",
+    "updatedAt": "2026-06-30T08:27:31.760Z"
+  },
+  {
+    "id": "USR-1001",
+    "firstName": "Abdifatah",
+    "lastName": "Hassan",
+    "email": "abdifatah@gmail.com",
+    "phone": "0612345678",
+    "address": "Hodan, Mogadishu",
+    "password": "$2a$10$PTP1/ZwdMjLixcwOfreyXO6J8OTm50i9BsvINkyK/26H0UCly2VHK",
+    "role": "user",
+    "avatar": "",
+    "createdAt": "2026-06-30T08:27:32.061Z",
+    "updatedAt": "2026-06-30T08:27:32.061Z"
+  },
+  {
+    "id": "USR-1002",
+    "firstName": "Mohamed",
+    "lastName": "Nur",
+    "email": "mohamed@gmail.com",
+    "phone": "0611112222",
+    "address": "Wadajir, Mogadishu",
+    "password": "$2a$10$Xobk5/s1mmdYNOfsO/FtKeU0ikY.4CVXs37LyYZB0KyozXTxjKTdO",
+    "role": "user",
+    "avatar": "",
+    "createdAt": "2026-06-30T08:27:32.311Z",
+    "updatedAt": "2026-06-30T08:27:32.311Z"
+  },
+  {
+    "id": "USR-1003",
+    "firstName": "Amina",
+    "lastName": "Yusuf",
+    "email": "amina@gmail.com",
+    "phone": "0613334444",
+    "address": "Karaan, Mogadishu",
+    "password": "$2a$10$E6HSQKWu3tA5/r3mJLc3a.5PSNEAO7rbvgU7uKbFJK8xKRsk/9aQm",
+    "role": "user",
+    "avatar": "",
+    "createdAt": "2026-06-30T08:27:32.476Z",
+    "updatedAt": "2026-06-30T08:27:32.476Z"
+  },
+  {
+    "id": "USR-2001",
+    "firstName": "Darawal",
+    "lastName": "Ali",
+    "email": "driver@gmail.com",
+    "phone": "0619988776",
+    "address": "Hamarweyne, Mogadishu",
+    "password": "$2a$10$AvZxlTpgpEQK1WX8gTeuKuYILBuzTbVfWGuZA5QTeqw2rs5vnuefu",
+    "role": "delivery",
+    "avatar": "",
+    "createdAt": "2026-06-30T08:27:32.633Z",
+    "updatedAt": "2026-06-30T08:27:32.633Z"
+  }
+]

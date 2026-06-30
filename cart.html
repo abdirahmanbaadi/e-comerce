@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="so">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopping Cart - Mogadishu Modern Furniture</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css?v=21">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --nav-bg: #EAE6DC;
+            --gold: #D8A128;
+            --teal: #0F6F64;
+            --deep-green: #073D35;
+            --btn-brown: #C97D55;
+            --light-bg: #FAF8F2;
+            --soft-bg: #F4EFE6;
+            --danger: #B42318;
+            --text-blue: #0F2A4A;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Manrope', sans-serif;
+            background: var(--light-bg);
+            color: #111111;
+            overflow-x: hidden;
+        }
+
+        .main-navbar {
+            background: var(--nav-bg);
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.07);
+            box-shadow: 0 3px 18px rgba(0,0,0,0.04);
+        }
+
+        .brand-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+
+        .brand-logo-mark {
+            position: relative;
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .brand-logo-frame {
+            position: absolute;
+            inset: 0;
+            border: 2px solid var(--gold);
+            border-radius: 9px;
+            transform: rotate(45deg);
+        }
+
+        .brand-logo-inner {
+            position: relative;
+            z-index: 2;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--gold);
+            letter-spacing: -1px;
+        }
+
+        .brand-logo-divider {
+            width: 1px;
+            height: 34px;
+            background: var(--gold);
+            opacity: 0.85;
+        }
+
+        .brand-logo-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.05;
+        }
+
+        .brand-logo-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.45rem;
+            font-weight: 700;
+            color: var(--deep-green);
+        }
+
+        .brand-logo-subtitle {
+            font-size: 0.52rem;
+            font-weight: 800;
+            color: var(--deep-green);
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+            margin-top: 3px;
+        }
+
+        .navbar-nav .nav-link {
+            color: #111111 !important;
+            font-size: 0.86rem;
+            font-weight: 700;
+            margin: 0 12px;
+            position: relative;
+            padding: 6px 0 !important;
+        }
+
+        .navbar-nav .nav-link::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: -4px;
+            width: 0;
+            height: 2px;
+            background: var(--gold);
+            transition: 0.3s ease;
+        }
+
+        .navbar-nav .nav-link:hover,
+        .navbar-nav .nav-link.active {
+            color: var(--gold) !important;
+        }
+
+        .navbar-nav .nav-link:hover::after,
+        .navbar-nav .nav-link.active::after {
+            width: 100%;
+        }
+
+        .search-wrapper {
+            margin-left: 20px;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .search-wrapper i {
+            position: absolute;
+            left: 12px;
+            color: #555555;
+            font-size: 0.82rem;
+            pointer-events: none;
+        }
+
+        .search-input {
+            border: 1px solid rgba(0,0,0,0.15);
+            background-color: rgba(255,255,255,0.45);
+            padding: 6px 14px 6px 33px;
+            border-radius: 22px;
+            font-size: 0.8rem;
+            width: 132px;
+            color: #111111;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            width: 175px;
+            border-color: var(--gold);
+            background-color: #ffffff;
+            box-shadow: 0 4px 14px rgba(216,161,40,0.14);
+        }
+
+        .nav-icons {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-icons-mid {
+            display: flex;
+            align-items: center;
+        }
+
+        .nav-icon-link {
+            color: #111111;
+            font-size: 1.08rem;
+            text-decoration: none;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+        }
+
+        .nav-icon-link:hover {
+            color: var(--gold);
+            transform: translateY(-2px) scale(1.18);
+        }
+
+        .profile-icon-link {
+            color: #111111;
+            font-size: 1.08rem;
+            text-decoration: none;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+        }
+
+        .profile-icon-link:hover {
+            color: var(--gold);
+            transform: translateY(-2px) scale(1.18);
+        }
+
+        .cart-count {
+            position: absolute;
+            top: -9px;
+            right: -10px;
+            background: var(--deep-green);
+            color: #ffffff;
+            font-size: 0.62rem;
+            font-weight: 800;
+            width: 17px;
+            height: 17px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .profile-letter {
+            width: 29px;
+            height: 29px;
+            background: var(--deep-green);
+            color: #ffffff;
+            border-radius: 50%;
+            font-size: 0.84rem;
+            font-weight: 900;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            text-transform: uppercase;
+            box-shadow: 0 4px 12px rgba(7,61,53,0.22);
+            margin: 0;
+        }
+
+        .cart-hero {
+            padding: 62px 0 42px;
+            background:
+                radial-gradient(circle at top left, rgba(216,161,40,0.13), transparent 34%),
+                linear-gradient(135deg, #FAF8F2 0%, #F4EFE6 100%);
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            text-align: center;
+        }
+
+        .cart-label {
+            display: inline-block;
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 10px;
+        }
+
+        .cart-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 3.15rem;
+            font-weight: 700;
+            color: var(--deep-green);
+            margin-bottom: 10px;
+        }
+
+        .cart-desc {
+            max-width: 760px;
+            margin: 0 auto;
+            color: #5f5f5f;
+            font-size: 1rem;
+            line-height: 1.85;
+            font-weight: 500;
+        }
+
+        .cart-section {
+            padding: 48px 0 80px;
+        }
+
+        .cart-layout {
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            gap: 28px;
+            align-items: start;
+        }
+
+        .cart-box,
+        .summary-box,
+        .saved-box {
+            background: #ffffff;
+            border-radius: 18px;
+            border: 1px solid rgba(0,0,0,0.06);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.07);
+        }
+
+        .cart-box {
+            overflow: hidden;
+        }
+
+        .cart-table-head {
+            display: grid;
+            grid-template-columns: 1.4fr 0.6fr 0.7fr 0.6fr 35px;
+            gap: 14px;
+            background: var(--teal);
+            color: #ffffff;
+            padding: 16px 20px;
+            font-size: 0.84rem;
+            font-weight: 900;
+            letter-spacing: 0.2px;
+        }
+
+        .cart-item {
+            display: grid;
+            grid-template-columns: 1.4fr 0.6fr 0.7fr 0.6fr 35px;
+            gap: 14px;
+            align-items: center;
+            padding: 18px 20px;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+        }
+
+        .cart-item:last-child {
+            border-bottom: none;
+        }
+
+        .product-cell {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            min-width: 0;
+        }
+
+        .cart-img {
+            width: 82px;
+            height: 72px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #f4f4f4;
+            flex-shrink: 0;
+        }
+
+        .cart-img img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .cart-name {
+            font-size: 0.95rem;
+            font-weight: 900;
+            color: var(--text-blue);
+            margin-bottom: 4px;
+            line-height: 1.35;
+        }
+
+        .cart-meta {
+            color: #777777;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
+        .price-text {
+            color: var(--btn-brown);
+            font-weight: 900;
+            font-size: 0.93rem;
+        }
+
+        .subtotal-text {
+            color: #111111;
+            font-weight: 900;
+            font-size: 0.93rem;
+        }
+
+        .qty-box {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid rgba(0,0,0,0.12);
+            border-radius: 22px;
+            overflow: hidden;
+            background: #ffffff;
+            height: 36px;
+        }
+
+        .qty-box button {
+            width: 34px;
+            height: 36px;
+            border: none;
+            background: #ffffff;
+            color: var(--deep-green);
+            font-weight: 900;
+        }
+
+        .qty-box span {
+            min-width: 34px;
+            text-align: center;
+            font-weight: 900;
+            font-size: 0.86rem;
+            border-left: 1px solid rgba(0,0,0,0.08);
+            border-right: 1px solid rgba(0,0,0,0.08);
+            height: 36px;
+            line-height: 36px;
+        }
+
+        .remove-btn {
+            border: none;
+            background: transparent;
+            color: var(--danger);
+            font-size: 1rem;
+        }
+
+        .cart-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 18px 20px;
+            border-top: 1px solid rgba(0,0,0,0.08);
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .coupon-wrap {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .coupon-input {
+            border: 1px solid rgba(0,0,0,0.13);
+            border-radius: 24px;
+            padding: 11px 16px;
+            font-size: 0.86rem;
+            min-width: 190px;
+            outline: none;
+        }
+
+        .coupon-btn,
+        .clear-btn,
+        .save-btn,
+        .move-btn,
+        .add-cart-btn,
+        .shop-small-btn {
+            border: none;
+            border-radius: 24px;
+            padding: 10px 16px;
+            font-size: 0.8rem;
+            font-weight: 900;
+            white-space: nowrap;
+            text-decoration: none;
+            transition: 0.25s ease;
+        }
+
+        .coupon-btn,
+        .move-btn,
+        .add-cart-btn {
+            background: var(--deep-green);
+            color: #ffffff;
+        }
+
+        .coupon-btn:hover,
+        .move-btn:hover,
+        .add-cart-btn:hover {
+            background: #052b25;
+            color: #ffffff;
+        }
+
+        .clear-btn {
+            background: #ffffff;
+            color: var(--danger);
+            text-decoration: underline;
+        }
+
+        .save-btn {
+            background: #F7F2E8;
+            color: var(--deep-green);
+        }
+
+        .shop-small-btn {
+            background: #ffffff;
+            color: var(--deep-green);
+            border: 1.5px solid var(--deep-green);
+        }
+
+        .shop-small-btn:hover {
+            background: var(--deep-green);
+            color: #ffffff;
+        }
+
+        .summary-box {
+            padding: 24px;
+            position: sticky;
+            top: 82px;
+        }
+
+        .summary-title,
+        .saved-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.8rem;
+            color: var(--deep-green);
+            font-weight: 700;
+            margin-bottom: 18px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 11px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+            color: #666666;
+            font-size: 0.9rem;
+            font-weight: 800;
+        }
+
+        .summary-row:last-child {
+            border-bottom: none;
+        }
+
+        .summary-total {
+            color: #111111;
+            font-size: 1.16rem;
+            font-weight: 900;
+        }
+
+        .district-box {
+            background: var(--soft-bg);
+            border-radius: 14px;
+            padding: 14px;
+            margin-top: 16px;
+        }
+
+        .district-box label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 900;
+            color: var(--deep-green);
+            margin-bottom: 8px;
+        }
+
+        .district-box select {
+            width: 100%;
+            border: 1px solid rgba(0,0,0,0.13);
+            border-radius: 10px;
+            padding: 10px 12px;
+            outline: none;
+            font-size: 0.86rem;
+        }
+
+        .checkout-btn {
+            width: 100%;
+            background: var(--deep-green);
+            color: #ffffff;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            border-radius: 24px;
+            padding: 13px 18px;
+            font-size: 0.9rem;
+            font-weight: 900;
+            margin-top: 18px;
+            transition: 0.25s ease;
+        }
+
+        .checkout-btn:hover {
+            background: #052b25;
+            color: #ffffff;
+            transform: translateY(-2px);
+        }
+
+        .continue-btn {
+            width: 100%;
+            background: #ffffff;
+            color: var(--deep-green);
+            text-decoration: none;
+            border: 1.5px solid var(--deep-green);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            border-radius: 24px;
+            padding: 12px 18px;
+            font-size: 0.9rem;
+            font-weight: 900;
+            margin-top: 10px;
+            transition: 0.25s ease;
+        }
+
+        .continue-btn:hover {
+            background: var(--deep-green);
+            color: #ffffff;
+        }
+
+        .note-box {
+            background: #F7F2E8;
+            border-left: 4px solid var(--gold);
+            padding: 12px 14px;
+            border-radius: 10px;
+            font-size: 0.83rem;
+            color: #555555;
+            font-weight: 700;
+            line-height: 1.6;
+            margin-top: 15px;
+        }
+
+        .saved-box {
+            padding: 22px;
+            margin-top: 24px;
+        }
+
+        .saved-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+        }
+
+        .saved-item:last-child {
+            border-bottom: none;
+        }
+
+        .saved-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .saved-img {
+            width: 70px;
+            height: 60px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #f4f4f4;
+            flex-shrink: 0;
+        }
+
+        .saved-img img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .saved-name {
+            font-size: 0.9rem;
+            font-weight: 900;
+            color: var(--text-blue);
+        }
+
+        .saved-price {
+            color: var(--btn-brown);
+            font-size: 0.82rem;
+            font-weight: 900;
+        }
+
+        .saved-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .empty-box {
+            display: none;
+            text-align: center;
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 50px 20px;
+            border: 1px solid rgba(0,0,0,0.06);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.07);
+        }
+
+        .empty-box i {
+            font-size: 3.2rem;
+            color: var(--gold);
+            margin-bottom: 16px;
+        }
+
+        .empty-box h3 {
+            font-family: 'Cormorant Garamond', serif;
+            color: var(--deep-green);
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .toast-box {
+            position: fixed;
+            right: 28px;
+            bottom: 28px;
+            background: var(--deep-green);
+            color: #ffffff;
+            padding: 13px 22px;
+            border-radius: 9px;
+            font-size: 0.9rem;
+            font-weight: 800;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.22);
+            z-index: 3000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: 0.35s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toast-box.show-toast {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .auth-modal .modal-dialog {
+            max-width: 430px;
+        }
+
+        .auth-modal .modal-content {
+            border: none;
+            border-radius: 22px;
+            background: linear-gradient(135deg, #E8F5F1 0%, #F8F5EE 100%);
+            box-shadow: 0 25px 70px rgba(0,0,0,0.22);
+            overflow: hidden;
+        }
+
+        .auth-card {
+            padding: 30px;
+        }
+
+        .auth-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .auth-logo-mark {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-logo-frame {
+            position: absolute;
+            inset: 0;
+            border: 2px solid var(--gold);
+            border-radius: 10px;
+            transform: rotate(45deg);
+        }
+
+        .auth-logo-inner {
+            position: relative;
+            z-index: 2;
+            font-family: 'Cormorant Garamond', serif;
+            color: var(--gold);
+            font-size: 1.35rem;
+            font-weight: 700;
+        }
+
+        .auth-logo-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.05;
+        }
+
+        .auth-logo-title {
+            font-family: 'Cormorant Garamond', serif;
+            color: var(--deep-green);
+            font-size: 1.65rem;
+            font-weight: 700;
+        }
+
+        .auth-logo-sub {
+            color: var(--gold);
+            font-size: 0.62rem;
+            font-weight: 900;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+
+        .auth-title {
+            font-family: 'Cormorant Garamond', serif;
+            color: var(--deep-green);
+            font-size: 2.3rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 4px;
+        }
+
+        .auth-subtitle {
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 22px;
+        }
+
+        .auth-label {
+            font-size: 0.82rem;
+            color: #1f2937;
+            font-weight: 900;
+            margin-bottom: 7px;
+        }
+
+        .auth-input-box {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .auth-input-box i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #7b8794;
+            font-size: 0.9rem;
+        }
+
+        .auth-input-box input {
+            width: 100%;
+            height: 47px;
+            border: 1px solid rgba(0,0,0,0.12);
+            border-radius: 11px;
+            background: #ffffff;
+            padding: 0 44px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            outline: none;
+        }
+
+        .auth-input-box input:focus {
+            border-color: var(--deep-green);
+            box-shadow: 0 0 0 0.18rem rgba(7,61,53,0.10);
+        }
+
+        .password-toggle {
+            position: absolute !important;
+            right: 15px !important;
+            left: auto !important;
+            cursor: pointer;
+        }
+
+        .auth-check {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin: 4px 0 17px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: #45515f;
+        }
+
+        .auth-check input {
+            accent-color: var(--deep-green);
+        }
+
+        .auth-check span {
+            color: var(--deep-green);
+        }
+
+        .auth-submit {
+            width: 100%;
+            height: 48px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #073D35 0%, #315C43 100%);
+            color: #ffffff;
+            font-size: 0.9rem;
+            font-weight: 900;
+            transition: 0.25s ease;
+        }
+
+        .auth-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(7,61,53,0.22);
+        }
+
+        .auth-bottom {
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.82rem;
+            font-weight: 800;
+            margin-top: 15px;
+        }
+
+        .auth-bottom a {
+            color: var(--deep-green);
+            text-decoration: none;
+            font-weight: 900;
+        }
+
+        .auth-error {
+            display: none;
+            color: #B42318;
+            font-size: 0.78rem;
+            font-weight: 800;
+            margin-top: -8px;
+            margin-bottom: 10px;
+        }
+
+        .auth-success {
+            display: none;
+            background: #E8F7EF;
+            color: #087443;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 0.82rem;
+            font-weight: 900;
+            margin-bottom: 14px;
+            text-align: center;
+        }
+
+        @media (max-width: 991px) {
+            .cart-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .summary-box {
+                position: static;
+            }
+
+            .search-wrapper {
+                margin-left: 0;
+                margin-top: 16px;
+                width: 100%;
+            }
+
+            .search-input,
+            .search-input:focus {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .cart-table-head {
+                display: none;
+            }
+
+            .cart-item {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .product-cell {
+                align-items: flex-start;
+            }
+
+            .cart-title {
+                font-size: 2.35rem;
+            }
+
+            .cart-actions {
+                align-items: stretch;
+            }
+
+            .coupon-wrap,
+            .coupon-input,
+            .coupon-btn,
+            .clear-btn {
+                width: 100%;
+            }
+
+            .saved-item {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .saved-actions {
+                justify-content: flex-start;
+            }
+
+            .brand-logo-title {
+                font-size: 1.35rem;
+            }
+
+            .brand-logo-subtitle {
+                font-size: 0.48rem;
+                letter-spacing: 1.5px;
+            }
+
+            .brand-logo-mark {
+                width: 35px;
+                height: 35px;
+            }
+
+            .brand-logo-inner {
+                font-size: 1rem;
+            }
+
+            .brand-logo-divider {
+                height: 31px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<nav class="navbar navbar-expand-lg main-navbar">
+    <div class="container">
+        <a class="brand-logo" href="index.html">
+            <div class="brand-logo-mark">
+                <span class="brand-logo-frame"></span>
+                <span class="brand-logo-inner">MF</span>
+            </div>
+
+            <div class="brand-logo-divider"></div>
+
+            <div class="brand-logo-text">
+                <span class="brand-logo-title">Mogadishu</span>
+                <span class="brand-logo-subtitle">Modern Furniture</span>
+            </div>
+        </a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse justify-content-center" id="mainNavbar">
+            <ul class="navbar-nav align-items-center">
+                <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
+                <li class="nav-item"><a class="nav-link" href="products.html">Shop</a></li>
+                <li class="nav-item"><a class="nav-link" href="track-order.html">Track Order</a></li>
+                <li class="nav-item"><a class="nav-link" href="#">About Us</a></li>
+                <li class="nav-item"><a class="nav-link" href="#">Contact</a></li>
+            </ul>
+
+        </div>
+
+        <div class="nav-icons d-none d-lg-flex">
+            <a href="#" class="nav-icon-link" title="Wishlist"><i class="fa-regular fa-heart"></i></a>
+            <a href="cart.html" class="nav-icon-link" title="Shopping Cart" style="color: var(--gold);">
+                <i class="fa-solid fa-cart-shopping"></i>
+                <span class="cart-count" id="cartCount">0</span>
+            </a>
+            <a href="login.html" id="userAccountBtn" title="User Account" class="profile-icon-link">
+                <i class="fa-regular fa-user" id="userIcon"></i>
+                <span class="profile-letter" id="profileLetter">U</span>
+            </a>
+        </div>
+    </div>
+</nav>
+
+<section class="cart-hero">
+    <div class="container">
+        <span class="cart-label">Shopping Cart</span>
+
+        <h1 class="cart-title">Review Your Furniture Cart</h1>
+
+        <p class="cart-desc">
+            Review your selected furniture, adjust your order with ease, save your favorite pieces for later,
+            and enjoy a smooth checkout experience designed for modern homes in Mogadishu.
+        </p>
+    </div>
+</section>
+
+<section class="cart-section">
+    <div class="container">
+
+        <div class="cart-layout" id="cartLayout">
+
+            <div>
+                <div class="cart-box">
+                    <div class="cart-table-head">
+                        <div>Product</div>
+                        <div>Price</div>
+                        <div>Quantity</div>
+                        <div>Subtotal</div>
+                        <div></div>
+                    </div>
+
+                    <div id="cartItemsContainer"></div>
+
+                    <div class="cart-actions">
+                        <div class="coupon-wrap">
+                            <input type="text" id="couponInput" class="coupon-input" placeholder="Coupon Code">
+                            <button class="coupon-btn" onclick="applyCoupon()">Apply Coupon</button>
+                        </div>
+
+                        <button class="clear-btn" onclick="clearCart()">Clear Shopping Cart</button>
+                    </div>
+                </div>
+
+                <div class="saved-box">
+                    <h2 class="saved-title">Saved for Later</h2>
+                    <div id="savedItemsContainer"></div>
+                </div>
+            </div>
+
+            <aside class="summary-box">
+                <h2 class="summary-title">Order Summary</h2>
+
+                <div class="summary-row">
+                    <span>Items</span>
+                    <span id="itemsCountText">0</span>
+                </div>
+
+                <div class="summary-row">
+                    <span>Sub Total</span>
+                    <span id="subtotalText">$0.00</span>
+                </div>
+
+                <div class="summary-row">
+                    <span>Shipping</span>
+                    <span id="deliveryFeeText">$0.00</span>
+                </div>
+
+                <div class="summary-row">
+                    <span>Coupon Discount</span>
+                    <span id="discountText">-$0.00</span>
+                </div>
+
+                <div class="summary-row">
+                    <span class="summary-total">Total</span>
+                    <span class="summary-total" id="totalText">$0.00</span>
+                </div>
+
+                <div class="district-box">
+                    <label>Delivery District</label>
+                    <select id="districtSelect" onchange="updateTotals()">
+                        <option value="0">Select district</option>
+                        <option value="5">Hodan - $5.00</option>
+                        <option value="6">Wadajir - $6.00</option>
+                        <option value="7">Karaan - $7.00</option>
+                        <option value="5">Hamarweyne - $5.00</option>
+                        <option value="8">Dayniile - $8.00</option>
+                        <option value="6">Yaqshid - $6.00</option>
+                    </select>
+                </div>
+
+                <a href="checkout.html" class="checkout-btn" id="checkoutBtn">
+                    Proceed to Checkout
+                    <i class="fa-solid fa-arrow-right"></i>
+                </a>
+
+                <a href="products.html" class="continue-btn">
+                    <i class="fa-solid fa-bag-shopping"></i>
+                    Continue Shopping
+                </a>
+
+                <div class="note-box">
+                    You must create an account or login before completing checkout.
+                </div>
+            </aside>
+
+        </div>
+
+        <div class="empty-box" id="emptyCartBox">
+            <i class="fa-solid fa-cart-shopping"></i>
+            <h3>Your cart is empty</h3>
+            <p>Add furniture items from the shop page to continue.</p>
+            <a href="products.html" class="checkout-btn" style="max-width:240px;margin:auto;">
+                Go to Shop
+            </a>
+        </div>
+
+    </div>
+</section>
+
+
+
+<div id="toastBox" class="toast-box">
+    <i class="fa-solid fa-circle-check"></i>
+    <span id="toastMessage">Done</span>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/auth.js?v=17"></script>
+<script src="js/wishlist-modal.js?v=1"></script>
+
+<script>
+    let discountAmount = Number(localStorage.getItem("cartDiscount")) || 0;
+
+    const defaultCartItems = [
+        {
+            id: 1,
+            title: "Bloom Accent Chair Set",
+            category: "Chair / Linen Fabric",
+            price: 0.01,
+            quantity: 1,
+            image: "chair/bloom-round-accent-chair-set-main.jpeg.png"
+        },
+        {
+            id: 3,
+            title: "Blush Velvet Arch Bed",
+            category: "Bedroom / Velvet",
+            price: 0.01,
+            quantity: 1,
+            image: "bedroom/blush-velvet-arch-bed-main.jpeg.jpeg"
+        },
+        {
+            id: 10,
+            title: "Walnut Sage Dining Set",
+            category: "Dining Room / Wood",
+            price: 0.01,
+            quantity: 1,
+            image: "dining-room/walnut-sage-dining-set-main.jpeg.jpeg"
+        }
+    ];
+
+    let cartItems = JSON.parse(localStorage.getItem("cartItems")) || defaultCartItems;
+    let savedItems = JSON.parse(localStorage.getItem("savedItems")) || [];
+
+    const cartItemsContainer = document.getElementById("cartItemsContainer");
+    const savedItemsContainer = document.getElementById("savedItemsContainer");
+    const cartLayout = document.getElementById("cartLayout");
+    const emptyCartBox = document.getElementById("emptyCartBox");
+    const cartCount = document.getElementById("cartCount");
+
+    function formatMoney(value) {
+        return "$" + Number(value).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function saveStorage() {
+        localStorage.setItem("cartItems", JSON.stringify(cartItems));
+        localStorage.setItem("savedItems", JSON.stringify(savedItems));
+    }
+
+    function renderCart() {
+        cartItemsContainer.innerHTML = "";
+
+        if (cartItems.length === 0) {
+            cartLayout.style.display = "none";
+            emptyCartBox.style.display = "block";
+        } else {
+            cartLayout.style.display = "grid";
+            emptyCartBox.style.display = "none";
+        }
+
+        cartItems.forEach(item => {
+            const itemSubtotal = item.price * item.quantity;
+
+            cartItemsContainer.innerHTML += `
+                <div class="cart-item">
+                    <div class="product-cell">
+                        <div class="cart-img">
+                            <img src="${item.image}" alt="${item.title}">
+                        </div>
+
+                        <div>
+                            <div class="cart-name">${item.title}</div>
+                            <div class="cart-meta">${item.category}</div>
+
+                            <button class="save-btn mt-2" onclick="saveForLater(${item.id})">
+                                <i class="fa-regular fa-bookmark me-1"></i>
+                                Save for Later
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="price-text">${formatMoney(item.price)}</div>
+
+                    <div>
+                        <div class="qty-box">
+                            <button onclick="updateQuantity(${item.id}, -1)">−</button>
+                            <span>${item.quantity}</span>
+                            <button onclick="updateQuantity(${item.id}, 1)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="subtotal-text">${formatMoney(itemSubtotal)}</div>
+
+                    <button class="remove-btn" onclick="removeItem(${item.id})">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            `;
+        });
+
+        renderSavedItems();
+        updateTotals();
+        saveStorage();
+    }
+
+    function renderSavedItems() {
+        savedItemsContainer.innerHTML = "";
+
+        if (savedItems.length === 0) {
+            savedItemsContainer.innerHTML = `
+                <p style="color:#777;font-weight:700;margin:0;">
+                    No saved items yet.
+                </p>
+            `;
+            return;
+        }
+
+        savedItems.forEach(item => {
+            savedItemsContainer.innerHTML += `
+                <div class="saved-item">
+                    <div class="saved-left">
+                        <div class="saved-img">
+                            <img src="${item.image}" alt="${item.title}">
+                        </div>
+
+                        <div>
+                            <div class="saved-name">${item.title}</div>
+                            <div class="saved-price">${formatMoney(item.price)}</div>
+                        </div>
+                    </div>
+
+                    <div class="saved-actions">
+                        <button class="add-cart-btn" onclick="moveToCart(${item.id})">
+                            <i class="fa-solid fa-cart-plus me-1"></i>
+                            Add to Cart
+                        </button>
+
+                        <a href="products.html" class="shop-small-btn">
+                            <i class="fa-solid fa-bag-shopping me-1"></i>
+                            Shop More
+                        </a>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function updateQuantity(id, change) {
+        const item = cartItems.find(product => product.id === id);
+
+        if (!item) return;
+
+        item.quantity += change;
+
+        if (item.quantity < 1) {
+            item.quantity = 1;
+        }
+
+        renderCart();
+        showToast("Cart quantity updated");
+    }
+
+    function removeItem(id) {
+        cartItems = cartItems.filter(item => item.id !== id);
+        renderCart();
+        showToast("Item removed from cart");
+    }
+
+    function saveForLater(id) {
+        const item = cartItems.find(product => product.id === id);
+
+        if (!item) return;
+
+        const alreadySaved = savedItems.some(product => product.id === id);
+
+        if (!alreadySaved) {
+            savedItems.push(item);
+        }
+
+        cartItems = cartItems.filter(product => product.id !== id);
+
+        renderCart();
+        showToast("Item saved for later");
+    }
+
+    function moveToCart(id) {
+        const item = savedItems.find(product => product.id === id);
+
+        if (!item) return;
+
+        const existingCartItem = cartItems.find(product => product.id === id);
+
+        if (existingCartItem) {
+            existingCartItem.quantity += item.quantity;
+        } else {
+            cartItems.push(item);
+        }
+
+        savedItems = savedItems.filter(product => product.id !== id);
+
+        renderCart();
+        showToast("Item added back to cart");
+    }
+
+    function clearCart() {
+        cartItems = [];
+        discountAmount = 0;
+        document.getElementById("couponInput").value = "";
+        localStorage.setItem("cartDiscount", 0);
+        renderCart();
+        showToast("Shopping cart cleared");
+    }
+
+    function applyCoupon() {
+        const couponValue = document.getElementById("couponInput").value.trim().toUpperCase();
+
+        if (couponValue === "MMF10") {
+            discountAmount = 10;
+            localStorage.setItem("cartDiscount", discountAmount);
+            showToast("Coupon applied: $10 discount");
+        } else if (couponValue === "") {
+            discountAmount = 0;
+            localStorage.setItem("cartDiscount", discountAmount);
+            showToast("Enter coupon code");
+        } else {
+            discountAmount = 0;
+            localStorage.setItem("cartDiscount", discountAmount);
+            showToast("Invalid coupon code");
+        }
+
+        updateTotals();
+    }
+
+    function updateTotals() {
+        const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const itemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+        const selectedDeliveryFee = Number(document.getElementById("districtSelect").value || 0);
+        const deliveryFee = cartItems.length > 0 ? selectedDeliveryFee : 0;
+        const discount = cartItems.length > 0 ? discountAmount : 0;
+        const total = Math.max(subtotal + deliveryFee - discount, 0);
+
+        document.getElementById("itemsCountText").innerText = itemCount;
+        document.getElementById("subtotalText").innerText = formatMoney(subtotal);
+        document.getElementById("deliveryFeeText").innerText = formatMoney(deliveryFee);
+        document.getElementById("discountText").innerText = "-" + formatMoney(discount);
+        document.getElementById("totalText").innerText = formatMoney(total);
+        cartCount.innerText = itemCount;
+
+        localStorage.setItem("cartSubtotal", subtotal);
+        localStorage.setItem("cartDiscount", discount);
+        localStorage.setItem("cartDeliveryFee", deliveryFee);
+        localStorage.setItem("cartTotal", total);
+        localStorage.setItem("cartItems", JSON.stringify(cartItems));
+    }
+
+    function showToast(message) {
+        const toast = document.getElementById("toastBox");
+        document.getElementById("toastMessage").innerText = message;
+
+        toast.classList.add("show-toast");
+
+        setTimeout(() => {
+            toast.classList.remove("show-toast");
+        }, 2300);
+    }
+
+    renderCart();
+</script>
+
+<!-- Register Modal -->
+<div class="modal fade auth-modal" id="registerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="position: absolute; right: 20px; top: 20px; z-index: 10;"></button>
+            <div class="modal-body p-0">
+                <div class="register-card" style="box-shadow: none; border: none; margin: 0; background: transparent;">
+                    <div class="brand-logo">
+                        <div class="brand-logo-mark">
+                            <span class="brand-logo-frame"></span>
+                            <span class="brand-logo-inner">MF</span>
+                        </div>
+                        <div class="brand-divider"></div>
+                        <div class="brand-text">
+                            <span class="brand-title">Mogadishu</span>
+                            <span class="brand-subtitle">Modern Furniture</span>
+                        </div>
+                    </div>
+
+                    <h1 class="page-title">Create Account</h1>
+                    <p class="page-subtitle">Register your new account</p>
+
+                    <div id="alertContainer"></div>
+
+                    <form id="registerForm">
+                        <div class="form-field">
+                            <i class="fa-regular fa-user field-icon"></i>
+                            <input type="text" id="regFirstName" class="auth-input" placeholder="First Name" required>
+                        </div>
+                        <div class="form-field">
+                            <i class="fa-regular fa-user field-icon"></i>
+                            <input type="text" id="regLastName" class="auth-input" placeholder="Last Name" required>
+                        </div>
+                        <div class="form-field">
+                            <i class="fa-regular fa-envelope field-icon"></i>
+                            <input type="email" id="regEmail" class="auth-input" placeholder="Gmail" required>
+                        </div>
+                        <div class="form-field">
+                            <div class="phone-input-wrapper">
+                                <select id="regCountryCode" class="country-select">
+                                    <option value="+252" selected>🇸🇴 +252</option>
+                                    <option value="+254">🇰🇪 +254</option>
+                                    <option value="+251">🇪🇹 +251</option>
+                                    <option value="+253">🇩🇯 +253</option>
+                                    <option value="+1">🇺🇸 +1</option>
+                                    <option value="+44">🇬🇧 +44</option>
+                                    <option value="+90">🇹🇷 +90</option>
+                                </select>
+                                <input type="tel" id="regPhone" class="auth-input phone-input" placeholder="Phone Number" required>
+                            </div>
+                        </div>
+                        <div class="form-field">
+                            <i class="fa-solid fa-lock field-icon"></i>
+                            <input type="password" id="regPassword" class="auth-input" placeholder="Password" required>
+                            <i class="fa-solid fa-eye-slash pass-toggle password-toggle-icon" onclick="togglePasswordVisibility('regPassword')"></i>
+                        </div>
+                        <div class="form-field">
+                            <i class="fa-solid fa-lock field-icon"></i>
+                            <input type="password" id="regConfirmPassword" class="auth-input" placeholder="Confirm Password" required>
+                            <i class="fa-solid fa-eye-slash pass-toggle password-toggle-icon" onclick="togglePasswordVisibility('regConfirmPassword')"></i>
+                        </div>
+                        <label class="terms-row">
+                            <input type="checkbox" id="termsCheck" required>
+                            <span>I agree to the <a href="#">Terms & Conditions</a></span>
+                        </label>
+                        <button type="submit" class="register-btn">Register</button>
+                    </form>
+                    <div class="login-link">
+                        Already have an account? <a href="#" id="openLoginModalBtn">Login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Login Modal -->
+<div class="modal fade auth-modal" id="loginModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="position: absolute; right: 20px; top: 20px; z-index: 10;"></button>
+            <div class="modal-body p-0">
+                <div class="login-card" style="box-shadow: none; border: none; margin: 0; background: transparent;">
+                    <div class="brand-logo">
+                        <div class="brand-logo-mark">
+                            <span class="brand-logo-frame"></span>
+                            <span class="brand-logo-inner">MF</span>
+                        </div>
+                        <div class="brand-divider"></div>
+                        <div class="brand-text">
+                            <span class="brand-title">Mogadishu</span>
+                            <span class="brand-subtitle">Modern Furniture</span>
+                        </div>
+                    </div>
+
+                    <h1 class="page-title">Welcome Back</h1>
+                    <p class="page-subtitle">Login to your account</p>
+
+                    <div id="loginAlertContainer"></div>
+
+                    <form id="loginForm" autocomplete="off">
+                        <div class="form-field">
+                            <i class="fa-regular fa-envelope field-icon"></i>
+                            <input type="email" id="loginEmail" class="auth-input" placeholder="Gmail" autocomplete="off" required>
+                        </div>
+                        <div class="form-field">
+                            <i class="fa-solid fa-lock field-icon"></i>
+                            <input type="password" id="loginPassword" class="auth-input" placeholder="Password" autocomplete="off" required>
+                            <i class="fa-solid fa-eye-slash pass-toggle password-toggle-icon" onclick="togglePasswordVisibility('loginPassword')"></i>
+                        </div>
+                        <div class="login-options-row">
+                            <label class="remember-password-check">
+                                <input type="checkbox" id="rememberCheck">
+                                <span>Remember password</span>
+                            </label>
+                            <a href="#" class="forgot-password-link" id="openForgotPasswordBtn">Forgot Password?</a>
+                        </div>
+                        <button type="submit" class="login-btn">Login</button>
+                    </form>
+                    <div class="register-link">
+                        Don't have an account? <a href="#" id="openRegisterModalBtn">Create one now</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Forgot Password Modal -->
+<div class="modal fade auth-modal" id="forgotPasswordModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background: var(--soft-bg); padding: 20px;">
+            <div class="modal-header" style="border: none; padding: 10px 0 20px;">
+                <h5 class="modal-title" style="font-family: 'Cormorant Garamond', serif; font-size: 2rem; font-weight: 700; color: var(--deep-green);">Reset Your Password</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="background: #ffffff; border-radius: 50%; padding: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);"></button>
+            </div>
+
+            <div class="modal-body p-0">
+                <div class="fp-progress-dots">
+                    <div class="fp-dot active"></div>
+                    <div class="fp-dot"></div>
+                    <div class="fp-dot"></div>
+                </div>
+
+                <!-- Step 1: Phone Number -->
+                <div id="fpStep1" class="fp-step active">
+                    <h6 style="font-weight: 700; margin-bottom: 12px; color: var(--deep-green);">Verify Your Phone Number</h6>
+                    <p style="font-size: 0.85rem; color: #666666; margin-bottom: 16px;">
+                        Enter the phone number you registered with.
+                    </p>
+                    <div class="form-field">
+                        <i class="fa-solid fa-phone field-icon"></i>
+                        <input type="tel" id="fpPhone" class="auth-input" placeholder="Phone Number" style="padding-left: 44px;">
+                    </div>
+                    <button type="button" class="register-btn" onclick="fpNextFromStep1()" style="height: 46px; border-radius: 8px; margin-top: 10px;">Next</button>
+                </div>
+
+                <!-- Step 2: Verification Code -->
+                <div id="fpStep2" class="fp-step">
+                    <h6 style="font-weight: 700; margin-bottom: 12px; color: var(--deep-green);">Verify Your Code</h6>
+                    <div id="fpCodeMessage" class="fp-message"></div>
+                    <div class="form-field">
+                        <i class="fa-solid fa-key field-icon"></i>
+                        <input type="text" id="fpCode" class="auth-input" placeholder="Verification Code" style="padding-left: 44px;">
+                    </div>
+                    <div class="fp-button-group">
+                        <button type="button" class="login-btn" onclick="fpGoBack(2)" style="height: 46px; border-radius: 8px; background: #ffffff; color: var(--deep-green); border: 1.5px solid var(--deep-green);">Back</button>
+                        <button type="button" class="register-btn" onclick="fpNextFromStep2()" style="height: 46px; border-radius: 8px;">Verify</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Reset Password -->
+                <div id="fpStep3" class="fp-step">
+                    <h6 style="font-weight: 700; margin-bottom: 12px; color: var(--deep-green);">Create New Password</h6>
+                    <div class="form-field">
+                        <i class="fa-solid fa-lock field-icon"></i>
+                        <input type="password" id="fpNewPassword" class="auth-input" placeholder="New Password" style="padding-left: 44px;">
+                        <i class="fa-solid fa-eye-slash pass-toggle password-toggle-icon" onclick="togglePasswordVisibility('fpNewPassword')"></i>
+                    </div>
+                    <div class="form-field">
+                        <i class="fa-solid fa-lock field-icon"></i>
+                        <input type="password" id="fpConfirmPassword" class="auth-input" placeholder="Confirm Password" style="padding-left: 44px;">
+                        <i class="fa-solid fa-eye-slash pass-toggle password-toggle-icon" onclick="togglePasswordVisibility('fpConfirmPassword')"></i>
+                    </div>
+                    <div class="fp-button-group">
+                        <button type="button" class="login-btn" onclick="fpGoBack(3)" style="height: 46px; border-radius: 8px; background: #ffffff; color: var(--deep-green); border: 1.5px solid var(--deep-green);">Back</button>
+                        <button type="button" class="register-btn" onclick="fpSubmitNewPassword()" style="height: 46px; border-radius: 8px;">Reset Password</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "ticketId": "TKT-3021",
+    "senderRole": "user",
+    "senderName": "Abdifatah Hassan",
+    "messageText": "I need help with my order",
+    "createdAt": "2026-06-30T08:27:32.676Z",
+    "updatedAt": "2026-06-30T08:27:32.676Z"
+  },
+  {
+    "id": 2,
+    "ticketId": "TKT-3022",
+    "senderRole": "user",
+    "senderName": "Abdifatah Hassan",
+    "messageText": "Payment not confirmed",
+    "createdAt": "2026-06-30T08:27:32.677Z",
+    "updatedAt": "2026-06-30T08:27:32.677Z"
+  },
+  {
+    "id": 3,
+    "ticketId": "TKT-3023",
+    "senderRole": "user",
+    "senderName": "Mohamed Nur",
+    "messageText": "Where is my delivery?",
+    "createdAt": "2026-06-30T08:27:32.678Z",
+    "updatedAt": "2026-06-30T08:27:32.678Z"
+  },
+  {
+    "id": 4,
+    "ticketId": "TKT-3023",
+    "senderRole": "admin",
+    "senderName": "Support Admin",
+    "messageText": "We reviewed your issue and found that your EVC Plus payment was not completed successfully. Please try the payment again using the same phone number you used before. If the problem continues, our support team will be happy to help you further.",
+    "createdAt": "2026-06-30T08:27:32.680Z",
+    "updatedAt": "2026-06-30T08:27:32.680Z"
+  },
+  {
+    "id": 5,
+    "ticketId": "TKT-3024",
+    "senderRole": "user",
+    "senderName": "Amina Yusuf",
+    "messageText": "Change delivery address",
+    "createdAt": "2026-06-30T08:27:32.681Z",
+    "updatedAt": "2026-06-30T08:27:32.681Z"
+  }
+]

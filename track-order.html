@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="so">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track Order - Mogadishu Modern Furniture</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css?v=21">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&family=Cormorant+Garamond:wght@600;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --nav-bg: #EAE6DC;
+            --gold: #D8A128;
+            --teal: #0F6F64;
+            --deep-green: #073D35;
+            --btn-brown: #C97D55;
+            --product-title: #0F2A4A;
+            --light-bg: #FAF8F2;
+            --soft-bg: #F4EFE6;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Manrope', sans-serif;
+            background: var(--light-bg);
+            color: #111111;
+            overflow-x: hidden;
+        }
+
+        .main-navbar {
+            background: var(--nav-bg);
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+            box-shadow: 0 3px 18px rgba(0, 0, 0, 0.04);
+        }
+
+        .brand-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+
+        .brand-logo-mark {
+            position: relative;
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .brand-logo-frame {
+            position: absolute;
+            inset: 0;
+            border: 2px solid var(--gold);
+            border-radius: 9px;
+            transform: rotate(45deg);
+            background: transparent;
+        }
+
+        .brand-logo-inner {
+            position: relative;
+            z-index: 2;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--gold);
+            line-height: 1;
+            letter-spacing: -1px;
+        }
+
+        .brand-logo-divider {
+            width: 1px;
+            height: 34px;
+            background: var(--gold);
+            opacity: 0.85;
+        }
+
+        .brand-logo-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.05;
+        }
+
+        .brand-logo-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.45rem;
+            font-weight: 700;
+            color: var(--deep-green);
+            letter-spacing: 0.2px;
+        }
+
+        .brand-logo-subtitle {
+            font-size: 0.52rem;
+            font-weight: 800;
+            color: var(--deep-green);
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+            margin-top: 3px;
+        }
+
+        .navbar-nav .nav-link {
+            color: #111111 !important;
+            font-size: 0.86rem;
+            font-weight: 700;
+            margin: 0 12px;
+            position: relative;
+            padding: 6px 0 !important;
+        }
+
+        .navbar-nav .nav-link::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: -4px;
+            width: 0;
+            height: 2px;
+            background: var(--gold);
+            transition: 0.3s ease;
+        }
+
+        .navbar-nav .nav-link:hover,
+        .navbar-nav .nav-link.active {
+            color: var(--gold) !important;
+        }
+
+        .navbar-nav .nav-link:hover::after,
+        .navbar-nav .nav-link.active::after {
+            width: 100%;
+        }
+
+        .search-wrapper {
+            margin-left: 20px;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .search-wrapper i {
+            position: absolute;
+            left: 12px;
+            color: #555555;
+            font-size: 0.82rem;
+            pointer-events: none;
+        }
+
+        .search-input {
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            background-color: rgba(255, 255, 255, 0.45);
+            padding: 6px 14px 6px 33px;
+            border-radius: 22px;
+            font-size: 0.8rem;
+            width: 132px;
+            color: #111111;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            width: 175px;
+            border-color: var(--gold);
+            background-color: #ffffff;
+            box-shadow: 0 4px 14px rgba(216, 161, 40, 0.14);
+        }
+
+        .nav-icons {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-icons-mid {
+            display: flex;
+            align-items: center;
+        }
+
+        .nav-icon-link {
+            color: #111111;
+            font-size: 1.08rem;
+            text-decoration: none;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+        }
+
+        .nav-icon-link:hover {
+            color: var(--gold);
+            transform: translateY(-2px) scale(1.18);
+        }
+
+        .profile-icon-link {
+            color: #111111;
+            font-size: 1.08rem;
+            text-decoration: none;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+        }
+
+        .profile-icon-link:hover {
+            color: var(--gold);
+            transform: translateY(-2px) scale(1.18);
+        }
+
+        .cart-count {
+            position: absolute;
+            top: -9px;
+            right: -10px;
+            background: var(--deep-green);
+            color: #ffffff;
+            font-size: 0.62rem;
+            font-weight: 800;
+            width: 17px;
+            height: 17px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .profile-letter {
+            width: 29px;
+            height: 29px;
+            background: var(--deep-green);
+            color: #ffffff;
+            border-radius: 50%;
+            font-size: 0.84rem;
+            font-weight: 900;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            text-transform: uppercase;
+            box-shadow: 0 4px 12px rgba(7, 61, 53, 0.22);
+            margin: 0;
+        }
+
+        .track-hero {
+            padding: 70px 0 45px;
+            background:
+                radial-gradient(circle at top left, rgba(216, 161, 40, 0.14), transparent 34%),
+                linear-gradient(135deg, #FAF8F2 0%, #F4EFE6 100%);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .track-label {
+            display: inline-block;
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 10px;
+        }
+
+        .track-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 3.2rem;
+            font-weight: 700;
+            color: var(--deep-green);
+            margin-bottom: 12px;
+        }
+
+        .track-desc {
+            max-width: 680px;
+            margin: 0 auto;
+            color: #5f5f5f;
+            font-size: 0.98rem;
+            line-height: 1.8;
+        }
+
+        .track-section {
+            padding: 55px 0 80px;
+        }
+
+        .track-search-card {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 28px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.07);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            margin-bottom: 28px;
+        }
+
+        .form-label {
+            font-weight: 800;
+            color: var(--deep-green);
+            font-size: 0.9rem;
+        }
+
+        .form-control {
+            border-radius: 10px;
+            padding: 12px 14px;
+            border: 1px solid rgba(0, 0, 0, 0.14);
+            font-size: 0.92rem;
+        }
+
+        .form-control:focus {
+            border-color: var(--gold);
+            box-shadow: 0 0 0 0.18rem rgba(216, 161, 40, 0.14);
+        }
+
+        .track-btn {
+            background: var(--deep-green);
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            padding: 12px 24px;
+            font-weight: 800;
+            transition: 0.25s ease;
+            width: 100%;
+        }
+
+        .track-btn:hover {
+            background: #052b25;
+            transform: translateY(-2px);
+        }
+
+        .hint-box {
+            background: #F7F2E8;
+            border-left: 4px solid var(--gold);
+            padding: 12px 14px;
+            border-radius: 10px;
+            font-size: 0.86rem;
+            color: #555555;
+            margin-top: 15px;
+        }
+
+        .order-result {
+            display: none;
+        }
+
+        .order-summary-card {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 26px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.07);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            margin-bottom: 28px;
+        }
+
+        .summary-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--deep-green);
+            margin-bottom: 6px;
+        }
+
+        .summary-sub {
+            color: #666666;
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+
+        .info-box {
+            background: var(--soft-bg);
+            border-radius: 14px;
+            padding: 16px;
+            height: 100%;
+        }
+
+        .info-label {
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888888;
+            font-weight: 800;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 0.95rem;
+            color: #111111;
+            font-weight: 800;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 8px 13px;
+            border-radius: 22px;
+            font-size: 0.82rem;
+            font-weight: 800;
+        }
+
+        .paid {
+            background: #E8F7EF;
+            color: #087443;
+        }
+
+        .pending {
+            background: #FFF4E5;
+            color: #B54708;
+        }
+
+        .timeline-card {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 26px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.07);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .timeline-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: var(--deep-green);
+            margin-bottom: 24px;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 28px;
+        }
+
+        .timeline::before {
+            content: "";
+            position: absolute;
+            left: 9px;
+            top: 7px;
+            width: 3px;
+            height: calc(100% - 14px);
+            background: #E0E0E0;
+            border-radius: 10px;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-bottom: 26px;
+        }
+
+        .timeline-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: -27px;
+            top: 2px;
+            width: 21px;
+            height: 21px;
+            border-radius: 50%;
+            background: #dddddd;
+            border: 4px solid #ffffff;
+            box-shadow: 0 0 0 2px #dddddd;
+            z-index: 2;
+        }
+
+        .timeline-item.done .timeline-dot {
+            background: var(--deep-green);
+            box-shadow: 0 0 0 2px var(--deep-green);
+        }
+
+        .timeline-item.active .timeline-dot {
+            background: var(--gold);
+            box-shadow: 0 0 0 2px var(--gold);
+        }
+
+        .timeline-heading {
+            font-size: 0.98rem;
+            font-weight: 800;
+            color: #111111;
+            margin-bottom: 4px;
+        }
+
+        .timeline-text {
+            font-size: 0.88rem;
+            color: #666666;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .not-found {
+            display: none;
+            background: #FFF1F0;
+            color: #B42318;
+            border: 1px solid #FDA29B;
+            border-radius: 12px;
+            padding: 14px 16px;
+            font-weight: 800;
+            margin-top: 16px;
+        }
+
+        .auth-modal .modal-dialog {
+            max-width: 430px;
+        }
+
+        .auth-modal .modal-content {
+            border: none;
+            border-radius: 22px;
+            background: linear-gradient(135deg, #E8F5F1 0%, #F8F5EE 100%);
+            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.22);
+            overflow: hidden;
+        }
+
+        .auth-card {
+            padding: 30px;
+        }
+
+        .auth-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .auth-logo-mark {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-logo-frame {
+            position: absolute;
+            inset: 0;
+            border: 2px solid var(--gold);
+            border-radius: 10px;
+            transform: rotate(45deg);
+        }
+
+        .auth-logo-inner {
+            position: relative;
+            z-index: 2;
+            font-family: 'Cormorant Garamond', serif;
+            color: var(--gold);
+            font-size: 1.35rem;
+            font-weight: 700;
+        }
+
+        .auth-logo-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.05;
+        }
+
+        .auth-logo-title {
+            font-family: 'Cormorant Garamond', serif;
+            color: var(--deep-green);
+            font-size: 1.65rem;
+            font-weight: 700;
+        }
+
+        .auth-logo-sub {
+            color: var(--gold);
+            font-size: 0.62rem;
+            font-weight: 900;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+
+        .auth-title {
+            font-family: 'Cormorant Garamond', serif;
+            color: var(--deep-green);
+            font-size: 2.3rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 4px;
+        }
+
+        .auth-subtitle {
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 22px;
+        }
+
+        .auth-label {
+            font-size: 0.82rem;
+            color: #1f2937;
+            font-weight: 900;
+            margin-bottom: 7px;
+        }
+
+        .auth-input-box {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .auth-input-box i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #7b8794;
+            font-size: 0.9rem;
+        }
+
+        .auth-input-box input {
+            width: 100%;
+            height: 47px;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            border-radius: 11px;
+            background: #ffffff;
+            padding: 0 44px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            outline: none;
+        }
+
+        .auth-input-box input:focus {
+            border-color: var(--deep-green);
+            box-shadow: 0 0 0 0.18rem rgba(7, 61, 53, 0.10);
+        }
+
+        .password-toggle {
+            position: absolute !important;
+            right: 15px !important;
+            left: auto !important;
+            cursor: pointer;
+        }
+
+        .auth-check {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin: 4px 0 17px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: #45515f;
+        }
+
+        .auth-check input {
+            accent-color: var(--deep-green);
+        }
+
+        .auth-check span {
+            color: var(--deep-green);
+        }
+
+        .auth-submit {
+            width: 100%;
+            height: 48px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #073D35 0%, #315C43 100%);
+            color: #ffffff;
+            font-size: 0.9rem;
+            font-weight: 900;
+            transition: 0.25s ease;
+        }
+
+        .auth-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(7, 61, 53, 0.22);
+        }
+
+        .auth-bottom {
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.82rem;
+            font-weight: 800;
+            margin-top: 15px;
+        }
+
+        .auth-bottom a {
+            color: var(--deep-green);
+            text-decoration: none;
+            font-weight: 900;
+        }
+
+        .auth-error {
+            display: none;
+            color: #B42318;
+            font-size: 0.78rem;
+            font-weight: 800;
+            margin-top: -8px;
+            margin-bottom: 10px;
+        }
+
+        .auth-success {
+            display: none;
+            background: #E8F7EF;
+            color: #087443;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 0.82rem;
+            font-weight: 900;
+            margin-bottom: 14px;
+            text-align: center;
+        }
+
+        .toast-box {
+            position: fixed;
+            right: 28px;
+            bottom: 28px;
+            background: var(--deep-green);
+            color: #ffffff;
+            padding: 13px 22px;
+            border-radius: 9px;
+            font-size: 0.9rem;
+            font-weight: 800;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+            z-index: 3000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: 0.35s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toast-box.show-toast {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        @media (max-width: 991px) {
+            .search-wrapper {
+                margin-left: 0;
+                margin-top: 16px;
+                width: 100%;
+            }
+
+            .search-input,
+            .search-input:focus {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .track-title {
+                font-size: 2.45rem;
+            }
+
+            .brand-logo-title {
+                font-size: 1.35rem;
+            }
+
+            .brand-logo-subtitle {
+                font-size: 0.48rem;
+                letter-spacing: 1.5px;
+            }
+
+            .brand-logo-mark {
+                width: 35px;
+                height: 35px;
+            }
+
+            .brand-logo-inner {
+                font-size: 1rem;
+            }
+
+            .brand-logo-divider {
+                height: 31px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav class="navbar navbar-expand-lg main-navbar">
+        <div class="container">
+            <a class="brand-logo" href="index.html">
+                <div class="brand-logo-mark">
+                    <span class="brand-logo-frame"></span>
+                    <span class="brand-logo-inner">MF</span>
+                </div>
+
+                <div class="brand-logo-divider"></div>
+
+                <div class="brand-logo-text">
+                    <span class="brand-logo-title">Mogadishu</span>
+                    <span class="brand-logo-subtitle">Modern Furniture</span>
+                </div>
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse justify-content-center" id="mainNavbar">
+                <ul class="navbar-nav align-items-center">
+                    <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="products.html">Shop</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="track-order.html">Track Order</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#">About Us</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#">Contact</a></li>
+                </ul>
+
+            </div>
+
+            <div class="nav-icons d-none d-lg-flex">
+                <a href="#" class="nav-icon-link" title="Wishlist"><i class="fa-regular fa-heart"></i></a>
+                <a href="cart.html" class="nav-icon-link" title="Shopping Cart">
+                    <i class="fa-solid fa-cart-shopping"></i>
+                    <span class="cart-count" id="cartCount">0</span>
+                </a>
+                <a href="login.html" id="userAccountBtn" title="User Account" class="profile-icon-link">
+                    <i class="fa-regular fa-user" id="userIcon"></i>
+                    <span class="profile-letter" id="profileLetter">U</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="track-hero text-center">
+        <div class="container">
+            <span class="track-label">Delivery Tracking</span>
+            <h1 class="track-title">Track Your Furniture Order</h1>
+            <p class="track-desc">
+                Enter your tracking code or order ID to view your payment status, delivery progress,
+                driver information, and estimated delivery time inside Mogadishu.
+            </p>
+        </div>
+    </section>
+
+    <section class="track-section">
+        <div class="container">
+
+            <div class="track-search-card">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-5">
+                        <label class="form-label">Order ID / Tracking Code</label>
+                        <input type="text" class="form-control" id="trackingInput" placeholder="Example: MMF-1001">
+                    </div>
+
+                    <div class="col-md-5">
+                        <label class="form-label">Phone Number Optional</label>
+                        <input type="text" class="form-control" id="phoneInput" placeholder="Example: 0612345678">
+                    </div>
+
+                    <div class="col-md-2">
+                        <button class="track-btn" onclick="trackOrder()">
+                            <i class="fa-solid fa-magnifying-glass me-2"></i>
+                            Track
+                        </button>
+                    </div>
+                </div>
+
+                <div class="hint-box">
+                    <strong>Demo Tracking Codes:</strong> MMF-1001, MMF-1002, MMF-1003.
+                    Haddii aad checkout ka timid, isticmaal tracking code-ka modal-ka kuu soo baxay.
+                </div>
+
+                <div class="not-found" id="notFoundBox">
+                    <i class="fa-solid fa-circle-exclamation me-2"></i>
+                    Order not found. Please check your tracking code and try again.
+                </div>
+            </div>
+
+            <div class="order-result" id="orderResult">
+
+                <div class="order-summary-card">
+                    <h2 class="summary-title">Order Summary</h2>
+                    <p class="summary-sub" id="orderSubText">Tracking information will appear here.</p>
+
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="info-box">
+                                <div class="info-label">Order ID</div>
+                                <div class="info-value" id="orderIdText">---</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="info-box">
+                                <div class="info-label">Customer</div>
+                                <div class="info-value" id="customerText">---</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="info-box">
+                                <div class="info-label">Total Amount</div>
+                                <div class="info-value" id="amountText">---</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="info-box">
+                                <div class="info-label">Payment</div>
+                                <div id="paymentStatusText">---</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="info-box">
+                                <div class="info-label">Delivery Address</div>
+                                <div class="info-value" id="addressText">---</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="info-box">
+                                <div class="info-label">Driver</div>
+                                <div class="info-value" id="driverText">---</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="info-box">
+                                <div class="info-label">Estimated Delivery</div>
+                                <div class="info-value" id="estimateText">---</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="timeline-card">
+                    <h2 class="timeline-title">Delivery Progress</h2>
+                    <div class="timeline" id="timelineBox"></div>
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+
+
+    <div id="toastBox" class="toast-box">
+        <i class="fa-solid fa-circle-check"></i>
+        <span id="toastMessage">Done</span>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/auth.js?v=16"></script>
+    <script src="js/wishlist-modal.js?v=1"></script>
+
+    <script>
+        const orders = JSON.parse(localStorage.getItem('orders')) || [
+            {
+                id: "MMF-1001",
+                phone: "0612345678",
+                customer: "Abdifatah Hassan",
+                amount: "$850.00",
+                payment: "Paid",
+                paymentType: "paid",
+                address: "Hodan, Mogadishu",
+                driver: "Ahmed Ali - 0619988776",
+                estimate: "Today, 4:00 PM",
+                currentStep: 3,
+                product: "Blush Velvet Arch Bed"
+            },
+            {
+                id: "MMF-1002",
+                phone: "0611112222",
+                customer: "Mohamed Nur",
+                amount: "$1,600.00",
+                payment: "Paid",
+                paymentType: "paid",
+                address: "Wadajir, Mogadishu",
+                driver: "Hassan Omar - 0614455667",
+                estimate: "Tomorrow, 10:30 AM",
+                currentStep: 2,
+                product: "Emerald Luxe Dining Set"
+            },
+            {
+                id: "MMF-1003",
+                phone: "0613334444",
+                customer: "Amina Yusuf",
+                amount: "$150.00",
+                payment: "Pending",
+                paymentType: "pending",
+                address: "Karaan, Mogadishu",
+                driver: "Not assigned yet",
+                estimate: "Waiting for payment confirmation",
+                currentStep: 1,
+                product: "Bloom Accent Chair Set"
+            }
+        ];
+
+        const steps = [
+            {
+                title: "Order Placed",
+                text: "Your order has been successfully placed in the system."
+            },
+            {
+                title: "Payment Verified",
+                text: "Your mobile money payment has been checked and confirmed."
+            },
+            {
+                title: "Preparing Order",
+                text: "Your furniture item is being prepared and packed for delivery."
+            },
+            {
+                title: "Out for Delivery",
+                text: "The delivery driver is on the way to your address."
+            },
+            {
+                title: "Delivered",
+                text: "Your order has been delivered successfully."
+            }
+        ];
+
+        function updateCartCount() {
+            const cartItems = JSON.parse(localStorage.getItem("cartItems")) || [];
+            const totalQty = cartItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+            document.getElementById("cartCount").innerText = totalQty;
+        }
+
+        function loadLatestCheckoutOrder() {
+            const lastTrackingCode = localStorage.getItem("lastTrackingCode");
+            const lastOrderTotal = localStorage.getItem("lastOrderTotal");
+            const lastPaymentMethod = localStorage.getItem("lastPaymentMethod");
+            const userFullName = localStorage.getItem("userFullName") || "Guest Customer";
+
+            if (!lastTrackingCode) return;
+
+            const alreadyExists = orders.some(order => order.id === lastTrackingCode);
+
+            if (!alreadyExists) {
+                orders.unshift({
+                    id: lastTrackingCode,
+                    phone: "",
+                    customer: userFullName,
+                    amount: "$" + Number(lastOrderTotal || 0).toLocaleString("en-US", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    }),
+                    payment: lastPaymentMethod === "Cash on Delivery" ? "Pending" : "Pending",
+                    paymentType: "pending",
+                    address: "Mogadishu Delivery Address",
+                    driver: "Not assigned yet",
+                    estimate: "Waiting for order confirmation",
+                    currentStep: 1,
+                    product: "Furniture Order"
+                });
+            }
+
+            document.getElementById("trackingInput").value = lastTrackingCode;
+        }
+
+        function trackOrder() {
+            const trackingValue = document.getElementById("trackingInput").value.trim().toUpperCase();
+            const phoneValue = document.getElementById("phoneInput").value.trim();
+
+            const resultBox = document.getElementById("orderResult");
+            const notFoundBox = document.getElementById("notFoundBox");
+
+            if (trackingValue === "") {
+                alert("Please enter Order ID / Tracking Code!");
+                return;
+            }
+
+            let url = `http://localhost:5000/api/orders/track/${encodeURIComponent(trackingValue)}`;
+            if (phoneValue !== "") {
+                url += `?phone=${encodeURIComponent(phoneValue)}`;
+            }
+
+            fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const order = data.order;
+                    notFoundBox.style.display = "none";
+                    resultBox.style.display = "block";
+
+                    document.getElementById("orderSubText").innerText = `${order.product} • ${order.address}`;
+                    document.getElementById("orderIdText").innerText = order.id;
+                    document.getElementById("customerText").innerText = order.customer;
+                    document.getElementById("amountText").innerText = order.amount;
+                    document.getElementById("addressText").innerText = order.address;
+                    document.getElementById("driverText").innerText = order.driver;
+                    document.getElementById("estimateText").innerText = order.estimate;
+
+                    const paymentClass = order.paymentType === "paid" ? "paid" : "pending";
+
+                    document.getElementById("paymentStatusText").innerHTML = `
+                    <span class="status-pill ${paymentClass}">
+                        <i class="fa-solid ${order.paymentType === "paid" ? "fa-circle-check" : "fa-clock"}"></i>
+                        ${order.payment}
+                    </span>
+                `;
+
+                    renderTimeline(order.currentStep);
+
+                    resultBox.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start"
+                    });
+                } else {
+                    resultBox.style.display = "none";
+                    notFoundBox.innerHTML = `<i class="fa-solid fa-circle-exclamation me-2"></i>❌ ${data.message}`;
+                    notFoundBox.style.display = "block";
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                resultBox.style.display = "none";
+                notFoundBox.innerHTML = `<i class="fa-solid fa-circle-exclamation me-2"></i>❌ Ma suurtagelin la xiriirka server-ka backend-ka!`;
+                notFoundBox.style.display = "block";
+            });
+        }
+
+        function renderTimeline(currentStep) {
+            const timelineBox = document.getElementById("timelineBox");
+            timelineBox.innerHTML = "";
+
+            steps.forEach((step, index) => {
+                let statusClass = "";
+
+                if (index < currentStep) {
+                    statusClass = "done";
+                }
+
+                if (index === currentStep) {
+                    statusClass = "active";
+                }
+
+                timelineBox.innerHTML += `
+                <div class="timeline-item ${statusClass}">
+                    <span class="timeline-dot"></span>
+                    <h4 class="timeline-heading">${step.title}</h4>
+                    <p class="timeline-text">${step.text}</p>
+                </div>
+            `;
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById("toastBox");
+            document.getElementById("toastMessage").innerText = message;
+
+            toast.classList.add("show-toast");
+
+            setTimeout(() => {
+                toast.classList.remove("show-toast");
+            }, 2300);
+        }
+
+        updateCartCount();
+        loadLatestCheckoutOrder();
+    </script>
+
+    <!-- Register Modal -->
+    <div class="modal fade auth-modal" id="registerModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
+                    style="position: absolute; right: 20px; top: 20px; z-index: 10;"></button>
+                <div class="modal-body p-0">
+                    <div class="register-card"
+                        style="box-shadow: none; border: none; margin: 0; background: transparent;">
+                        <div class="brand-logo">
+                            <div class="brand-logo-mark">
+                                <span class="brand-logo-frame"></span>
+                                <span class="brand-logo-inner">MF</span>
+                            </div>
+                            <div class="brand-divider"></div>
+                            <div class="brand-text">
+                                <span class="brand-title">Mogadishu</span>
+                                <span class="brand-subtitle">Modern Furniture</span>
+                            </div>
+                        </div>
+
+                        <h1 class="page-title">Create Account</h1>
+                        <p class="page-subtitle">Register your new account</p>
+
+                        <div id="alertContainer"></div>
+
+                        <form id="registerForm">
+                            <div class="form-field">
+                                <i class="fa-regular fa-user field-icon"></i>
+                                <input type="text" id="regFirstName" class="auth-input" placeholder="First Name"
+                                    required>
+                            </div>
+                            <div class="form-field">
+                                <i class="fa-regular fa-user field-icon"></i>
+                                <input type="text" id="regLastName" class="auth-input" placeholder="Last Name" required>
+                            </div>
+                            <div class="form-field">
+                                <i class="fa-regular fa-envelope field-icon"></i>
+                                <input type="email" id="regEmail" class="auth-input" placeholder="Gmail" required>
+                            </div>
+                            <div class="form-field">
+                                <div class="phone-input-wrapper">
+                                    <select id="regCountryCode" class="country-select">
+                                        <option value="+252" selected>🇸🇴 +252</option>
+                                        <option value="+254">🇰🇪 +254</option>
+                                        <option value="+251">🇪🇹 +251</option>
+                                        <option value="+253">🇩🇯 +253</option>
+                                        <option value="+1">🇺🇸 +1</option>
+                                        <option value="+44">🇬🇧 +44</option>
+                                        <option value="+90">🇹🇷 +90</option>
+                                    </select>
+                                    <input type="tel" id="regPhone" class="auth-input phone-input"
+                                        placeholder="Phone Number" required>
+                                </div>
+                            </div>
+                            <div class="form-field">
+                                <i class="fa-solid fa-lock field-icon"></i>
+                                <input type="password" id="regPassword" class="auth-input" placeholder="Password"
+                                    required>
+                                <i class="fa-solid fa-eye-slash pass-toggle password-toggle-icon"
+                                    onclick="togglePasswordVisibility('regPassword')"></i>
+                            </div>
+                            <div class="form-field">
+                                <i class="fa-solid fa-lock field-icon"></i>
+                                <input type="password" id="regConfirmPassword" class="auth-input"
+                                    placeholder="Confirm Password" required>
+                                <i class="fa-solid fa-eye-slash pass-toggle password-toggle-icon"
+                                    onclick="togglePasswordVisibility('regConfirmPassword')"></i>
+                            </div>
+                            <label class="terms-row">
+                                <input type="checkbox" id="termsCheck" required>
+                                <span>I agree to the <a href="#">Terms & Conditions</a></span>
+                            </label>
+                            <button type="submit" class="register-btn">Register</button>
+                        </form>
+                        <div class="login-link">
+                            Already have an account? <a href="#" id="openLoginModalBtn">Login</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal fade auth-modal" id="loginModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
+                    style="position: absolute; right: 20px; top: 20px; z-index: 10;"></button>
+                <div class="modal-body p-0">
+                    <div class="login-card" style="box-shadow: none; border: none; margin: 0; background: transparent;">
+                        <div class="brand-logo">
+                            <div class="brand-logo-mark">
+                                <span class="brand-logo-frame"></span>
+                                <span class="brand-logo-inner">MF</span>
+                            </div>
+                            <div class="brand-divider"></div>
+                            <div class="brand-text">
+                                <span class="brand-title">Mogadishu</span>
+                                <span class="brand-subtitle">Modern Furniture</span>
+                            </div>
+                        </div>
+
+                        <h1 class="page-title">Welcome Back</h1>
+                        <p class="page-subtitle">Login to your account</p>
+
+                        <div id="loginAlertContainer"></div>
+
+                        <form id="loginForm" autocomplete="off">
+                            <div class="form-field">
+                                <i class="fa-regular fa-envelope field-icon"></i>
+                                <input type="email" id="loginEmail" class="auth-input" placeholder="Gmail"
+                                    autocomplete="off" required>
+                            </div>
+                            <div class="form-field">
+                                <i class="fa-solid fa-lock field-icon"></i>
+                                <input type="password" id="loginPassword" class="auth-input" placeholder="Password"
+                                    autocomplete="off" required>
+                                <i class="fa-solid fa-eye-slash pass-toggle password-toggle-icon"
+                                    onclick="togglePasswordVisibility('loginPassword')"></i>
+                            </div>
+                            <div class="login-options-row">
+                                <label class="remember-password-check">
+                                    <input type="checkbox" id="rememberCheck">
+                                    <span>Remember password</span>
+                                </label>
+                                <a href="#" class="forgot-password-link" id="openForgotPasswordBtn">Forgot Password?</a>
+                            </div>
+                            <button type="submit" class="login-btn">Login</button>
+                        </form>
+                        <div class="register-link">
+                            Don't have an account? <a href="#" id="openRegisterModalBtn">Create one now</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div class="modal fade auth-modal" id="forgotPasswordModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: var(--soft-bg); padding: 20px;">
+                <div class="modal-header" style="border: none; padding: 10px 0 20px;">
+                    <h5 class="modal-title"
+                        style="font-family: 'Cormorant Garamond', serif; font-size: 2rem; font-weight: 700; color: var(--deep-green);">
+                        Reset Your Password</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
+                        style="background: #ffffff; border-radius: 50%; padding: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);"></button>
+                </div>
+
+                <div class="modal-body p-0">
+                    <div class="fp-progress-dots">
+                        <div class="fp-dot active"></div>
+                        <div class="fp-dot"></div>
+                        <div class="fp-dot"></div>
+                    </div>
+
+                    <!-- Step 1: Phone Number -->
+                    <div id="fpStep1" class="fp-step active">
+                        <h6 style="font-weight: 700; margin-bottom: 12px; color: var(--deep-green);">Verify Your Phone
+                            Number</h6>
+                        <p style="font-size: 0.85rem; color: #666666; margin-bottom: 16px;">
+                            Enter the phone number you registered with.
+                        </p>
+                        <div class="form-field">
+                            <i class="fa-solid fa-phone field-icon"></i>
+                            <input type="tel" id="fpPhone" class="auth-input" placeholder="Phone Number"
+                                style="padding-left: 44px;">
+                        </div>
+                        <button type="button" class="register-btn" onclick="fpNextFromStep1()"
+                            style="height: 46px; border-radius: 8px; margin-top: 10px;">Next</button>
+                    </div>
+
+                    <!-- Step 2: Verification Code -->
+                    <div id="fpStep2" class="fp-step">
+                        <h6 style="font-weight: 700; margin-bottom: 12px; color: var(--deep-green);">Verify Your Code
+                        </h6>
+                        <div id="fpCodeMessage" class="fp-message"></div>
+                        <div class="form-field">
+                            <i class="fa-solid fa-key field-icon"></i>
+                            <input type="text" id="fpCode" class="auth-input" placeholder="Verification Code"
+                                style="padding-left: 44px;">
+                        </div>
+                        <div class="fp-button-group">
+                            <button type="button" class="login-btn" onclick="fpGoBack(2)"
+                                style="height: 46px; border-radius: 8px; background: #ffffff; color: var(--deep-green); border: 1.5px solid var(--deep-green);">Back</button>
+                            <button type="button" class="register-btn" onclick="fpNextFromStep2()"
+                                style="height: 46px; border-radius: 8px;">Verify</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Reset Password -->
+                    <div id="fpStep3" class="fp-step">
+                        <h6 style="font-weight: 700; margin-bottom: 12px; color: var(--deep-green);">Create New Password
+                        </h6>
+                        <div class="form-field">
+                            <i class="fa-solid fa-lock field-icon"></i>
+                            <input type="password" id="fpNewPassword" class="auth-input" placeholder="New Password"
+                                style="padding-left: 44px;">
+                            <i class="fa-solid fa-eye-slash pass-toggle password-toggle-icon"
+                                onclick="togglePasswordVisibility('fpNewPassword')"></i>
+                        </div>
+                        <div class="form-field">
+                            <i class="fa-solid fa-lock field-icon"></i>
+                            <input type="password" id="fpConfirmPassword" class="auth-input"
+                                placeholder="Confirm Password" style="padding-left: 44px;">
+                            <i class="fa-solid fa-eye-slash pass-toggle password-toggle-icon"
+                                onclick="togglePasswordVisibility('fpConfirmPassword')"></i>
+                        </div>
+                        <div class="fp-button-group">
+                            <button type="button" class="login-btn" onclick="fpGoBack(3)"
+                                style="height: 46px; border-radius: 8px; background: #ffffff; color: var(--deep-green); border: 1.5px solid var(--deep-green);">Back</button>
+                            <button type="button" class="register-btn" onclick="fpSubmitNewPassword()"
+                                style="height: 46px; border-radius: 8px;">Reset Password</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>
