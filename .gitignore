@@ -30,3 +30,7 @@ yarn-error.log*
 # Build
 dist/
 build/
+.netlify/
+
+# Legacy static HTML (source for React migration)
+legacy/

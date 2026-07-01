@@ -1,0 +1,180 @@
+/* Auth injected styles - profile dropdown, toasts, forgot password */
+.profile-dropdown-container {
+  position: relative;
+  display: inline-block;
+}
+.profile-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 1050;
+  display: none;
+  min-width: 240px;
+  padding: 16px;
+  margin: 0;
+  font-size: 0.9rem;
+  color: #111111;
+  text-align: left;
+  list-style: none;
+  background-color: #FAF9F6;
+  background-clip: padding-box;
+  border: 1px solid rgba(7, 61, 53, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(7, 61, 53, 0.15);
+  transform: translateY(10px);
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.profile-dropdown-menu.show {
+  display: block;
+  transform: translateY(0);
+  opacity: 1;
+}
+.dropdown-header-info {
+  padding: 4px 8px 10px;
+}
+.user-display-name {
+  display: block;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #073D35;
+  line-height: 1.2;
+}
+.user-display-email {
+  display: block;
+  font-size: 0.78rem;
+  color: #7A8585;
+  font-weight: 500;
+  margin-top: 2px;
+}
+.profile-dropdown-menu .dropdown-divider {
+  height: 1px;
+  margin: 8px 0;
+  overflow: hidden;
+  background-color: rgba(7, 61, 53, 0.08);
+  border: 0;
+}
+.profile-dropdown-menu .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  clear: both;
+  font-weight: 600;
+  color: #073D35;
+  text-align: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  background-color: transparent;
+  border: 0;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.profile-dropdown-menu .dropdown-item i {
+  font-size: 0.95rem;
+  color: #D8A128;
+  width: 16px;
+  text-align: center;
+}
+.profile-dropdown-menu .dropdown-item:hover {
+  background-color: rgba(7, 61, 53, 0.05);
+  color: #073D35;
+  transform: translateX(3px);
+}
+.profile-dropdown-menu .dropdown-item.logout-btn {
+  color: #B42318;
+}
+.profile-dropdown-menu .dropdown-item.logout-btn i {
+  color: #B42318;
+}
+.profile-dropdown-menu .dropdown-item.logout-btn:hover {
+  background-color: rgba(180, 35, 24, 0.05);
+}
+
+.sitopia-toast, .toast-box {
+  position: fixed !important;
+  top: 24px !important;
+  bottom: auto !important;
+  left: 50% !important;
+  right: auto !important;
+  transform: translate(-50%, -40px) !important;
+  background: rgba(7, 61, 53, 0.96) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 1.5px solid rgba(216, 161, 40, 0.35) !important;
+  color: #ffffff !important;
+  padding: 12px 24px !important;
+  border-radius: 14px !important;
+  box-shadow: 0 15px 35px rgba(7, 61, 53, 0.35) !important;
+  font-family: 'Manrope', sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 0.92rem !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease, visibility 0.4s ease !important;
+  pointer-events: none !important;
+}
+
+.sitopia-toast.show, .toast-box.show,
+.sitopia-toast.show-toast, .toast-box.show-toast {
+  transform: translate(-50%, 0) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.sitopia-toast i, .toast-box i {
+  color: #D8A128 !important;
+  font-size: 1.15rem !important;
+}
+
+.fp-step {
+  display: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.fp-step.active {
+  display: block;
+  opacity: 1;
+}
+.fp-progress-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.fp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(7, 61, 53, 0.15);
+  transition: all 0.3s ease;
+}
+.fp-dot.active {
+  background-color: #D8A128;
+  width: 24px;
+  border-radius: 4px;
+}
+.fp-message {
+  background-color: rgba(216, 161, 40, 0.08);
+  border: 1px dashed rgba(216, 161, 40, 0.4);
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: #073D35;
+  margin-bottom: 16px;
+  line-height: 1.4;
+  font-weight: 500;
+}
+.fp-button-group {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 12px;
+  margin-top: 15px;
+}
