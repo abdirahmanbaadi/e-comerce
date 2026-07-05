@@ -1,0 +1,280 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { apiUrl } from '../utils/data';
+import { formatPastChatTime } from '../utils/format';
+import { showTopFloatNotification } from '../utils/notifications';
+
+function sortTicketsByLatest(tickets) {
+  return [...tickets].sort((a, b) => {
+    const aTime = new Date(a.lastMessageAt || a.createdAt || 0).getTime();
+    const bTime = new Date(b.lastMessageAt || b.createdAt || 0).getTime();
+    return bTime - aTime;
+  });
+}
+
+export function useSupportChat(enabled) {
+  const [tickets, setTickets] = useState([]);
+  const [activeTicketId, setActiveTicketId] = useState(null);
+  const [activeTicket, setActiveTicket] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [view, setView] = useState('form');
+  const [sending, setSending] = useState(false);
+  const sseRef = useRef(null);
+
+  const loadChats = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const response = await fetch(apiUrl('/api/support/chats'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setTickets(sortTicketsByLatest(data.tickets || []));
+      }
+    } catch (error) {
+      console.error('Failed to load customer chats:', error);
+    }
+  }, []);
+
+  const openTicket = useCallback(async (ticketId) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setActiveTicketId(ticketId);
+    setView('chat');
+
+    try {
+      const response = await fetch(apiUrl(`/api/support/chats/${ticketId}/messages`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setActiveTicket(data.ticket);
+        setMessages(data.messages || []);
+      }
+    } catch (error) {
+      console.error('Failed to open customer chat:', error);
+    }
+  }, []);
+
+  const reloadMessages = useCallback(async () => {
+    if (!activeTicketId) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const response = await fetch(apiUrl(`/api/support/chats/${activeTicketId}/messages`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setMessages(data.messages || []);
+      }
+    } catch (error) {
+      console.error('Failed to reload chat messages:', error);
+    }
+  }, [activeTicketId]);
+
+  const createConversation = useCallback(
+    async (subject, messageText) => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        showTopFloatNotification('❌ Fadlan marka hore soo gal!', 'danger');
+        return false;
+      }
+
+      setSending(true);
+      try {
+        const response = await fetch(apiUrl('/api/support/chats'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ subject, messageText }),
+        });
+        const data = await response.json();
+        if (data.success) {
+          showTopFloatNotification('✅ Fariintaada kowaad waa la diray!');
+          await loadChats();
+          if (data.ticket?.id) {
+            await openTicket(data.ticket.id);
+          }
+          return true;
+        }
+        showTopFloatNotification(`❌ Khalad ayaa dhacay: ${data.message}`, 'danger');
+        return false;
+      } catch (error) {
+        console.error(error);
+        showTopFloatNotification('❌ Khalad xariirka server-ka ah!', 'danger');
+        return false;
+      } finally {
+        setSending(false);
+      }
+    },
+    [loadChats, openTicket]
+  );
+
+  const sendTicketMessage = useCallback(
+    async (ticketId, messageText) => {
+      const token = localStorage.getItem('token');
+      if (!ticketId || !messageText.trim() || !token) return false;
+
+      setSending(true);
+      try {
+        const response = await fetch(apiUrl(`/api/support/chats/${ticketId}/messages`), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ messageText: messageText.trim() }),
+        });
+        const data = await response.json();
+        if (data.success) {
+          if (ticketId === activeTicketId) {
+            await reloadMessages();
+          }
+          await loadChats();
+          return true;
+        }
+        showTopFloatNotification(`❌ ${data.message || 'Failed to send message'}`, 'danger');
+        return false;
+      } catch (error) {
+        console.error(error);
+        showTopFloatNotification('❌ Failed to send message!', 'danger');
+        return false;
+      } finally {
+        setSending(false);
+      }
+    },
+    [activeTicketId, loadChats, reloadMessages]
+  );
+
+  const sendMessage = useCallback(
+    async (messageText) => sendTicketMessage(activeTicketId, messageText),
+    [activeTicketId, sendTicketMessage]
+  );
+
+  const openRepliedTicket = useCallback(() => {
+    const replied = tickets.find((t) => t.status === 'Replied');
+    if (replied) {
+      openTicket(replied.id);
+    } else {
+      setView('form');
+    }
+  }, [openTicket, tickets]);
+
+  const backToForm = useCallback(() => {
+    setView('form');
+    setActiveTicketId(null);
+    setActiveTicket(null);
+    setMessages([]);
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+
+    loadChats();
+
+    const token = localStorage.getItem('token');
+    if (!token) return undefined;
+
+    let cancelled = false;
+    let retryTimer = null;
+    let retryDelay = 2000;
+
+    const connectStream = () => {
+      if (cancelled) return;
+
+      if (sseRef.current) {
+        sseRef.current.close();
+      }
+
+      const source = new EventSource(
+        apiUrl(`/api/support/stream?token=${encodeURIComponent(token)}`)
+      );
+      sseRef.current = source;
+
+      source.onopen = () => {
+        retryDelay = 2000;
+      };
+
+      source.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'message' || data.type === 'ticket') {
+            if (data.ticket) {
+              setTickets((prev) => {
+                const idx = prev.findIndex((t) => t.id === data.ticket.id);
+                if (idx >= 0) {
+                  const next = [...prev];
+                  next[idx] = data.ticket;
+                  return sortTicketsByLatest(next);
+                }
+                return sortTicketsByLatest([...prev, data.ticket]);
+              });
+            } else {
+              loadChats();
+            }
+
+            if (data.type === 'message' && data.message?.ticketId === activeTicketId) {
+              reloadMessages();
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse SSE event data:', e);
+        }
+      };
+
+      source.onerror = () => {
+        source.close();
+        sseRef.current = null;
+        if (cancelled) return;
+        retryTimer = setTimeout(() => {
+          retryDelay = Math.min(retryDelay * 1.5, 15000);
+          connectStream();
+        }, retryDelay);
+      };
+    };
+
+    const startDelay = setTimeout(connectStream, 1500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(startDelay);
+      if (retryTimer) clearTimeout(retryTimer);
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
+      }
+    };
+  }, [enabled, activeTicketId, loadChats, reloadMessages]);
+
+  useEffect(() => {
+    if (enabled && activeTicketId && view === 'chat') {
+      reloadMessages();
+    }
+  }, [enabled, activeTicketId, view, reloadMessages]);
+
+  const repliedTicket = tickets.find((t) => t.status === 'Replied');
+
+  return {
+    tickets,
+    activeTicket,
+    activeTicketId,
+    messages,
+    view,
+    sending,
+    repliedTicket,
+    formatPastChatTime,
+    loadChats,
+    openTicket,
+    createConversation,
+    sendMessage,
+    sendTicketMessage,
+    openRepliedTicket,
+    backToForm,
+  };
+}

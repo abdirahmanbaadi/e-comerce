@@ -1,7 +1,9 @@
-export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+export const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export function apiUrl(path) {
-  return `${API_BASE}${path}`;
+  const base = API_BASE || '';
+  const normalized = path.startsWith('/api') ? path : `/api${path.startsWith('/') ? path : `/${path}`}`;
+  return `${base}${normalized}`;
 }
 
 export const defaultProducts = [
@@ -289,6 +291,79 @@ export const defaultUsers = [
   { id: "USR-1003", firstName: "Amina", lastName: "Yusuf", email: "amina@gmail.com", phone: "0613334444", address: "Karaan, Mogadishu", password: "customer123", avatar: "" }
 ];
 
+export const DEMO_PRODUCT_PRICE = 0.001;
+export const DEMO_PRODUCT_OLD_PRICE = 0.002;
+
+/** Rotating demo prices so cards don't all look identical */
+export const DEMO_PRODUCT_PRICES = [0.001, 0.003, 0.001, 0.002, 0.003, 0.001, 0.002, 0.001, 0.003, 0.002];
+export const DEMO_PRODUCT_OLD_PRICES = [0.002, 0.004, 0.002, 0.003, 0.004, 0.002, 0.003, 0.002, 0.004, 0.003];
+
+function demoPriceForProduct(product, index) {
+  const slot = typeof product?.id === 'number' ? product.id - 1 : index;
+  return DEMO_PRODUCT_PRICES[((slot % DEMO_PRODUCT_PRICES.length) + DEMO_PRODUCT_PRICES.length) % DEMO_PRODUCT_PRICES.length];
+}
+
+function demoOldPriceForProduct(product, index) {
+  const slot = typeof product?.id === 'number' ? product.id - 1 : index;
+  return DEMO_PRODUCT_OLD_PRICES[((slot % DEMO_PRODUCT_OLD_PRICES.length) + DEMO_PRODUCT_OLD_PRICES.length) % DEMO_PRODUCT_OLD_PRICES.length];
+}
+
+export const DEMO_DELIVERY_FEE = 0.001;
+export const DEMO_DELIVERY_FEE_ALT = 0.002;
+
+export const DELIVERY_DISTRICTS = [
+  { value: 'Hodan', fee: DEMO_DELIVERY_FEE },
+  { value: 'Wadajir', fee: DEMO_DELIVERY_FEE },
+  { value: 'Karaan', fee: DEMO_DELIVERY_FEE_ALT },
+  { value: 'Hamarweyne', fee: DEMO_DELIVERY_FEE },
+  { value: 'Dayniile', fee: DEMO_DELIVERY_FEE_ALT },
+  { value: 'Yaqshid', fee: DEMO_DELIVERY_FEE },
+];
+
+export function findDistrictByDeliveryFee(fee) {
+  const amount = Number(fee) || 0;
+  if (amount <= 0) return '';
+  const match = DELIVERY_DISTRICTS.find((d) => Math.abs(d.fee - amount) < 0.0001);
+  return match?.value || DELIVERY_DISTRICTS[0]?.value || '';
+}
+
+export function getDistrictFee(districtValue, districts = DELIVERY_DISTRICTS) {
+  return districts.find((d) => d.value === districtValue)?.fee ?? DEMO_DELIVERY_FEE;
+}
+
+let cachedDeliveryDistricts = null;
+
+export async function fetchDeliveryDistricts(forceRefresh = false) {
+  if (!forceRefresh && cachedDeliveryDistricts) return cachedDeliveryDistricts;
+  try {
+    const response = await fetch(apiUrl('/api/cms'));
+    const data = await response.json();
+    if (data.success && Array.isArray(data.cms?.deliveryFees) && data.cms.deliveryFees.length) {
+      cachedDeliveryDistricts = data.cms.deliveryFees.map(({ district, fee }) => ({
+        value: district,
+        fee: Number(fee),
+      }));
+      return cachedDeliveryDistricts;
+    }
+  } catch {
+    /* fall back to defaults */
+  }
+  cachedDeliveryDistricts = DELIVERY_DISTRICTS;
+  return cachedDeliveryDistricts;
+}
+
+export function clearDeliveryDistrictsCache() {
+  cachedDeliveryDistricts = null;
+}
+
+export function normalizeProductPrices(products) {
+  return products.map((p, index) => ({
+    ...p,
+    price: demoPriceForProduct(p, index),
+    oldPrice: p.oldPrice != null ? demoOldPriceForProduct(p, index) : undefined,
+  }));
+}
+
 export function initializeLocalStorage() {
   if (!localStorage.getItem('users')) {
     localStorage.setItem('users', JSON.stringify(defaultUsers));
@@ -304,10 +379,10 @@ export function initializeLocalStorage() {
   const hasAll10 = localProducts.length === 10 && localProducts.some(p => p.title === "Bloom Accent Chair Set");
 
   if (!localStorage.getItem('products') || !hasAll10) {
-    const prodsToSave = defaultProducts.map(p => {
+    const prodsToSave = defaultProducts.map((p, index) => {
       const copy = { ...p };
-      copy.price = 0.01;
-      if (copy.oldPrice) copy.oldPrice = 0.02;
+      copy.price = demoPriceForProduct(p, index);
+      if (copy.oldPrice) copy.oldPrice = demoOldPriceForProduct(p, index);
       return copy;
     });
     localStorage.setItem('products', JSON.stringify(prodsToSave));
@@ -327,17 +402,9 @@ export function normalizePhoneNumber(phone) {
 
 export function getProductsList() {
   try {
-    return JSON.parse(localStorage.getItem('products')) || defaultProducts;
+    const list = JSON.parse(localStorage.getItem('products')) || defaultProducts;
+    return normalizeProductPrices(list);
   } catch {
-    return defaultProducts;
+    return normalizeProductPrices(defaultProducts);
   }
-}
-
-export function normalizeProductPrices(products) {
-  return products.map(p => {
-    const copy = { ...p };
-    copy.price = 0.01;
-    if (copy.oldPrice) copy.oldPrice = 0.02;
-    return copy;
-  });
 }

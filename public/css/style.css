@@ -41,7 +41,8 @@
     padding: 0;
 }
 
-.register-card, .login-card {
+.auth-modal .register-card,
+.auth-modal .login-card {
     width: 100%;
     background: transparent;
     padding: 38px 40px 32px;
@@ -491,7 +492,8 @@
 
 /* ======= RESPONSIVE ======= */
 @media (max-width: 540px) {
-    .register-card, .login-card {
+    .auth-modal .register-card,
+    .auth-modal .login-card {
         padding: 30px 24px 26px;
     }
     .page-title { font-size: 2.1rem; }
@@ -500,7 +502,8 @@
 }
 
 @media (max-width: 380px) {
-    .register-card, .login-card {
+    .auth-modal .register-card,
+    .auth-modal .login-card {
         padding: 24px 18px 22px;
     }
 }

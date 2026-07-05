@@ -1,8 +1,11 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const path = require('path');
 const bcrypt = require('bcryptjs');
-const sequelize = require('./config/database');
+const mongoose = require('mongoose');
+require('dotenv').config();
+const connectDB = require('./config/database');
 
 // Import Models
 const User = require('./models/User');
@@ -10,26 +13,53 @@ const Product = require('./models/Product');
 const Order = require('./models/Order');
 const SupportTicket = require('./models/SupportTicket');
 const SupportMessage = require('./models/SupportMessage');
-
-// Define Model Associations
-SupportTicket.hasMany(SupportMessage, { foreignKey: 'ticketId', onDelete: 'CASCADE' });
-SupportMessage.belongsTo(SupportTicket, { foreignKey: 'ticketId' });
+const Category = require('./models/Category');
+const CmsContent = require('./models/CmsContent');
+const { getDefaultCms } = require('./controllers/cmsController');
 
 // Import Routes
 const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const supportRoutes = require('./routes/supportRoutes');
+const driverRoutes = require('./routes/driverRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const cmsRoutes = require('./routes/cmsRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
+const wishlistRoutes = require('./routes/wishlistRoutes');
+const cartRoutes = require('./routes/cartRoutes');
+const couponRoutes = require('./routes/couponRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Enable CORS
-app.use(cors({
-  origin: '*', // Allow all origins for local development, customize for production
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || corsOrigins.includes('*') || corsOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, corsOrigins[0]);
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 
 // Body Parser Middleware
 app.use(express.json({ limit: '10mb' })); // Support base64 image uploads in JSON
@@ -43,6 +73,33 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/drivers', driverRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/cms', cmsRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/coupons', couponRoutes);
+app.use('/api/admin', adminRoutes);
+
+app.get('/api/health', (_req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const dbLabels = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting',
+  };
+  const dbConnected = dbState === 1;
+  res.status(dbConnected ? 200 : 503).json({
+    success: dbConnected,
+    status: dbConnected ? 'ok' : 'degraded',
+    database: dbLabels[dbState] || 'unknown',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Simple Welcome Route
 app.get('/', (req, res) => {
@@ -53,7 +110,7 @@ app.get('/', (req, res) => {
 const seedDatabase = async () => {
   try {
     // 1. Seed Users (Hash their passwords first)
-    const userCount = await User.count();
+    const userCount = await User.countDocuments();
     if (userCount === 0) {
       console.log('Seeding users table...');
       const defaultUsers = [
@@ -110,7 +167,17 @@ const seedDatabase = async () => {
           address: "Hamarweyne, Mogadishu",
           password: "driver123",
           role: "delivery",
-          avatar: ""
+          avatar: "",
+          driverApplication: {
+            status: "approved",
+            district: "Hamarweyne",
+            vehicleType: "van",
+            experience: "2 years delivery experience in Mogadishu",
+            availability: "full-time",
+            appliedAt: new Date(),
+            reviewedAt: new Date(),
+            rejectReason: ""
+          }
         }
       ];
 
@@ -123,7 +190,7 @@ const seedDatabase = async () => {
     }
 
     // 2. Seed Products
-    const productCount = await Product.count();
+    const productCount = await Product.countDocuments();
     if (productCount === 0) {
       console.log('Seeding products table...');
       const defaultProducts = [
@@ -386,7 +453,7 @@ const seedDatabase = async () => {
     }
 
     // 3. Seed Orders
-    const orderCount = await Order.count();
+    const orderCount = await Order.countDocuments();
     if (orderCount === 0) {
       console.log('Seeding orders table...');
       const defaultOrders = [
@@ -567,7 +634,7 @@ const seedDatabase = async () => {
     }
 
     // 4. Seed Support Tickets & Messages
-    const ticketCount = await SupportTicket.count();
+    const ticketCount = await SupportTicket.countDocuments();
     if (ticketCount === 0) {
       console.log('Seeding support tickets table...');
       const defaultTickets = [
@@ -593,20 +660,63 @@ const seedDatabase = async () => {
       }
       console.log('Support tickets & messages seeded successfully.');
     }
+
+    const categoryCount = await Category.countDocuments();
+    if (categoryCount === 0) {
+      const defaultCategories = [
+        { id: 'CAT-living', name: 'Living Room', slug: 'living-room', order: 1 },
+        { id: 'CAT-bedroom', name: 'Bedroom', slug: 'bedroom', order: 2 },
+        { id: 'CAT-dining', name: 'Dining Room', slug: 'dining-room', order: 3 },
+        { id: 'CAT-chair', name: 'Chairs', slug: 'chair', order: 4 },
+        { id: 'CAT-office', name: 'Office', slug: 'office', order: 5 },
+        { id: 'CAT-outdoor', name: 'Outdoor', slug: 'outdoor', order: 6 },
+      ];
+      await Category.insertMany(defaultCategories);
+      console.log('Categories seeded successfully.');
+    }
+
+    const cmsCount = await CmsContent.countDocuments();
+    if (cmsCount === 0) {
+      await CmsContent.create(getDefaultCms());
+      console.log('CMS content seeded successfully.');
+    }
   } catch (err) {
     console.error('Error seeding database:', err);
   }
 };
 
-// Sync Database and Start Server
-sequelize.sync({ force: false }) // force: false keeps data intact after restarts
-  .then(async () => {
-    console.log('SQLite Connected & Models Synced successfully.');
-    await seedDatabase();
-    app.listen(PORT, () => {
+// Connect to MongoDB and Start Server
+const startServer = async () => {
+  try {
+    await connectDB();
+    try {
+      const { ensureIndexes } = require('./utils/ensureIndexes');
+      await ensureIndexes();
+      console.log('MongoDB indexes verified.');
+    } catch (indexErr) {
+      console.warn('Index setup skipped:', indexErr.message);
+    }
+
+    const server = app.listen(PORT, () => {
       console.log(`Backend server is running on port ${PORT}`);
     });
-  })
-  .catch(err => {
-    console.error('Failed to sync database:', err);
-  });
+
+    seedDatabase().catch((err) => console.error('Error seeding database:', err));
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`\nPort ${PORT} is already in use.`);
+        console.error('Close the other backend process (Ctrl+C) or run:');
+        console.error(`  netstat -ano | findstr :${PORT}`);
+        console.error('  taskkill /PID <PID> /F\n');
+        process.exit(1);
+      }
+      throw err;
+    });
+  } catch (err) {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  }
+};
+
+startServer();

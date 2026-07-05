@@ -1,0 +1,79 @@
+.auth-alert {
+  margin-bottom: 18px;
+  padding: 13px 16px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  animation: authAlertIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+  border: 1px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-alert::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 12px 0 0 12px;
+}
+
+.auth-alert__text {
+  display: block;
+}
+
+.auth-alert--danger {
+  background: linear-gradient(135deg, #fff6f4 0%, #fef9f0 55%, #fdf5eb 100%);
+  color: #7a2e28;
+  border-color: rgba(216, 161, 40, 0.22);
+  box-shadow:
+    0 6px 20px rgba(122, 46, 40, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.auth-alert--danger::before {
+  background: linear-gradient(180deg, #e07a6a 0%, #d8a128 100%);
+}
+
+.auth-alert--success {
+  background: linear-gradient(135deg, #f2faf6 0%, #f8fbf4 55%, #fef9f0 100%);
+  color: #073d35;
+  border-color: rgba(7, 61, 53, 0.14);
+  box-shadow:
+    0 6px 20px rgba(7, 61, 53, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.auth-alert--success::before {
+  background: linear-gradient(180deg, #073d35 0%, #d8a128 100%);
+}
+
+.auth-alert--leaving {
+  animation: authAlertOut 0.32s ease forwards;
+}
+
+@keyframes authAlertIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes authAlertOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}

@@ -1,6 +1,460 @@
-import LegacyPageRenderer from '../components/LegacyPageRenderer';
-import cartHtml from '../legacy/cart.html?raw';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import MainNavbar from '../components/MainNavbar';
+import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
+import { validateCartItems, validateCouponCode } from '../utils/cartApi';
+import { DELIVERY_DISTRICTS, fetchDeliveryDistricts, getDistrictFee } from '../utils/data';
+import { formatMoney, productImage } from '../utils/format';
+import { showTopFloatNotification } from '../utils/notifications';
+import '../styles/pages/Cart.css';
+
+const EMPTY_DISTRICT = { value: '0', label: 'Select district', fee: 0 };
 
 export default function Cart() {
-  return <LegacyPageRenderer html={cartHtml} pageKey="cart" />;
+  const navigate = useNavigate();
+  const { user, syncFromStorage: syncAuth } = useAuth();
+  const {
+    cartItems,
+    savedItems,
+    changeQuantity,
+    removeFromCart,
+    saveForLater,
+    moveToCart,
+    clearCart,
+    setCartItems,
+    syncFromStorage,
+  } = useCart();
+
+  const [couponInput, setCouponInput] = useState(
+    () => localStorage.getItem('cartCouponCode') || ''
+  );
+  const [discountAmount, setDiscountAmount] = useState(
+    () => Number(localStorage.getItem('cartDiscount')) || 0
+  );
+  const [districtKey, setDistrictKey] = useState(
+    () => localStorage.getItem('cartDistrict') || '0'
+  );
+  const [districts, setDistricts] = useState([
+    EMPTY_DISTRICT,
+    ...DELIVERY_DISTRICTS.map((d) => ({
+      ...d,
+      label: `${d.value} - ${formatMoney(d.fee)}`,
+    })),
+  ]);
+  const [validating, setValidating] = useState(false);
+  const [stockHints, setStockHints] = useState({});
+
+  useEffect(() => {
+    syncFromStorage();
+    syncAuth();
+  }, [syncFromStorage, syncAuth]);
+
+  useEffect(() => {
+    fetchDeliveryDistricts().then((list) => {
+      setDistricts([
+        EMPTY_DISTRICT,
+        ...list.map((d) => ({
+          ...d,
+          label: `${d.value} - ${formatMoney(d.fee)}`,
+        })),
+      ]);
+    });
+
+    const refreshDistricts = () => {
+      fetchDeliveryDistricts(true).then((list) => {
+        setDistricts([
+          EMPTY_DISTRICT,
+          ...list.map((d) => ({
+            ...d,
+            label: `${d.value} - ${formatMoney(d.fee)}`,
+          })),
+        ]);
+      });
+    };
+    window.addEventListener('delivery-fees-updated', refreshDistricts);
+    return () => window.removeEventListener('delivery-fees-updated', refreshDistricts);
+  }, []);
+
+  useEffect(() => {
+    if (cartItems.length === 0) {
+      setStockHints({});
+      return;
+    }
+
+    let cancelled = false;
+    validateCartItems(cartItems).then((data) => {
+      if (cancelled || !data.success) return;
+
+      const hints = {};
+      (data.items || []).forEach((item) => {
+        hints[item.id] = {
+          maxStock: item.maxStock,
+          stockOk: item.stockOk,
+          priceChanged: item.priceChanged,
+        };
+      });
+      setStockHints(hints);
+
+      if (data.items?.some((item) => item.priceChanged)) {
+        setCartItems((prev) =>
+          prev.map((item) => {
+            const fresh = data.items.find((row) => row.id === item.id);
+            return fresh ? { ...item, price: fresh.price, quantity: fresh.quantity } : item;
+          })
+        );
+        showTopFloatNotification('Cart prices updated to latest catalog values.');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cartItems.length, setCartItems]);
+
+  const subtotal = useMemo(
+    () => cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    [cartItems]
+  );
+
+  const itemCount = useMemo(
+    () => cartItems.reduce((sum, item) => sum + item.quantity, 0),
+    [cartItems]
+  );
+
+  const deliveryFee = useMemo(() => {
+    if (cartItems.length === 0) return 0;
+    const district = districts.find((d) => d.value === districtKey);
+    return district?.fee || 0;
+  }, [cartItems.length, districtKey, districts]);
+
+  const discount = cartItems.length > 0 ? discountAmount : 0;
+  const total = Math.max(subtotal + deliveryFee - discount, 0);
+
+  useEffect(() => {
+    localStorage.setItem('cartSubtotal', String(subtotal));
+    localStorage.setItem('cartDiscount', String(discount));
+    localStorage.setItem('cartDeliveryFee', String(deliveryFee));
+    localStorage.setItem('cartDistrict', districtKey);
+    localStorage.setItem('cartTotal', String(total));
+  }, [subtotal, discount, deliveryFee, total, districtKey]);
+
+  const applyCoupon = async () => {
+    const couponValue = couponInput.trim();
+    if (!couponValue) {
+      setDiscountAmount(0);
+      localStorage.setItem('cartDiscount', '0');
+      localStorage.removeItem('cartCouponCode');
+      showTopFloatNotification('Enter coupon code');
+      return;
+    }
+
+    try {
+      const data = await validateCouponCode(couponValue, subtotal);
+      if (data.success) {
+        setDiscountAmount(data.discount);
+        localStorage.setItem('cartDiscount', String(data.discount));
+        localStorage.setItem('cartCouponCode', data.code);
+        showTopFloatNotification(data.message || 'Coupon applied');
+      } else {
+        setDiscountAmount(0);
+        localStorage.setItem('cartDiscount', '0');
+        localStorage.removeItem('cartCouponCode');
+        showTopFloatNotification(data.message || 'Invalid coupon code', 'danger');
+      }
+    } catch {
+      showTopFloatNotification('Could not validate coupon. Check backend connection.', 'danger');
+    }
+  };
+
+  const handleClearCart = () => {
+    clearCart();
+    setDiscountAmount(0);
+    setCouponInput('');
+    localStorage.setItem('cartDiscount', '0');
+    localStorage.removeItem('cartCouponCode');
+    showTopFloatNotification('Shopping cart cleared');
+  };
+
+  const handleQuantityChange = (id, delta) => {
+    const item = cartItems.find((row) => row.id === id);
+    const hint = stockHints[id];
+    const maxStock = hint?.maxStock;
+
+    if (delta > 0 && maxStock && item && item.quantity >= maxStock) {
+      showTopFloatNotification(`Only ${maxStock} units available for "${item.title}".`, 'danger');
+      return;
+    }
+
+    changeQuantity(id, delta);
+    showTopFloatNotification('Cart quantity updated');
+  };
+
+  const handleRemove = (id) => {
+    removeFromCart(id);
+    showTopFloatNotification('Item removed from cart');
+  };
+
+  const handleSaveForLater = (id) => {
+    saveForLater(id);
+    showTopFloatNotification('Item saved for later');
+  };
+
+  const handleMoveToCart = (id) => {
+    moveToCart(id);
+    showTopFloatNotification('Item added back to cart');
+  };
+
+  const handleProceedToCheckout = async () => {
+    if (!districtKey || districtKey === '0') {
+      showTopFloatNotification('Please select a delivery district before checkout.', 'danger');
+      return;
+    }
+
+    setValidating(true);
+    try {
+      const data = await validateCartItems(cartItems);
+      if (!data.success || !data.valid) {
+        showTopFloatNotification(data.message || 'Cart validation failed.', 'danger');
+        if (data.items?.length) {
+          setCartItems(data.items.map(({ maxStock, stockOk, priceChanged, ...item }) => item));
+        }
+        return;
+      }
+
+      if (data.items?.length) {
+        setCartItems(data.items.map(({ maxStock, stockOk, priceChanged, ...item }) => item));
+      }
+
+      navigate('/checkout');
+    } catch {
+      showTopFloatNotification('Could not validate cart. Check backend connection.', 'danger');
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const isEmpty = cartItems.length === 0;
+
+  return (
+    <div className="cart-page">
+      <MainNavbar cartActive />
+
+      <section className="cart-hero">
+        <div className="container">
+          <span className="cart-label">Shopping Cart</span>
+          <h1 className="cart-title">Review Your Furniture Cart</h1>
+        </div>
+      </section>
+
+      <section className="cart-section">
+        <div className="container">
+          {!isEmpty && (
+            <div className="cart-layout">
+              <div>
+                <div className="cart-box">
+                  <div className="cart-table-head">
+                    <div>Product</div>
+                    <div>Price</div>
+                    <div>Quantity</div>
+                    <div>Subtotal</div>
+                    <div />
+                  </div>
+
+                  {cartItems.map((item) => {
+                    const hint = stockHints[item.id];
+                    return (
+                      <div key={item.id} className="cart-item">
+                        <div className="product-cell">
+                          <div className="cart-img">
+                            <img src={productImage(item.image)} alt={item.title} />
+                          </div>
+                          <div>
+                            <div className="cart-name">{item.title}</div>
+                            <div className="cart-meta">{item.category}</div>
+                            {hint && !hint.stockOk && (
+                              <div className="cart-stock-warning">Low or out of stock — update quantity</div>
+                            )}
+                            {hint?.maxStock > 0 && hint?.maxStock <= 5 && (
+                              <div className="cart-stock-warning">Only {hint.maxStock} left</div>
+                            )}
+                            <button
+                              type="button"
+                              className="save-btn mt-2"
+                              onClick={() => handleSaveForLater(item.id)}
+                            >
+                              <i className="fa-regular fa-bookmark me-1" />
+                              Save for Later
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="cart-col-price">
+                          <span className="price-text">{formatMoney(item.price)}</span>
+                        </div>
+
+                        <div className="cart-col-qty">
+                          <div className="qty-box">
+                            <button type="button" onClick={() => handleQuantityChange(item.id, -1)}>
+                              −
+                            </button>
+                            <span>{item.quantity}</span>
+                            <button type="button" onClick={() => handleQuantityChange(item.id, 1)}>
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="cart-col-subtotal">
+                          <span className="subtotal-text">
+                            {formatMoney(item.price * item.quantity)}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="remove-btn"
+                          onClick={() => handleRemove(item.id)}
+                          aria-label="Remove item"
+                        >
+                          <i className="fa-solid fa-xmark" />
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  <div className="cart-actions">
+                    <div className="coupon-wrap">
+                      <input
+                        type="text"
+                        className="coupon-input"
+                        placeholder="Coupon Code (e.g. MMF10)"
+                        value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value)}
+                      />
+                      <button type="button" className="coupon-btn" onClick={applyCoupon}>
+                        Apply Coupon
+                      </button>
+                    </div>
+                    <button type="button" className="clear-btn" onClick={handleClearCart}>
+                      Clear Shopping Cart
+                    </button>
+                  </div>
+                </div>
+
+                <div className="saved-box">
+                  <h2 className="saved-title">Saved for Later</h2>
+                  {savedItems.length === 0 ? (
+                    <p style={{ color: '#777', fontWeight: 700, margin: 0 }}>
+                      No saved items yet.
+                    </p>
+                  ) : (
+                    savedItems.map((item) => (
+                      <div key={item.id} className="saved-item">
+                        <div className="saved-left">
+                          <div className="saved-img">
+                            <img src={productImage(item.image)} alt={item.title} />
+                          </div>
+                          <div>
+                            <div className="saved-name">{item.title}</div>
+                            <div className="saved-price">{formatMoney(item.price)}</div>
+                          </div>
+                        </div>
+                        <div className="saved-actions">
+                          <button
+                            type="button"
+                            className="add-cart-btn"
+                            onClick={() => handleMoveToCart(item.id)}
+                          >
+                            <i className="fa-solid fa-cart-plus me-1" />
+                            Add to Cart
+                          </button>
+                          <Link to="/products" className="shop-small-btn">
+                            <i className="fa-solid fa-bag-shopping me-1" />
+                            Shop More
+                          </Link>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <aside className="summary-box">
+                <h2 className="summary-title">Order Summary</h2>
+
+                <div className="summary-row">
+                  <span>Items</span>
+                  <span>{itemCount}</span>
+                </div>
+                <div className="summary-row">
+                  <span>Sub Total</span>
+                  <span>{formatMoney(subtotal)}</span>
+                </div>
+                <div className="summary-row">
+                  <span>Shipping</span>
+                  <span>{formatMoney(deliveryFee)}</span>
+                </div>
+                <div className="summary-row">
+                  <span>Coupon Discount</span>
+                  <span>-{formatMoney(discount)}</span>
+                </div>
+                <div className="summary-row">
+                  <span className="summary-total">Total</span>
+                  <span className="summary-total">{formatMoney(total)}</span>
+                </div>
+
+                <div className="district-box">
+                  <label htmlFor="districtSelect">Delivery District *</label>
+                  <select
+                    id="districtSelect"
+                    value={districtKey}
+                    onChange={(e) => setDistrictKey(e.target.value)}
+                  >
+                    {districts.map(({ value, label }) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="button"
+                  className="checkout-btn"
+                  onClick={handleProceedToCheckout}
+                  disabled={validating}
+                >
+                  {validating ? 'Validating Cart...' : 'Proceed to Checkout'}
+                  <i className="fa-solid fa-arrow-right" />
+                </button>
+
+                <Link to="/products" className="continue-btn">
+                  <i className="fa-solid fa-bag-shopping" />
+                  Continue Shopping
+                </Link>
+
+                {!user.isLoggedIn && (
+                  <div className="note-box">
+                    Guest checkout available — you can complete your order without an account.
+                  </div>
+                )}
+              </aside>
+            </div>
+          )}
+
+          {isEmpty && (
+            <div className="empty-box">
+              <i className="fa-solid fa-cart-shopping" />
+              <h3>Your cart is empty</h3>
+              <p>Add furniture items from the shop page to continue.</p>
+              <Link to="/products" className="checkout-btn" style={{ maxWidth: '240px', margin: 'auto' }}>
+                Go to Shop
+              </Link>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }

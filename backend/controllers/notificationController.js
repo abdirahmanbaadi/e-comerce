@@ -1,0 +1,127 @@
+const Notification = require('../models/Notification');
+
+function formatTime(date) {
+  const d = new Date(date);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) {
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+const UI_META = {
+  order_confirmed: { iconType: 'order-confirmed', dot: 'green', iconWrap: 'solid-green', modalType: 'order-confirmed', highlight: true },
+  payment_success: { iconType: 'payment-success', dot: 'green', iconWrap: 'solid-green', modalType: 'payment-success' },
+  payment_failed: { iconType: 'payment-failed', dot: 'red', iconWrap: 'solid-red', modalType: 'payment-failed' },
+  order_processing: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-processing' },
+  order_shipped: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-processing' },
+  order_delivered: { iconType: 'order-confirmed', dot: 'green', iconWrap: 'solid-green', modalType: 'order-confirmed' },
+  order_cancelled: { iconType: 'payment-failed', dot: 'red', iconWrap: 'solid-red', modalType: 'payment-failed' },
+  driver_assigned: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-processing' },
+  support_replied: { iconType: 'support-replied', dot: 'grey', iconWrap: 'solid-brown', modalType: 'support-replied', dynamic: true },
+  wishlist_stock: { iconType: 'wishlist', dot: 'grey', iconWrap: 'solid-yellow', modalType: 'wishlist-available' },
+  weekend_offer: { iconType: 'weekend-offer', dot: 'grey', iconWrap: 'solid-orange', modalType: 'weekend-offer' },
+  new_order: { iconType: 'order-confirmed', dot: 'green', iconWrap: 'solid-green', modalType: 'order-confirmed' },
+  driver_application: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-processing' },
+  new_support_ticket: { iconType: 'support-replied', dot: 'grey', iconWrap: 'solid-brown', modalType: 'support-replied' },
+  delivery_assigned: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'delivery-assigned' },
+  review_moderated: { iconType: 'weekend-offer', dot: 'green', iconWrap: 'solid-green', modalType: 'review-moderated' },
+};
+
+function mapNotification(n, index) {
+  const meta = UI_META[n.type] || {
+    iconType: 'order-confirmed',
+    dot: 'grey',
+    iconWrap: 'solid-green',
+    modalType: 'order-confirmed',
+  };
+
+  return {
+    id: n.id,
+    index,
+    type: n.type,
+    title: n.title,
+    desc: n.message,
+    time: formatTime(n.createdAt),
+    unread: !n.read,
+    read: n.read,
+    relatedId: n.relatedId,
+    orderId: n.metadata?.orderId || n.relatedId,
+    paymentTotal: n.metadata?.amount || '',
+    metadata: n.metadata || {},
+    dot: n.read ? 'grey' : meta.dot,
+    iconWrap: meta.iconWrap,
+    iconType: meta.iconType,
+    modalType: meta.modalType,
+    highlight: meta.highlight && !n.read,
+    dynamic: meta.dynamic,
+    audience: n.audience,
+  };
+}
+
+function queryForUser(user) {
+  if (user.role === 'admin') {
+    return { audience: 'admin' };
+  }
+  return { audience: 'user', userId: user.id };
+}
+
+exports.getNotifications = async (req, res) => {
+  try {
+    const filter = queryForUser(req.user);
+    const items = await Notification.find(filter).sort({ createdAt: -1 }).limit(100);
+
+    return res.status(200).json({
+      success: true,
+      count: items.length,
+      notifications: items.map(mapNotification),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to load notifications.' });
+  }
+};
+
+exports.getUnreadCount = async (req, res) => {
+  try {
+    const filter = { ...queryForUser(req.user), read: false };
+    const count = await Notification.countDocuments(filter);
+    return res.status(200).json({ success: true, count });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to count notifications.' });
+  }
+};
+
+exports.markRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const filter = { id, ...queryForUser(req.user) };
+    const notification = await Notification.findOneAndUpdate(filter, { read: true }, { new: true });
+
+    if (!notification) {
+      return res.status(404).json({ success: false, message: 'Notification not found.' });
+    }
+
+    return res.status(200).json({ success: true, notification: mapNotification(notification, 0) });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to update notification.' });
+  }
+};
+
+exports.markAllRead = async (req, res) => {
+  try {
+    const filter = { ...queryForUser(req.user), read: false };
+    await Notification.updateMany(filter, { read: true });
+    return res.status(200).json({ success: true, message: 'All notifications marked as read.' });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to mark notifications as read.' });
+  }
+};

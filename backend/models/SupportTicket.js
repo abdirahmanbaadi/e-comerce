@@ -1,45 +1,70 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
+const mongoose = require('mongoose');
 
-const SupportTicket = sequelize.define('SupportTicket', {
-  id: {
-    type: DataTypes.STRING,
-    primaryKey: true,
+const supportTicketSchema = new mongoose.Schema(
+  {
+    id: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    userId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
+    },
+    subject: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    status: {
+      type: String,
+      default: 'Open',
+      enum: ['Open', 'Replied', 'Closed'],
+      required: true,
+    },
+    lastMessageText: {
+      type: String,
+      default: '',
+    },
+    lastMessageAt: {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+    date: {
+      type: String,
+      required: true,
+    },
   },
-  userId: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  name: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  email: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  subject: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  status: {
-    type: DataTypes.STRING, // 'Open', 'Replied', 'Closed'
-    defaultValue: 'Open',
-    allowNull: false,
-  },
-  lastMessageText: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  },
-  lastMessageAt: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: DataTypes.NOW,
-  },
-  date: {
-    type: DataTypes.STRING, // e.g. "2026-06-22"
-    allowNull: false,
+  {
+    timestamps: true,
+    versionKey: false,
+    toJSON: {
+      transform: (_doc, ret) => {
+        delete ret._id;
+        return ret;
+      },
+    },
+    toObject: {
+      transform: (_doc, ret) => {
+        delete ret._id;
+        return ret;
+      },
+    },
   }
-});
+);
 
-module.exports = SupportTicket;
+module.exports = mongoose.model('SupportTicket', supportTicketSchema);

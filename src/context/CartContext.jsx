@@ -1,19 +1,100 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  CART_UPDATED_EVENT,
+  readCartItems,
+  readSavedItems,
+} from '../utils/cartStorage';
+import { apiUrl } from '../utils/data';
 
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
-  const [cartItems, setCartItems] = useState(() => {
+  const [cartItems, setCartItems] = useState(readCartItems);
+  const [savedItems, setSavedItems] = useState(readSavedItems);
+  const syncTimerRef = useRef(null);
+
+  const syncFromStorage = useCallback(() => {
+    setCartItems(readCartItems());
+    setSavedItems(readSavedItems());
+  }, []);
+
+  const mergeCartWithServer = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const localCart = readCartItems();
+    const localSaved = readSavedItems();
+
     try {
-      return JSON.parse(localStorage.getItem('cartItems')) || [];
+      const response = await fetch(apiUrl('/api/cart'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ cartItems: localCart, savedItems: localSaved }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setCartItems(data.cartItems || []);
+        setSavedItems(data.savedItems || []);
+        localStorage.setItem('cartItems', JSON.stringify(data.cartItems || []));
+        localStorage.setItem('savedItems', JSON.stringify(data.savedItems || []));
+        window.dispatchEvent(new Event(CART_UPDATED_EVENT));
+      }
     } catch {
-      return [];
+      /* keep local cart */
     }
-  });
+  }, []);
+
+  const pushCartToServer = useCallback(async (cart, saved) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      await fetch(apiUrl('/api/cart'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ cartItems: cart, savedItems: saved }),
+      });
+    } catch {
+      /* ignore sync errors */
+    }
+  }, []);
+
+  useEffect(() => {
+    syncFromStorage();
+
+    const onCartUpdated = () => syncFromStorage();
+    const onLogin = () => mergeCartWithServer();
+
+    window.addEventListener(CART_UPDATED_EVENT, onCartUpdated);
+    window.addEventListener('focus', onCartUpdated);
+    window.addEventListener('user-logged-in', onLogin);
+
+    return () => {
+      window.removeEventListener(CART_UPDATED_EVENT, onCartUpdated);
+      window.removeEventListener('focus', onCartUpdated);
+      window.removeEventListener('user-logged-in', onLogin);
+    };
+  }, [syncFromStorage, mergeCartWithServer]);
 
   useEffect(() => {
     localStorage.setItem('cartItems', JSON.stringify(cartItems));
-  }, [cartItems]);
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      pushCartToServer(cartItems, savedItems);
+    }, 800);
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, [cartItems, savedItems, pushCartToServer]);
+
+  useEffect(() => {
+    localStorage.setItem('savedItems', JSON.stringify(savedItems));
+  }, [savedItems]);
 
   const cartCount = useMemo(
     () => cartItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
@@ -54,11 +135,74 @@ export function CartProvider({ children }) {
     setCartItems(prev => prev.filter(item => item.id !== id));
   }, []);
 
+  const changeQuantity = useCallback((id, delta) => {
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
+      )
+    );
+  }, []);
+
+  const saveForLater = useCallback((id) => {
+    setCartItems((prev) => {
+      const item = prev.find((i) => i.id === id);
+      if (!item) return prev;
+      setSavedItems((saved) => (saved.some((s) => s.id === id) ? saved : [...saved, item]));
+      return prev.filter((i) => i.id !== id);
+    });
+  }, []);
+
+  const moveToCart = useCallback((id) => {
+    setSavedItems((prev) => {
+      const item = prev.find((i) => i.id === id);
+      if (!item) return prev;
+
+      setCartItems((cart) => {
+        const existing = cart.find((c) => c.id === id);
+        if (existing) {
+          return cart.map((c) =>
+            c.id === id ? { ...c, quantity: c.quantity + item.quantity } : c
+          );
+        }
+        return [...cart, item];
+      });
+      return prev.filter((i) => i.id !== id);
+    });
+  }, []);
+
   const clearCart = useCallback(() => setCartItems([]), []);
 
   const value = useMemo(
-    () => ({ cartItems, cartCount, addToCart, updateQuantity, removeFromCart, clearCart, setCartItems }),
-    [cartItems, cartCount, addToCart, updateQuantity, removeFromCart, clearCart]
+    () => ({
+      cartItems,
+      savedItems,
+      cartCount,
+      addToCart,
+      updateQuantity,
+      changeQuantity,
+      removeFromCart,
+      saveForLater,
+      moveToCart,
+      clearCart,
+      setCartItems,
+      setSavedItems,
+      syncFromStorage,
+      mergeCartWithServer,
+    }),
+    [
+      cartItems,
+      savedItems,
+      cartCount,
+      addToCart,
+      updateQuantity,
+      changeQuantity,
+      removeFromCart,
+      saveForLater,
+      moveToCart,
+      clearCart,
+      syncFromStorage,
+      mergeCartWithServer,
+    ]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

@@ -1,28 +1,58 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
+const mongoose = require('mongoose');
 
-const SupportMessage = sequelize.define('SupportMessage', {
-  id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    autoIncrement: true,
+const supportMessageSchema = new mongoose.Schema(
+  {
+    id: {
+      type: Number,
+      unique: true,
+      index: true,
+    },
+    ticketId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    senderRole: {
+      type: String,
+      required: true,
+      enum: ['user', 'admin'],
+    },
+    senderName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    messageText: {
+      type: String,
+      required: true,
+    },
   },
-  ticketId: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  senderRole: {
-    type: DataTypes.STRING, // 'user' or 'admin'
-    allowNull: false,
-  },
-  senderName: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  messageText: {
-    type: DataTypes.TEXT,
-    allowNull: false,
+  {
+    timestamps: true,
+    versionKey: false,
+    toJSON: {
+      transform: (_doc, ret) => {
+        delete ret._id;
+        return ret;
+      },
+    },
+    toObject: {
+      transform: (_doc, ret) => {
+        delete ret._id;
+        return ret;
+      },
+    },
   }
+);
+
+supportMessageSchema.pre('save', async function assignMessageId(next) {
+  if (!this.isNew || this.id != null) {
+    return next();
+  }
+
+  const latest = await this.constructor.findOne().sort({ id: -1 }).select('id').lean();
+  this.id = latest?.id ? latest.id + 1 : 1;
+  next();
 });
 
-module.exports = SupportMessage;
+module.exports = mongoose.model('SupportMessage', supportMessageSchema);

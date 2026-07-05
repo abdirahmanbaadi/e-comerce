@@ -5,8 +5,13 @@ const ProductsContext = createContext(null);
 
 export function ProductsProvider({ children }) {
   const [products, setProducts] = useState(getProductsList);
+  const [loading, setLoading] = useState(false);
 
   const syncProducts = useCallback(async () => {
+    const cached = getProductsList();
+    if (cached.length) setProducts(cached);
+
+    setLoading(true);
     try {
       const response = await fetch(apiUrl('/api/products'));
       const data = await response.json();
@@ -17,6 +22,8 @@ export function ProductsProvider({ children }) {
       }
     } catch {
       setProducts(getProductsList());
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -24,7 +31,10 @@ export function ProductsProvider({ children }) {
     syncProducts();
   }, [syncProducts]);
 
-  const value = useMemo(() => ({ products, setProducts, syncProducts }), [products, syncProducts]);
+  const value = useMemo(
+    () => ({ products, setProducts, syncProducts, loading }),
+    [products, syncProducts, loading]
+  );
 
   return <ProductsContext.Provider value={value}>{children}</ProductsContext.Provider>;
 }

@@ -1,6 +1,9 @@
 const SupportTicket = require('../models/SupportTicket');
 const SupportMessage = require('../models/SupportMessage');
-const User = require('../models/User');
+const {
+  onSupportAdminReply,
+  onSupportTicketCreated,
+} = require('../services/notificationService');
 
 // Active SSE clients list
 let sseClients = [];
@@ -21,6 +24,8 @@ const broadcast = (data) => {
     }
   });
 };
+
+const toPlainObject = (doc) => (doc?.toObject ? doc.toObject() : doc);
 
 // SSE stream connection endpoint
 exports.supportStream = (req, res) => {
@@ -96,14 +101,16 @@ exports.createConversation = async (req, res) => {
       messageText
     });
 
-    const ticketData = ticket.get ? ticket.get({ plain: true }) : ticket;
-    const messageData = message.get ? message.get({ plain: true }) : message;
+    const ticketData = toPlainObject(ticket);
+    const messageData = toPlainObject(message);
 
     broadcast({
       type: 'ticket',
       ticket: ticketData,
       message: messageData
     });
+
+    await onSupportTicketCreated(ticket);
 
     return res.status(201).json({
       success: true,
@@ -122,10 +129,7 @@ exports.getUserConversations = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const tickets = await SupportTicket.findAll({
-      where: { userId },
-      order: [['lastMessageAt', 'DESC']]
-    });
+    const tickets = await SupportTicket.find({ userId }).sort({ lastMessageAt: -1 });
 
     return res.status(200).json({ success: true, count: tickets.length, tickets });
   } catch (error) {
@@ -142,7 +146,7 @@ exports.getConversationMessages = async (req, res) => {
     const role = req.user.role;
 
     // Retrieve ticket to verify ownership
-    const ticket = await SupportTicket.findByPk(ticketId);
+    const ticket = await SupportTicket.findOne({ id: ticketId });
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Wadahadalkaan lama helin!' });
     }
@@ -152,10 +156,7 @@ exports.getConversationMessages = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Malahid awood aad ku aragto wadahadalkaan!' });
     }
 
-    const messages = await SupportMessage.findAll({
-      where: { ticketId },
-      order: [['createdAt', 'ASC']]
-    });
+    const messages = await SupportMessage.find({ ticketId }).sort({ createdAt: 1 });
 
     return res.status(200).json({ success: true, count: messages.length, messages, ticket });
   } catch (error) {
@@ -177,7 +178,7 @@ exports.addMessage = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Fariintu ma noqon karto eber!' });
     }
 
-    const ticket = await SupportTicket.findByPk(ticketId);
+    const ticket = await SupportTicket.findOne({ id: ticketId });
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Wadahadalkaan lama helin!' });
     }
@@ -205,14 +206,18 @@ exports.addMessage = async (req, res) => {
     ticket.status = role === 'admin' ? 'Replied' : 'Open';
     await ticket.save();
 
-    const ticketData = ticket.get ? ticket.get({ plain: true }) : ticket;
-    const messageData = message.get ? message.get({ plain: true }) : message;
+    const ticketData = toPlainObject(ticket);
+    const messageData = toPlainObject(message);
 
     broadcast({
       type: 'message',
       message: messageData,
       ticket: ticketData
     });
+
+    if (role === 'admin') {
+      await onSupportAdminReply(ticket);
+    }
 
     return res.status(201).json({
       success: true,
@@ -229,9 +234,11 @@ exports.addMessage = async (req, res) => {
 // 5. Get all conversations (Admin)
 exports.getAdminConversations = async (req, res) => {
   try {
-    const tickets = await SupportTicket.findAll({
-      order: [['lastMessageAt', 'DESC']]
-    });
+    const tickets = await SupportTicket.find()
+      .select('id userId name email subject status lastMessageAt lastMessageText createdAt')
+      .sort({ lastMessageAt: -1 })
+      .limit(80)
+      .lean();
 
     return res.status(200).json({ success: true, count: tickets.length, tickets });
   } catch (error) {

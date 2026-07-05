@@ -1,55 +1,148 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
+const mongoose = require('mongoose');
 
-const Order = sequelize.define('Order', {
-  id: {
-    type: DataTypes.STRING,
-    primaryKey: true,
+const orderSchema = new mongoose.Schema(
+  {
+    id: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    phone: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    customer: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    amount: {
+      type: String,
+      required: true,
+    },
+    payment: {
+      type: String,
+      default: 'Pending',
+    },
+    paymentType: {
+      type: String,
+      default: 'pending',
+    },
+    address: {
+      type: String,
+      required: true,
+    },
+    driver: {
+      type: String,
+      default: 'Not assigned yet',
+    },
+    assignedDriverId: {
+      type: String,
+      default: '',
+      index: true,
+    },
+    estimate: {
+      type: String,
+      default: 'Processing your order',
+    },
+    status: {
+      type: String,
+      enum: ['processing', 'shipped', 'delivered', 'cancelled'],
+      default: 'processing',
+    },
+    currentStep: {
+      type: Number,
+      default: 1,
+    },
+    product: {
+      type: String,
+      required: true,
+    },
+    items: {
+      type: [
+        {
+          id: Number,
+          title: String,
+          quantity: Number,
+          price: Number,
+          category: String,
+          image: String,
+        },
+      ],
+      default: [],
+    },
+    email: {
+      type: String,
+      default: '',
+    },
+    userId: {
+      type: String,
+      default: '',
+      index: true,
+    },
+    deliveryDate: {
+      type: String,
+      default: '',
+    },
+    deliveryTime: {
+      type: String,
+      default: '',
+    },
+    paymentMethod: {
+      type: String,
+      default: '',
+    },
+    paymentReference: {
+      type: String,
+      default: '',
+    },
+    transactionId: {
+      type: String,
+      default: '',
+    },
+    paidAt: {
+      type: Date,
+      default: null,
+    },
+    date: {
+      type: String,
+      required: true,
+    },
+    subtotal: {
+      type: Number,
+      default: 0,
+    },
+    deliveryFee: {
+      type: Number,
+      default: 0,
+    },
+    discount: {
+      type: Number,
+      default: 0,
+    },
+    couponCode: {
+      type: String,
+      default: '',
+    },
   },
-  phone: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  customer: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  amount: {
-    type: DataTypes.STRING, // e.g. "$350.00" or raw numbers
-    allowNull: false,
-  },
-  payment: {
-    type: DataTypes.STRING, // 'Paid', 'Pending', 'Failed'
-    defaultValue: 'Pending',
-  },
-  paymentType: {
-    type: DataTypes.STRING, // 'paid', 'pending', 'failed'
-    defaultValue: 'pending',
-  },
-  address: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  driver: {
-    type: DataTypes.STRING,
-    defaultValue: 'Not assigned yet',
-  },
-  estimate: {
-    type: DataTypes.STRING,
-    defaultValue: 'Waiting for payment verification',
-  },
-  currentStep: {
-    type: DataTypes.INTEGER, // Step 0 to 5
-    defaultValue: 1,
-  },
-  product: {
-    type: DataTypes.TEXT, // Summary of product or JSON items
-    allowNull: false,
-  },
-  date: {
-    type: DataTypes.STRING, // e.g. "May 22, 2026"
-    allowNull: false,
+  {
+    timestamps: true,
+    versionKey: false,
+    toJSON: {
+      transform: (_doc, ret) => {
+        delete ret._id;
+        return ret;
+      },
+    },
+    toObject: {
+      transform: (_doc, ret) => {
+        delete ret._id;
+        return ret;
+      },
+    },
   }
-});
+);
 
-module.exports = Order;
+module.exports = mongoose.model('Order', orderSchema);

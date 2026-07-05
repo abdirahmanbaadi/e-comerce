@@ -1,7 +1,11 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const JWT_SECRET = 'mogadishu_modern_furniture_secret_key_2026'; // Simple local secret
+if (!process.env.JWT_SECRET) {
+  console.warn('[SECURITY] JWT_SECRET is not set. Using development fallback — set JWT_SECRET in production.');
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || 'mogadishu_modern_furniture_dev_only';
 
 // Protect routes - Verify JWT token
 const protect = async (req, res, next) => {
@@ -19,7 +23,7 @@ const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, JWT_SECRET);
 
       // Get user from the token
-      const user = await User.findByPk(decoded.id);
+      const user = await User.findOne({ id: decoded.id });
       
       if (!user) {
         return res.status(401).json({ success: false, message: 'Fadlan dib u soo gal, isticmaalahaan lama helin!' });
@@ -49,4 +53,25 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { protect, authorize, JWT_SECRET };
+// Optional auth — attaches req.user when token is valid, continues as guest otherwise
+const optionalProtect = async (req, res, next) => {
+  let token;
+
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+
+  if (!token) return next();
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findOne({ id: decoded.id });
+    if (user) req.user = user;
+  } catch (error) {
+    // Ignore invalid token for public checkout
+  }
+
+  return next();
+};
+
+module.exports = { protect, optionalProtect, authorize, JWT_SECRET };

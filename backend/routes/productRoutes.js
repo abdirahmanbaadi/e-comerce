@@ -40,6 +40,7 @@ const upload = multer({
 
 // Public Product Endpoints
 router.get('/', prodController.getProducts);
+router.get('/:id/details', protect, authorize('admin'), prodController.getProductDetails);
 router.get('/:id', prodController.getProductById);
 
 // Protected Admin-Only Product Endpoints (Uses upload.array for uploading up to 5 images)

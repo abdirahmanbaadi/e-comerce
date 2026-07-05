@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --deep-green: #073d35;
+    --gold: #d8a128;
+    --light-bg: #faf8f2;
+    --soft-bg: #f4efe6;
+  }
+
+  body {
+    @apply m-0 font-sans text-[#111111] bg-[#F4EFE6];
+  }
+
+  #root {
+    min-height: 100vh;
+    width: 100%;
+  }
+}

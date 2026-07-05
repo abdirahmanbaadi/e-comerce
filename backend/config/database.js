@@ -1,11 +1,14 @@
-const { Sequelize } = require('sequelize');
-const path = require('path');
+const mongoose = require('mongoose');
 
-// Configure Sequelize with SQLite
-const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: path.join(__dirname, '..', 'database.sqlite'),
-  logging: false, // Set to console.log to see SQL queries during debugging
-});
+const connectDB = async () => {
+  const uri = process.env.MONGODB_URI;
 
-module.exports = sequelize;
+  if (!uri) {
+    throw new Error('MONGODB_URI is not defined in environment variables');
+  }
+
+  await mongoose.connect(uri);
+  console.log('MongoDB Atlas Connected successfully.');
+};
+
+module.exports = connectDB;
