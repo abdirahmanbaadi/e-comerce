@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import MainNavbar from '../components/MainNavbar';
-import ProductCard from '../components/ProductCard';
-import ProductModal from '../components/ProductModal';
+import StoreNavbar, { AppSearchField } from '../features/nav/StoreNavbar';
+import { ProductCard } from '../features/products/StoreProducts';
+import ProductModal from '../features/products/StoreProducts';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useProducts } from '../context/ProductsContext';
@@ -23,8 +23,6 @@ import {
 } from '../utils/productFilters';
 import { apiUrl, normalizeProductPrices } from '../utils/data';
 import { showTopFloatNotification } from '../utils/notifications';
-import '../styles/pages/Products.css';
-import '../styles/product-modal.css';
 
 function toggleArrayValue(list, value) {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -192,19 +190,21 @@ export default function Products() {
       : `Showing ${filteredProducts.length} product${filteredProducts.length === 1 ? '' : 's'}`;
 
   return (
-    <div className="products-page-wrapper">
-      <MainNavbar />
+    <div className="products-page min-h-screen bg-white font-sans text-[#111]">
+      <StoreNavbar />
 
-      <main className="products-page">
+      <main className="bg-white py-10 pb-20">
         <div className="container">
-          <div className="shop-top">
+          <div className="shop-top mb-6 flex flex-wrap items-center justify-between gap-5">
             <div>
-              <h1 className="shop-title">All Products</h1>
-              <p className="results-text">{resultsText}</p>
+              <h1 className="m-0 font-display text-[2.2rem] font-bold text-deepGreen md:text-[2.7rem]">
+                All Products
+              </h1>
+              <p className="m-0 text-[0.95rem] font-extrabold text-[#666]">{resultsText}</p>
             </div>
 
             <div className="shop-controls-right">
-              <div className="sort-box" style={{ margin: 0 }}>
+              <div className="sort-box">
                 <span>Sort by:</span>
                 <select
                   className="sort-select"
@@ -219,33 +219,17 @@ export default function Products() {
                 </select>
               </div>
 
-              <div className="search-wrapper page-search-wrapper">
-                <input
-                  type="text"
-                  className="search-input"
-                  placeholder="Search title, material, color..."
-                  value={filters.search}
-                  onChange={(e) => updateFilter('search', e.target.value)}
-                />
-                <i className="fa-solid fa-magnifying-glass" />
-              </div>
+              <AppSearchField
+                placeholder="Search title, material, color..."
+                value={filters.search}
+                onChange={(e) => updateFilter('search', e.target.value)}
+              />
             </div>
           </div>
 
           <div className="products-layout">
             <aside className="filter-sidebar">
               <div className="filter-main-title">Filter Options</div>
-
-              <div className="filter-group">
-                <label className="check-row">
-                  <input
-                    type="checkbox"
-                    checked={filters.isNewest}
-                    onChange={(e) => updateFilter('isNewest', e.target.checked)}
-                  />
-                  New Arrivals Only
-                </label>
-              </div>
 
               <div className="filter-group">
                 <div className="filter-group-title">By Categories</div>
@@ -341,9 +325,7 @@ export default function Products() {
                 <span className="active-filter-label">Active Filter</span>
                 <div id="activeFiltersContainer">
                   {!hasActiveFilters && (
-                    <span style={{ color: '#999', fontSize: '0.85rem', fontWeight: 700 }}>
-                      No active filter
-                    </span>
+                    <span className="text-[0.85rem] font-bold text-[#999]">No active filter</span>
                   )}
                   {activeChips.map((chip) => (
                     <span key={`${chip.type}-${chip.value}`} className="active-chip">
@@ -376,7 +358,7 @@ export default function Products() {
                   </button>
                 </div>
               ) : (
-                <div className="row row-cols-1 row-cols-sm-2 row-cols-xl-3 g-4">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
                   {filteredProducts.map((product) => (
                     <ProductCard
                       key={product.id}

@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ProductsProvider } from './context/ProductsContext';
@@ -7,17 +8,15 @@ import Home from './pages/Home';
 import Products from './pages/Products';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
-import Login from './pages/Login';
-import Register from './pages/Register';
+import { LoginPage, RegisterPage } from './pages/Auth';
 import Profile from './pages/Profile';
 import TrackOrder from './pages/TrackOrder';
-import Admin from './pages/Admin';
 import ApplyDelivery from './pages/ApplyDelivery';
 import Delivery from './pages/Delivery';
 import ProtectedRoute from './components/ProtectedRoute';
 import ScrollToTop from './components/ScrollToTop';
-import './styles/auth.css';
-import './styles/product-cards-original.css';
+
+const Admin = lazy(() => import('./pages/Admin'));
 
 function AppRoutes() {
   return (
@@ -27,8 +26,8 @@ function AppRoutes() {
       <Route path="/categories" element={<Navigate to="/products" replace />} />
       <Route path="/cart" element={<Cart />} />
       <Route path="/checkout" element={<Checkout />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route path="/profile" element={<Profile />} />
       <Route path="/track-order" element={<TrackOrder />} />
       <Route path="/apply-delivery" element={<ApplyDelivery />} />
@@ -44,7 +43,18 @@ function AppRoutes() {
         path="/admin"
         element={
           <ProtectedRoute roles={['admin']}>
-            <Admin />
+            <Suspense
+              fallback={
+                <div className="flex min-h-screen items-center justify-center bg-[#f4f7f6] text-[#073d35]">
+                  <div className="flex items-center gap-3 rounded-2xl border border-[#073d35]/10 bg-white px-5 py-4 font-bold shadow-sm">
+                    <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" />
+                    Loading admin panel…
+                  </div>
+                </div>
+              }
+            >
+              <Admin />
+            </Suspense>
           </ProtectedRoute>
         }
       />

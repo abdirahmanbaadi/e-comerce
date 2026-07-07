@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { initAdminPageLogic } from './adminPageLogic.js';
+import { initAdminDataBridge } from './adminDataBridge.js';
 
 function patchLegacyLinks(navigate) {
   document.querySelectorAll('a[href^="/"]').forEach((anchor) => {
@@ -21,7 +21,7 @@ export function useAdminPage() {
   const [ready, setReady] = useState(Boolean(window.__adminPageLogicInit));
 
   useEffect(() => {
-    initAdminPageLogic();
+    initAdminDataBridge();
     patchLegacyLinks(navigate);
     setReady(true);
   }, [navigate]);

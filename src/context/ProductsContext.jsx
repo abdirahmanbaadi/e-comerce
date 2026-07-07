@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { apiUrl, getProductsList, normalizeProductPrices } from '../utils/data';
+import { apiUrl, fetchWithTimeout, getProductsList, normalizeProductPrices } from '../utils/data';
 
 const ProductsContext = createContext(null);
 
@@ -13,7 +13,7 @@ export function ProductsProvider({ children }) {
 
     setLoading(true);
     try {
-      const response = await fetch(apiUrl('/api/products'));
+      const response = await fetchWithTimeout(apiUrl('/api/products'));
       const data = await response.json();
       if (data.success && data.products) {
         const normalized = normalizeProductPrices(data.products);

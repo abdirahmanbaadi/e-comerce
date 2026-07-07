@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import MainNavbar from '../components/MainNavbar';
-import OrderConfirmModal from '../components/OrderConfirmModal';
+import StoreNavbar from '../features/nav/StoreNavbar';
+import OrderConfirmModal from '../features/checkout/CheckoutModals';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { validateCartItems } from '../utils/cartApi';
 import { apiUrl, DELIVERY_DISTRICTS, fetchDeliveryDistricts, findDistrictByDeliveryFee, getDistrictFee, normalizePhoneNumber } from '../utils/data';
 import { formatMoney, productImage } from '../utils/format';
 import { showTopFloatNotification } from '../utils/notifications';
-import '../styles/pages/Checkout.css';
 
 const DEFAULT_DISTRICTS = DELIVERY_DISTRICTS.map((d) => ({
   ...d,
@@ -368,21 +367,25 @@ export default function Checkout() {
   const showError = (field) => errors[field];
 
   return (
-    <div className="checkout-page">
-      <MainNavbar />
+    <div className="checkout-page min-h-screen bg-base font-sans text-[#111]">
+      <StoreNavbar />
 
-      <section className="checkout-hero">
+      <section className="border-b border-black/[0.06] bg-[radial-gradient(circle_at_top_left,rgba(216,161,40,0.13),transparent_34%),linear-gradient(135deg,#FAF8F2_0%,#F4EFE6_100%)] py-16 pb-10 text-center">
         <div className="container">
-          <span className="checkout-label">Secure Checkout</span>
-          <h1 className="checkout-title">Complete Your Furniture Order</h1>
-          <p className="checkout-desc">
+          <span className="mb-2.5 inline-block text-[0.76rem] font-extrabold uppercase tracking-[3px] text-gold">
+            Secure Checkout
+          </span>
+          <h1 className="mb-2.5 font-display text-[2.4rem] font-bold text-deepGreen md:text-[3.15rem]">
+            Complete Your Furniture Order
+          </h1>
+          <p className="mx-auto mb-0 max-w-[760px] text-base font-medium leading-[1.85] text-[#5f5f5f]">
             Confirm your delivery details, choose EVC Plus or Cash on Delivery, and place your order.
             {user.isLoggedIn ? ' Your profile details are pre-filled below.' : ' Guest checkout is available — create an account anytime to save order history.'}
           </p>
         </div>
       </section>
 
-      <section className="checkout-section checkout-section--visible">
+      <section className="checkout-section checkout-section--visible py-12 pb-20">
           <div className="container">
             <div className="checkout-layout">
               <div>

@@ -1,0 +1,1082 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { getLastOrderDetails, getOrderTotalFormatted } from '../../utils/notificationOrderContext';
+import { apiUrl } from '../../utils/data';
+import { formatMoney } from '../../utils/format';
+import { showTopFloatNotification } from '../../utils/notifications';
+
+/* ═══ SECTION: MODAL SHELL ═══ */
+export function ModalBackdrop({ children, onClose, maxWidth = 'max-w-lg', className = '' }) {
+  useEffect(() => {
+    if (!onClose) return undefined;
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[1050] flex items-center justify-center bg-black/45 p-4"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div className={`w-full ${maxWidth} ${className}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function CloseAbsoluteBtn({ onClose }) {
+  return (
+    <button
+      type="button"
+      className="absolute right-4 top-4 z-10 flex items-center justify-center border-0 bg-transparent p-1 text-[1.2rem] text-[#888888] transition-colors hover:text-[#333333]"
+      onClick={onClose}
+      aria-label="Close"
+    >
+      <i className="fa-solid fa-xmark" />
+    </button>
+  );
+}
+
+function LeafLeft() {
+  return (
+    <span className="pointer-events-none absolute bottom-0 -left-7 inline-flex">
+      <svg width="32" height="26" viewBox="0 0 32 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M26 21C18 19 9 12 13.5 5C19 5 23 10 26 21Z" fill="#A7C1AE" />
+        <path d="M28 23C19.5 24 12 19 13 13C18 13.5 23.5 17.5 28 23Z" fill="#A7C1AE" opacity="0.85" />
+      </svg>
+    </span>
+  );
+}
+
+function LeafRight() {
+  return (
+    <span className="pointer-events-none absolute bottom-0 -right-7 inline-flex">
+      <svg width="32" height="26" viewBox="0 0 32 26" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ transform: 'scaleX(-1)' }}>
+        <path d="M26 21C18 19 9 12 13.5 5C19 5 23 10 26 21Z" fill="#A7C1AE" />
+        <path d="M28 23C19.5 24 12 19 13 13C18 13.5 23.5 17.5 28 23Z" fill="#A7C1AE" opacity="0.85" />
+      </svg>
+    </span>
+  );
+}
+
+function Sparkle({ className }) {
+  return (
+    <span className={`pointer-events-none absolute inline-flex ${className}`}>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 0L10.2 5.8L16 8L10.2 10.2L8 16L5.8 10.2L0 8L5.8 5.8L8 0Z" fill="#D8A128" />
+      </svg>
+    </span>
+  );
+}
+
+export function GoldStarSeparator({ lineClass = 'bg-[#e5dfd3]' }) {
+  return (
+    <div className="my-2 flex items-center justify-center gap-4">
+      <span className={`h-px w-11 ${lineClass}`} />
+      <span className="text-[0.85rem] text-[#c4b9a3]">✦</span>
+      <span className={`h-px w-11 ${lineClass}`} />
+    </div>
+  );
+}
+
+export function PremiumDeco({ children, className = 'mb-6' }) {
+  return (
+    <div className={`relative inline-block ${className}`}>
+      {children}
+      <LeafLeft />
+      <LeafRight />
+      <Sparkle className="-left-3 -top-3" />
+      <Sparkle className="-right-3 -top-3" />
+    </div>
+  );
+}
+
+export const premiumCardClass =
+  'relative rounded-3xl border-0 bg-base px-9 py-10 text-center font-sans shadow-[0_15px_45px_rgba(0,0,0,0.08)]';
+
+export const formCardClass =
+  'relative rounded-[20px] border-0 bg-softBg p-8 font-sans shadow-[0_15px_45px_rgba(0,0,0,0.12)]';
+
+export function BtnPrimary({ children, className = '', ...props }) {
+  return (
+    <button
+      type="button"
+      className={`flex-1 rounded-lg border-0 bg-[#4a5d4e] px-[18px] py-3 text-[0.9rem] font-bold text-white transition hover:-translate-y-px hover:bg-[#39483c] disabled:opacity-60 ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function BtnDeepGreen({ children, className = '', ...props }) {
+  return (
+    <button
+      type="button"
+      className={`rounded-[10px] border-0 bg-deepGreen px-6 py-3 text-[0.95rem] font-bold text-white transition hover:bg-[#052a24] disabled:opacity-60 ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function BtnSecondary({ children, className = '', ...props }) {
+  return (
+    <button
+      type="button"
+      className={`flex-1 rounded-lg border border-[#d4cebc] bg-white px-[18px] py-3 text-[0.9rem] font-bold text-[#4a3e35] transition hover:border-[#c0b9a6] hover:bg-[#FAF8F5] ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function BtnOutlineGreen({ children, className = '', ...props }) {
+  return (
+    <button
+      type="button"
+      className={`rounded-[10px] border-[1.5px] border-deepGreen bg-white px-6 py-3 text-[0.95rem] font-bold text-deepGreen transition hover:bg-[#f7f9f7] ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function BtnCloseFooter({ children = 'Close', className = '', ...props }) {
+  return (
+    <button
+      type="button"
+      className={`max-w-[160px] flex-1 rounded-[10px] border border-[#d4cebc] bg-[#fcfbf9] px-6 py-3 text-[0.95rem] font-bold text-[#4a3e35] transition hover:border-gold hover:bg-[#faf6f0] hover:text-deepGreen ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function InfoBox({ children }) {
+  return (
+    <div className="mb-6 rounded-[14px] border border-[#f0eee8] bg-[#FAF8F5] px-5 py-4 text-left">{children}</div>
+  );
+}
+
+export function InfoRow({ icon, label, value, badge }) {
+  return (
+    <div className="flex items-center justify-between border-b border-[#f2ece1] py-3 last:border-b-0">
+      <div className="flex items-center gap-3">
+        <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#f2ece1] text-[0.88rem] text-[#8c7a6b]">
+          <i className={icon} />
+        </span>
+        <span className="text-[0.88rem] font-semibold text-[#666666]">{label}</span>
+      </div>
+      {badge || <span className="text-[0.88rem] font-bold text-[#333333]">{value}</span>}
+    </div>
+  );
+}
+
+export const fieldClass =
+  'w-full rounded-lg border border-black/[0.12] bg-white px-3 py-2.5 text-[0.88rem] font-semibold text-[#333333] outline-none transition focus:border-deepGreen focus:shadow-[0_0_0_3px_rgba(7,61,53,0.1)]';
+
+export const fieldLabelClass = 'mb-1.5 block text-[0.8rem] font-bold text-[#111111]';
+
+
+/* ═══ SECTION: NOTIFICATION MODALS ═══ */
+
+const FALLBACK_ADMIN_REPLY =
+  'We reviewed your issue and found that your EVC Plus payment was not completed successfully. Please try the payment again using the same phone number you used before. If the problem continues, our support team will be happy to help you further.';
+
+const WEEKEND_OFFER = {
+  productTitle: 'Ivory Cloud Sofa Set',
+  image: '/product-images/ivory-cloud-sofa-set-main.jpeg.jpeg',
+};
+
+function SuccessCircle({ children, className = 'bg-[#e2ece9]' }) {
+  return (
+    <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full ${className}`}>{children}</div>
+  );
+}
+
+function OrderConfirmedModal({ onClose, onViewDetails }) {
+  const order = getLastOrderDetails();
+
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={premiumCardClass}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco>
+          <SuccessCircle className="bg-[#e5ebe4]">
+            <i className="fa-solid fa-check text-[2rem] text-[#4a6454]" />
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-[#2b3a30]">Order Confirmed</h2>
+        <GoldStarSeparator />
+        <p className="mx-auto mb-6 max-w-[320px] text-[0.92rem] leading-relaxed text-[#666666]">
+          Thank you for your order! We&apos;ve received it and are preparing it for a smooth delivery.
+        </p>
+        <InfoBox>
+          <InfoRow icon="fa-regular fa-file-lines" label="Order ID" value={order.orderId} />
+          <InfoRow icon="fa-regular fa-calendar" label="Order Date" value={order.orderDate || 'May 15, 2025'} />
+          <InfoRow
+            icon="fa-regular fa-circle-check"
+            label="Current Status"
+            badge={<span className="rounded-md bg-green-100 px-2 py-0.5 text-[0.8rem] font-bold text-green-700">Confirmed</span>}
+          />
+        </InfoBox>
+        <div className="mt-6 flex gap-3">
+          <BtnPrimary onClick={onViewDetails}>View Order Details</BtnPrimary>
+          <BtnSecondary onClick={onClose}>Close</BtnSecondary>
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function OrderDetailsModal({ onClose }) {
+  const order = getLastOrderDetails();
+  const items = order.items?.length ? order.items : [];
+
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[620px]">
+      <div className={formCardClass}>
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-[46px] w-[46px] items-center justify-center rounded-full bg-[#e5ebe4] text-[1.25rem] text-[#4a6454]">
+              <i className="fa-solid fa-bag-shopping" />
+            </div>
+            <h2 className="m-0 font-display text-[1.9rem] font-bold text-[#2b3a30]">Order Details</h2>
+          </div>
+          <button type="button" className="border-0 bg-transparent p-1 text-[#888888] hover:text-[#333333]" onClick={onClose} aria-label="Close">
+            <i className="fa-solid fa-xmark" />
+          </button>
+        </div>
+
+        <div className="mb-5 grid grid-cols-3 gap-4">
+          <div>
+            <span className="mb-1 block text-[0.8rem] font-semibold text-[#888888]">Order ID</span>
+            <span className="text-[0.95rem] font-extrabold text-[#4a6454]">{order.orderId}</span>
+          </div>
+          <div>
+            <span className="mb-1 block text-[0.8rem] font-semibold text-[#888888]">Customer</span>
+            <span className="text-[0.95rem] font-bold text-[#333333]">{order.customerName}</span>
+          </div>
+          <div>
+            <span className="mb-1 block text-[0.8rem] font-semibold text-[#888888]">Phone</span>
+            <span className="text-[0.95rem] font-bold text-[#333333]">{order.customerPhone}</span>
+          </div>
+        </div>
+
+        <hr className="my-5 border-0 border-t border-[#f0eee8]" />
+
+        {items.map((item) => (
+          <div key={item.title} className="mb-2.5 flex items-center gap-4">
+            <img src={item.image} alt={item.title} className="h-16 w-[100px] rounded-lg border border-black/[0.05] bg-[#FAF8F5] object-cover" />
+            <span className="flex-1 text-[0.95rem] font-bold text-[#333333]">{item.title}</span>
+            <div>
+              <span className="block text-[0.8rem] text-[#888888]">Qty</span>
+              <span className="font-bold">{item.quantity}</span>
+            </div>
+            <div>
+              <span className="block text-[0.8rem] text-[#888888]">Price</span>
+              <span className="font-bold">{formatMoney(item.price * item.quantity)}</span>
+            </div>
+          </div>
+        ))}
+
+        <hr className="my-5 border-0 border-t border-[#f0eee8]" />
+
+        <div className="mb-5 grid grid-cols-2 gap-4">
+          <div>
+            <span className="mb-1 block text-[0.8rem] font-semibold text-[#888888]">Payment Method</span>
+            <span className="font-bold">{order.paymentMethod}</span>
+          </div>
+          <div>
+            <span className="mb-1 block text-[0.8rem] font-semibold text-[#888888]">Payment Status</span>
+            <span className={`inline-block rounded-md px-2 py-1 text-[0.82rem] font-bold ${order.paymentStatus?.toLowerCase() === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+              {order.paymentStatus}
+            </span>
+          </div>
+          <div className="col-span-2">
+            <span className="mb-1 block text-[0.8rem] font-semibold text-[#888888]">Delivery Address</span>
+            <span className="font-bold">{order.deliveryAddress}</span>
+          </div>
+        </div>
+
+        <hr className="my-5 border-0 border-t border-[#f0eee8]" />
+
+        <div className="mb-6">
+          <span className="mb-1 block text-[0.8rem] font-semibold text-[#888888]">Order Status</span>
+          <span className="inline-block rounded-md bg-green-100 px-2 py-1 text-[0.82rem] font-bold text-green-700">
+            {order.orderStatus} ✓
+          </span>
+        </div>
+
+        <div className="flex gap-3">
+          <Link
+            to="/track-order"
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-deepGreen px-4 py-3 text-center text-[0.9rem] font-bold text-white no-underline transition hover:bg-[#0A5246]"
+            onClick={onClose}
+          >
+            <i className="fa-solid fa-location-dot" /> Track Order
+          </Link>
+          <BtnSecondary onClick={onClose}>Close</BtnSecondary>
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function PaymentSuccessModal({ onClose, order }) {
+  const total = getOrderTotalFormatted(order);
+  const orderId = order?.orderId || 'MF-250515-001';
+
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={premiumCardClass}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco>
+          <SuccessCircle>
+            <svg width="28" height="20" viewBox="0 0 28 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 9.5L10.5 17L25 3.5" stroke="#073D35" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-[#2b3a30]">Payment Successfully</h2>
+        <GoldStarSeparator />
+        <p className="mx-auto mb-5 max-w-[380px] text-[0.92rem] leading-relaxed text-[#666666]">
+          Thank you for your payment of <strong>{total}</strong> for Order <strong>#{orderId}</strong>. Your order has been confirmed successfully.
+        </p>
+        <BtnCloseFooter onClick={onClose} className="mx-auto w-full max-w-[160px]" />
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function PaymentFailedModal({ onClose, onRetry, order }) {
+  const orderId = order?.orderId || 'MF-250515-001';
+
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={premiumCardClass}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco>
+          <SuccessCircle className="bg-[#fce8e6]">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18 6L6 18M6 6L18 18" stroke="#ae4e46" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.5rem] font-bold text-[#b42318]">Payment Failed</h2>
+        <GoldStarSeparator lineClass="bg-[#e2b0aa]" />
+        <p className="mx-auto mb-6 max-w-[380px] text-[0.95rem] leading-relaxed text-[#555555]">
+          Your payment for Order <strong>#{orderId}</strong> was not successful. Please try again or choose a different payment method.
+        </p>
+        <div className="flex justify-center gap-3">
+          <BtnDeepGreen onClick={onRetry} className="max-w-[160px] flex-none">
+            Retry Payment
+          </BtnDeepGreen>
+          <BtnCloseFooter onClick={onClose} />
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+const PROGRESS_STEPS = [
+  { icon: 'fa-solid fa-check', label: 'Order\nConfirmed', state: 'completed' },
+  { icon: 'fa-solid fa-box-open', label: 'Processing', state: 'active' },
+  { icon: 'fa-solid fa-truck', label: 'Out for\nDelivery', state: '' },
+  { icon: 'fa-solid fa-thumbs-up', label: 'Delivered', state: '' },
+];
+
+function OrderProcessingModal({ onClose }) {
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={premiumCardClass}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco>
+          <SuccessCircle className="relative bg-[#e2ece9]">
+            <div className="relative inline-block">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#073D35" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="16.5" y1="9.4" x2="7.5" y2="4.21" />
+                <polygon points="12 22.08 12 12 3 6.92 3 17.08 12 22.08" />
+                <polygon points="12 12 21 6.92 21 17.08 12 22.08" />
+                <polygon points="12 2 3 6.92 12 12 21 6.92 12 2" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>
+              <span className="absolute -bottom-1.5 -right-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full border-[1.5px] border-[#e2ece9] bg-deepGreen text-[0.65rem] text-white">
+                <i className="fa-solid fa-gear fa-spin" />
+              </span>
+            </div>
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-[#2b3a30]">Order Processing</h2>
+        <GoldStarSeparator />
+        <p className="mx-auto mb-6 max-w-[380px] text-[0.92rem] text-[#666666]">
+          Good news! We&apos;ve received your order and are currently processing it.
+        </p>
+
+        <div className="relative mb-6 px-2">
+          <div className="absolute left-[12%] right-[12%] top-5 h-0.5 bg-gray-200">
+            <div className="h-full w-1/3 bg-deepGreen" />
+          </div>
+          <div className="relative flex justify-between">
+            {PROGRESS_STEPS.map((step) => (
+              <div key={step.label} className="flex w-16 flex-col items-center gap-1.5">
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-full text-sm ${
+                    step.state === 'completed'
+                      ? 'bg-deepGreen text-white'
+                      : step.state === 'active'
+                        ? 'border-2 border-deepGreen bg-white text-deepGreen'
+                        : 'bg-gray-100 text-gray-400'
+                  }`}
+                >
+                  <i className={step.icon} />
+                </div>
+                <span className={`whitespace-pre-line text-center text-[0.62rem] font-semibold leading-tight ${step.state ? 'text-deepGreen' : 'text-gray-400'}`}>
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-6 flex items-center gap-3 rounded-xl bg-[#f4f7f5] p-4 text-left">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e2ece9] text-deepGreen">
+            <i className="fa-regular fa-clock" />
+          </div>
+          <div>
+            <span className="block text-[0.82rem] font-bold text-[#333333]">Estimated Time</span>
+            <span className="text-[0.8rem] text-[#666666]">
+              Your order will be on the way within <strong>24 hours</strong>.
+            </span>
+          </div>
+        </div>
+
+        <BtnCloseFooter onClick={onClose} className="mx-auto w-full max-w-[160px]" />
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function SupportRepliedModal({ onClose, userName, repliedTicket, onSendFollowUp, sending }) {
+  const firstName = userName?.trim().split(' ')[0] || 'Customer';
+  const [adminReply, setAdminReply] = useState('');
+  const [loadingReply, setLoadingReply] = useState(Boolean(repliedTicket?.id));
+  const [replyText, setReplyText] = useState('');
+
+  useEffect(() => {
+    if (!repliedTicket?.id) {
+      setAdminReply(FALLBACK_ADMIN_REPLY);
+      setLoadingReply(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setLoadingReply(true);
+
+    (async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        if (!cancelled) {
+          setAdminReply(repliedTicket.lastMessageText || FALLBACK_ADMIN_REPLY);
+          setLoadingReply(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(apiUrl(`/api/support/chats/${repliedTicket.id}/messages`), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (cancelled) return;
+        if (data.success) {
+          const adminMessages = (data.messages || []).filter((m) => m.senderRole === 'admin');
+          const lastAdmin = adminMessages[adminMessages.length - 1];
+          setAdminReply(lastAdmin?.messageText || repliedTicket.lastMessageText || FALLBACK_ADMIN_REPLY);
+        } else {
+          setAdminReply(repliedTicket.lastMessageText || FALLBACK_ADMIN_REPLY);
+        }
+      } catch {
+        if (!cancelled) setAdminReply(repliedTicket.lastMessageText || FALLBACK_ADMIN_REPLY);
+      } finally {
+        if (!cancelled) setLoadingReply(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [repliedTicket]);
+
+  const handleReply = async (e) => {
+    e.preventDefault();
+    const text = replyText.trim();
+    if (!text) return;
+
+    if (repliedTicket?.id && onSendFollowUp) {
+      const ok = await onSendFollowUp(repliedTicket.id, text);
+      if (ok) {
+        showTopFloatNotification('✅ Fariintaada waa la diray!');
+        setReplyText('');
+      }
+      return;
+    }
+
+    showTopFloatNotification('✅ Your reply has been sent successfully!');
+    setReplyText('');
+  };
+
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[580px]">
+      <div className={`${premiumCardClass} px-8 py-9`}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco className="mb-5">
+          <SuccessCircle>
+            <i className="fa-solid fa-comment-dots text-[2.1rem] text-deepGreen" />
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.1rem] font-bold text-[#2b3a30]">Support Replied</h2>
+        <p className="mx-auto mb-5 max-w-[420px] text-[0.9rem] text-[#666666]">
+          {repliedTicket?.subject
+            ? `Waxaan ka soo jawaabnay cabashadaada: "${repliedTicket.subject}"`
+            : 'Our support team has replied to your message.'}
+        </p>
+        <div className="mb-5 rounded-xl border border-[#f0eee8] bg-[#FAF8F5] p-5 text-left">
+          <p className="mb-3 text-[0.92rem] font-bold text-[#333333]">Hello {firstName},</p>
+          <p className="m-0 text-[0.88rem] leading-relaxed text-[#444444]">{loadingReply ? 'Loading reply...' : adminReply}</p>
+        </div>
+        <p className="mb-2 text-left text-[0.82rem] text-[#777777]">If you are still facing this issue, please leave a message below.</p>
+        <form onSubmit={handleReply} className="mb-5">
+          <div className="flex items-center gap-2 rounded-xl border border-black/[0.08] bg-white px-3 py-2 focus-within:border-deepGreen focus-within:shadow-[0_0_0_3px_rgba(7,61,53,0.08)]">
+            <input
+              type="text"
+              className="min-w-0 flex-1 border-0 bg-transparent text-[0.88rem] outline-none"
+              placeholder="Write your message here..."
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              disabled={sending}
+            />
+            <button type="submit" className="border-0 bg-transparent text-[1.1rem] text-deepGreen hover:text-[#0b5e52] disabled:opacity-50" disabled={sending || !replyText.trim()}>
+              <i className="fa-regular fa-paper-plane" />
+            </button>
+          </div>
+        </form>
+        <div className="flex justify-end">
+          <BtnCloseFooter onClick={onClose} className="max-w-[140px] flex-none rounded-lg text-[0.9rem]" />
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function WishlistAvailableModal({ onClose, navigate }) {
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[580px]">
+      <div className={`${premiumCardClass} px-8 py-9`}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco className="mb-5">
+          <SuccessCircle>
+            <svg width="28" height="20" viewBox="0 0 28 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 9.5L10.5 17L25 3.5" stroke="#073D35" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.1rem] font-bold text-deepGreen">Wishlist Product Available</h2>
+        <p className="mx-auto mb-5 max-w-[420px] text-[0.9rem] text-[#666666]">Good news! A product from your wishlist is now available.</p>
+        <div className="mx-auto mb-5 flex max-w-[400px] items-center gap-4 rounded-xl border border-black/[0.05] bg-[#FAF8F5] p-4 text-left">
+          <img src="/product-images/sage-wood-platform-bed-main.jpeg.jpeg" alt="Sage Wood Platform Bed" className="h-[85px] w-[110px] rounded-lg border border-black/[0.05] object-cover" />
+          <div>
+            <h4 className="mb-1 text-[0.95rem] font-bold text-[#2b3a30]">Sage Wood Platform Bed</h4>
+            <p className="mb-2 text-[0.8rem] font-medium text-[#888888]">Solid Walnut • Timber Finish</p>
+            <span className="text-[1.05rem] font-extrabold text-deepGreen">Now Available</span>
+          </div>
+        </div>
+        <p className="mb-6 text-center text-[0.88rem] font-medium leading-relaxed text-[#555555]">
+          Don&apos;t miss out! The product you saved is now in stock and ready for you.
+        </p>
+        <div className="flex justify-center gap-3">
+          <BtnDeepGreen
+            className="max-w-[160px] flex-none"
+            onClick={() => {
+              localStorage.setItem('openProductModalOnLoad', 'Sage Wood Platform Bed');
+              navigate('/products');
+              onClose();
+            }}
+          >
+            View Product
+          </BtnDeepGreen>
+          <BtnOutlineGreen onClick={onClose} className="max-w-[160px] flex-none">
+            Close
+          </BtnOutlineGreen>
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function WeekendOfferModal({ onClose, navigate }) {
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[850px]">
+      <div className="relative overflow-hidden rounded-3xl bg-base shadow-[0_15px_45px_rgba(0,0,0,0.08)]">
+        <button
+          type="button"
+          className="absolute right-[18px] top-[18px] z-[12] rounded-full bg-white/85 p-2 shadow-[0_2px_10px_rgba(0,0,0,0.05)]"
+          onClick={onClose}
+          aria-label="Close"
+        >
+          <i className="fa-solid fa-xmark" />
+        </button>
+        <div className="flex h-[500px] flex-col overflow-hidden md:flex-row md:max-md:h-auto">
+          <div className="h-60 w-full shrink-0 overflow-hidden bg-[#f3efe6] md:h-auto md:w-[45%]">
+            <img src={WEEKEND_OFFER.image} alt={WEEKEND_OFFER.productTitle} className="block h-full w-full object-cover object-center" />
+          </div>
+          <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#faf8f5] px-6 py-8 md:px-10 md:pb-8 md:pt-10">
+            <span className="absolute right-[52px] top-5 rounded-full border border-deepGreen/10 bg-[#e5ece9] px-3.5 py-1.5 text-[0.72rem] font-bold uppercase text-deepGreen">
+              15% OFF
+            </span>
+            <h2 className="mb-0 mt-2 pr-20 font-display text-[1.85rem] font-bold leading-tight text-[#111111] md:text-[2.35rem]">
+              Weekend Sofa Offer
+            </h2>
+            <hr className="my-3.5 h-0.5 w-[60px] border-0 bg-[#d4cebc]" />
+            <p className="mb-5 text-left text-[0.92rem] leading-relaxed text-[#666666]">
+              Make your weekends more comfortable with timeless sofas at a special price.
+            </p>
+            <div className="mb-6 flex max-w-[320px] overflow-hidden rounded-xl border-[1.5px] border-dashed border-[#ebdcb9] bg-white">
+              <div className="border-r border-dashed border-[#ebdcb9] bg-base px-4 py-2.5 text-[0.8rem] font-bold uppercase tracking-wide text-[#888888]">
+                Use Code
+              </div>
+              <div className="flex-1 px-4 py-2.5 text-center text-[1.15rem] font-extrabold tracking-widest text-[#8c7a6b]">
+                WEEKEND15
+              </div>
+            </div>
+            <div className="mb-4 flex items-center gap-2 text-left text-[0.86rem] text-[#555555]">
+              <i className="fa-regular fa-clock" /> Valid until Sunday, 11:59 PM
+            </div>
+            <div className="mb-2.5 text-left text-[0.76rem] font-extrabold uppercase tracking-wide text-[#888888]">Includes:</div>
+            <ul className="mb-5 list-none space-y-1.5 p-0 text-left">
+              {['15% off on selected sofas', 'Free delivery within Mogadishu', 'Easy returns & 2-year warranty'].map((item) => (
+                <li key={item} className="flex items-center gap-2.5 text-[0.88rem] text-[#444444]">
+                  <i className="fa-regular fa-circle-check text-[#4c7c59]" /> {item}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-auto flex gap-3.5">
+              <button
+                type="button"
+                className="flex-1 rounded-full border border-[#d4cebc] bg-[#fcfbf9] px-6 py-3 text-[0.95rem] font-bold text-[#4a3e35] transition hover:border-[#ebdcb9] hover:bg-[#faf6f0]"
+                onClick={() => {
+                  localStorage.setItem('openProductModalOnLoad', WEEKEND_OFFER.productTitle);
+                  navigate('/products');
+                  onClose();
+                }}
+              >
+                View Product
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-full border border-[#d4cebc] bg-white px-6 py-3 text-[0.95rem] font-bold text-[#4a3e35] transition hover:bg-[#faf6f0]"
+                onClick={onClose}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function RetryPaymentModal({ onClose, onSuccess, order, userPhone }) {
+  const [phone, setPhone] = useState(userPhone || '+252 61 2345678');
+  const [paying, setPaying] = useState(false);
+
+  const handlePay = async () => {
+    if (!order?.orderId) {
+      showTopFloatNotification('Order details not found. Please try again from your orders.', 'danger');
+      return;
+    }
+
+    setPaying(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const amountText = getOrderTotalFormatted(order).replace(/[^0-9.]/g, '');
+      const amount = Number(amountText) || Number(order.total) || 0;
+
+      const response = await fetch(apiUrl('/api/payments/waafi'), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          orderId: order.orderId,
+          accountNo: phone.trim(),
+          amount,
+          paymentReference: order.paymentReference || '',
+          description: `Retry payment for ${order.orderId}`,
+        }),
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        onSuccess();
+        showTopFloatNotification('✅ Payment completed successfully via Waafi!');
+      } else {
+        showTopFloatNotification(data.message || 'Waafi payment failed. Please try again.', 'danger');
+      }
+    } catch {
+      showTopFloatNotification('Could not connect to payment server. Ensure backend is running.', 'danger');
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={`${premiumCardClass} px-8`}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco>
+          <SuccessCircle className="relative bg-[#e5ebe4]">
+            <i className="fa-regular fa-credit-card text-[2.1rem] text-[#4a6454]" />
+            <span className="absolute -bottom-1 -right-1 text-[1rem] text-green-600">
+              <i className="fa-solid fa-circle-check" />
+            </span>
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-deepGreen">Retry Payment</h2>
+        <GoldStarSeparator />
+        <p className="mx-auto mb-6 max-w-[390px] text-[0.92rem] leading-relaxed text-[#555555]">
+          Your previous EVC Plus payment was not completed. Please confirm your number and try again.
+        </p>
+
+        <div className="mb-6 flex rounded-xl border border-[#f0eee8] bg-[#FAF8F5] text-left">
+          <div className="flex flex-1 items-center gap-3 p-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f2ece1] text-[#8c7a6b]">
+              <i className="fa-regular fa-file-lines" />
+            </div>
+            <div>
+              <span className="block text-[0.78rem] text-[#888888]">Order ID:</span>
+              <span className="font-bold">{order.orderId}</span>
+            </div>
+          </div>
+          <div className="w-px bg-[#f0eee8]" />
+          <div className="flex flex-1 items-center gap-3 p-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f2ece1] text-[#8c7a6b]">
+              <i className="fa-solid fa-dollar-sign" />
+            </div>
+            <div>
+              <span className="block text-[0.78rem] text-[#888888]">Total Amount:</span>
+              <span className="font-bold">{getOrderTotalFormatted(order)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-2 text-left text-[0.82rem] font-bold text-[#333333]">Payment Method</div>
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-black/[0.08] bg-white px-4 py-3 text-left">
+          <span className="h-4 w-4 rounded-full border-2 border-deepGreen" />
+          <span className="font-bold">EVC Plus</span>
+        </div>
+
+        <div className="mb-2 text-left text-[0.82rem] font-bold text-[#333333]">EVC Phone Number</div>
+        <div className="mb-1 flex items-center rounded-lg border border-black/[0.08] bg-white px-3">
+          <span className="pr-3 text-deepGreen"><i className="fa-solid fa-phone" /></span>
+          <div className="h-6 w-px bg-gray-200" />
+          <input type="tel" className="flex-1 border-0 bg-transparent px-3 py-2.5 text-[0.9rem] outline-none" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </div>
+        <p className="mb-6 text-left text-[0.78rem] text-[#888888]">Use the same EVC number for this payment.</p>
+
+        <div className="flex justify-center gap-3">
+          <BtnDeepGreen onClick={handlePay} disabled={paying} className="max-w-[160px] flex-none">
+            {paying ? 'Processing...' : 'Pay Now'}
+          </BtnDeepGreen>
+          <BtnCloseFooter onClick={onClose} />
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function SimpleAlertModal({ item, onClose }) {
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className="rounded-2xl border-0 bg-white p-8 text-center shadow-lg">
+        <h2 className="mb-2 text-lg font-bold text-green-700">{item?.title || 'Notification'}</h2>
+        <p className="mb-6 text-gray-500">{item?.desc || ''}</p>
+        <button type="button" className="rounded-lg bg-green-600 px-6 py-2.5 font-bold text-white hover:bg-green-700" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function NotificationDetailModal({
+  item,
+  onClose,
+  user,
+  repliedTicket,
+  onSendFollowUp,
+  sendingFollowUp,
+}) {
+  const navigate = useNavigate();
+  const order = getLastOrderDetails();
+  const [subModal, setSubModal] = useState(null);
+
+  useEffect(() => {
+    setSubModal(null);
+  }, [item?.modalType, item?.index]);
+
+  if (!item && !subModal) return null;
+
+  const closeAll = () => {
+    setSubModal(null);
+    onClose();
+  };
+
+  if (subModal === 'orderDetails') {
+    return <OrderDetailsModal onClose={() => { setSubModal(null); onClose(); }} />;
+  }
+
+  if (subModal === 'retryPayment') {
+    return (
+      <RetryPaymentModal
+        order={order}
+        userPhone={user?.phone}
+        onClose={() => { setSubModal(null); onClose(); }}
+        onSuccess={() => setSubModal('paymentSuccess')}
+      />
+    );
+  }
+
+  if (subModal === 'paymentSuccess') {
+    return <PaymentSuccessModal order={order} onClose={() => { setSubModal(null); onClose(); }} />;
+  }
+
+  if (!item) return null;
+
+  switch (item.modalType) {
+    case 'order-confirmed':
+      return <OrderConfirmedModal onClose={onClose} onViewDetails={() => setSubModal('orderDetails')} />;
+    case 'payment-success':
+      return <PaymentSuccessModal order={order} onClose={onClose} />;
+    case 'payment-failed':
+      return <PaymentFailedModal order={order} onClose={onClose} onRetry={() => setSubModal('retryPayment')} />;
+    case 'order-processing':
+      return <OrderProcessingModal onClose={onClose} />;
+    case 'support-replied':
+      return (
+        <SupportRepliedModal
+          userName={user?.fullName}
+          repliedTicket={repliedTicket}
+          onSendFollowUp={onSendFollowUp}
+          sending={sendingFollowUp}
+          onClose={onClose}
+        />
+      );
+    case 'wishlist-available':
+      return <WishlistAvailableModal navigate={navigate} onClose={onClose} />;
+    case 'weekend-offer':
+      return <WeekendOfferModal navigate={navigate} onClose={onClose} />;
+    case 'delivery-assigned':
+    case 'review-moderated':
+      return <SimpleAlertModal item={item} onClose={onClose} />;
+    default:
+      return null;
+  }
+}
+
+
+/* ═══ SECTION: NOTIFICATIONS TAB ═══ */
+
+const ICON_WRAP_STYLES = {
+  'solid-green': 'bg-[#627b6c] text-white',
+  'solid-brown': 'bg-[#797166] text-white',
+  'solid-yellow': 'bg-[#c39d63] text-white',
+  'solid-purple': 'bg-[#8e8095] text-white',
+  'solid-orange': 'bg-[#c17260] text-white',
+  'solid-red': 'bg-[#fce8e6] text-[#b42318]',
+};
+
+const DOT_STYLES = {
+  green: 'bg-[#4a7c59]',
+  gold: 'bg-[#c39d63]',
+  grey: 'hidden',
+  red: 'bg-[#b42318]',
+};
+
+function NotificationIcon({ type }) {
+  switch (type) {
+    case 'order-confirmed':
+      return (
+        <div className="relative inline-flex items-center justify-center">
+          <i className="fa-solid fa-bag-shopping" />
+          <i className="fa-solid fa-check absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border-[1.5px] border-white bg-[#627b6c] text-[0.55rem] text-white" />
+        </div>
+      );
+    case 'payment-success':
+      return <i className="fa-regular fa-credit-card" />;
+    case 'order-processing':
+      return <i className="fa-solid fa-gear" />;
+    case 'payment-failed':
+      return <i className="fa-solid fa-circle-exclamation" />;
+    case 'support-replied':
+      return <i className="fa-solid fa-comment-dots" />;
+    case 'wishlist':
+      return <i className="fa-regular fa-heart" />;
+    case 'weekend-offer':
+      return <i className="fa-solid fa-tag" />;
+    case 'delivery-assigned':
+      return <i className="fa-solid fa-truck" />;
+    case 'review-moderated':
+      return <i className="fa-solid fa-star" />;
+    default:
+      return <i className="fa-regular fa-bell" />;
+  }
+}
+
+export default function ProfileNotificationsTab({
+  onUnreadChange,
+  supportChat,
+  notifications,
+}) {
+  const { user } = useAuth();
+  const { items, loading, markRead, markAllRead } = notifications;
+  const [filter, setFilter] = useState('all');
+  const [activeModal, setActiveModal] = useState(null);
+
+  const visibleItems = useMemo(() => {
+    const merged = items.map((item) => {
+      if (item.type === 'support_replied' && supportChat?.repliedTicket) {
+        return {
+          ...item,
+          desc: `Waxaan ka soo jawaabnay fariintaada: "${supportChat.repliedTicket.subject}"`,
+          unread: !item.read,
+        };
+      }
+      return item;
+    });
+    return filter === 'unread' ? merged.filter((item) => item.unread) : merged;
+  }, [items, filter, supportChat?.repliedTicket]);
+
+  useEffect(() => {
+    onUnreadChange?.(notifications.unreadCount);
+  }, [notifications.unreadCount, onUnreadChange]);
+
+  const handleCardClick = (item) => {
+    if (item.unread) markRead(item.id);
+    setActiveModal(item);
+  };
+
+  return (
+    <div>
+      <div className="mb-5 flex w-full items-end justify-between max-md:flex-col max-md:items-start max-md:gap-3">
+        <div>
+          <h1 className="mb-0.5 font-display text-[2.3rem] font-bold text-deepGreen">Notifications</h1>
+          <p className="text-[0.92rem] text-[#666666]">Stay updated with your account activity.</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex rounded-full border border-black/[0.04] bg-[#F2ECE1] p-[3px]">
+            <button
+              type="button"
+              className={`rounded-full border-0 px-4 py-1.5 text-[0.85rem] font-bold transition-all duration-200 ${
+                filter === 'all' ? 'bg-deepGreen text-white' : 'bg-transparent text-[#4A3F35]'
+              }`}
+              onClick={() => setFilter('all')}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              className={`rounded-full border-0 px-4 py-1.5 text-[0.85rem] font-bold transition-all duration-200 ${
+                filter === 'unread' ? 'bg-deepGreen text-white' : 'bg-transparent text-[#4A3F35]'
+              }`}
+              onClick={() => setFilter('unread')}
+            >
+              Unread
+            </button>
+          </div>
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-lg border-[1.5px] border-black/[0.12] bg-white px-4 py-2 text-[0.85rem] font-bold text-[#111111] transition-all duration-200 hover:border-black/20 hover:bg-[#FAF9F6]"
+            onClick={markAllRead}
+          >
+            <i className="fa-regular fa-circle-check" /> Mark all as read
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto pr-1">
+        {loading && items.length === 0 ? (
+          <p className="p-4 text-[#666666]">Loading notifications...</p>
+        ) : null}
+
+        {!loading && visibleItems.length === 0 ? (
+          <p className="p-4 text-[#666666]">No notifications yet.</p>
+        ) : null}
+
+        <div className="flex flex-col" id="notificationsList">
+          {visibleItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`mb-2 flex w-full cursor-pointer items-center gap-3.5 rounded-lg border px-4 py-2.5 text-left transition-all duration-200 hover:border-[#DCDCD8] hover:bg-[#FAF9F6] ${
+                item.highlight && item.unread
+                  ? 'border-[#cbd0c4] bg-[#eaeae6]'
+                  : 'border-[#EAE9E4] bg-[#FCFBFA]'
+              }`}
+              data-status={item.unread ? 'unread' : 'read'}
+              onClick={() => handleCardClick(item)}
+            >
+              <div
+                className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full text-[1.15rem] ${
+                  ICON_WRAP_STYLES[item.iconWrap] || 'bg-[#627b6c] text-white'
+                }`}
+              >
+                <NotificationIcon type={item.iconType} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="mb-0.5 text-[0.88rem] font-bold text-[#333333]">{item.title}</h4>
+                <p className="m-0 line-clamp-2 text-[0.8rem] leading-snug text-[#666666]">{item.desc}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-right text-[0.78rem] font-medium text-[#888888]">{item.time}</span>
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${DOT_STYLES[item.dot] || DOT_STYLES.grey}`} />
+                </div>
+                <i className="fa-solid fa-chevron-right text-[0.75rem] text-[#888888]" />
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-center gap-2 py-6 pb-3 text-center text-[0.82rem] font-semibold text-[#888888]">
+          New notifications from your orders and support will appear here.
+          <i className="fa-regular fa-bell text-[0.9rem]" />
+        </div>
+      </div>
+
+      <NotificationDetailModal
+        item={activeModal}
+        onClose={() => setActiveModal(null)}
+        user={user}
+        repliedTicket={supportChat?.repliedTicket}
+        onSendFollowUp={supportChat?.sendTicketMessage}
+        sendingFollowUp={supportChat?.sending}
+      />
+    </div>
+  );
+}

@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
-import ProfileSidebar from '../components/profile/ProfileSidebar';
-import ProfileInfoTab from '../components/profile/ProfileInfoTab';
-import ProfileOrdersTab from '../components/profile/ProfileOrdersTab';
-import ProfileNotificationsTab from '../components/profile/ProfileNotificationsTab';
-import ProfileHelpTab from '../components/profile/ProfileHelpTab';
-import ProfileSettingsTab from '../components/profile/ProfileSettingsTab';
+import ProfileSidebar from '../features/profile/ProfileLayout';
+import { ProfileInfoTab, ProfileOrdersTab, ProfileHelpTab } from '../features/profile/ProfileContent';
+import ProfileNotificationsTab from '../features/profile/ProfileNotifications';
+import ProfileSettingsTab from '../features/profile/ProfileAccount';
 import { useAuth } from '../context/AuthContext';
 import { useSupportChat } from '../hooks/useSupportChat';
 import { useNotifications } from '../hooks/useNotifications';
-import '../styles/pages/Profile.css';
 
 const VALID_TABS = ['profile', 'orders', 'notifications', 'help', 'settings'];
 
@@ -44,12 +41,12 @@ export default function Profile() {
   }
 
   return (
-    <div className="profile-page">
-      <div className="pf-page-wrapper">
-        <div className="pf-layout">
+    <div className="min-h-screen overflow-x-hidden bg-[#FCFAF7] font-sans text-[#111]">
+      <div className="h-screen max-h-screen overflow-hidden max-lg:h-auto max-lg:max-h-none max-lg:overflow-visible">
+        <div className="grid h-screen max-h-screen grid-cols-[240px_1fr] overflow-hidden max-lg:h-auto max-lg:max-h-none max-lg:grid-cols-1 max-lg:overflow-visible">
           <ProfileSidebar activeTab={activeTab} unreadCount={unreadCount} onTabChange={handleTabChange} />
 
-          <main className="pf-main-content">
+          <main className="flex h-screen max-h-screen flex-col gap-5 overflow-y-auto px-10 py-6 max-lg:h-auto max-lg:max-h-none max-lg:overflow-visible max-lg:p-6">
             {activeTab === 'profile' && <ProfileInfoTab />}
             {activeTab === 'orders' && <ProfileOrdersTab />}
             {activeTab === 'notifications' && (

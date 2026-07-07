@@ -2,6 +2,42 @@ const CmsContent = require('../models/CmsContent');
 const { logUserActivity } = require('../services/activityService');
 const { validateCmsUpdate } = require('../utils/cmsValidation');
 
+function normalizeCmsAssetPath(path) {
+  if (!path) return path;
+  const clean = String(path).trim().replace(/^\/+/, '');
+  if (!clean) return path;
+
+  if (clean === 'hero1.jpeg') return '/product-images/hero1.jpeg';
+
+  if (/^(bedroom|chair|dining-room|living-room|office|outdoor)\//.test(clean)) {
+    return `/product-images/${clean.split('/').pop()}`;
+  }
+
+  if (clean.startsWith('product-images/')) return `/${clean}`;
+  if (/\.(png|jpe?g|gif|webp|svg)$/i.test(clean) && !clean.includes('/')) {
+    return `/product-images/${clean}`;
+  }
+
+  return path.startsWith('/') ? path : `/${clean}`;
+}
+
+function normalizeCmsPayload(cms) {
+  const data = typeof cms.toObject === 'function' ? cms.toObject() : { ...cms };
+
+  if (data.hero?.image) {
+    data.hero = { ...data.hero, image: normalizeCmsAssetPath(data.hero.image) };
+  }
+
+  if (Array.isArray(data.banners)) {
+    data.banners = data.banners.map((banner) => ({
+      ...banner,
+      image: banner.image ? normalizeCmsAssetPath(banner.image) : banner.image,
+    }));
+  }
+
+  return data;
+}
+
 const DEFAULT_CMS = {
   id: 'main',
   hero: {
@@ -11,14 +47,14 @@ const DEFAULT_CMS = {
       'Discover beautifully crafted furniture designed for stylish homes in Mogadishu — elegant designs, trusted quality, secure mobile money payment, and fast delivery.',
     ctaText: 'Explore Products',
     ctaLink: '/products',
-    image: '/hero1.jpeg',
+    image: '/product-images/hero1.jpeg',
   },
   banners: [
     {
       id: 'banner-1',
       title: 'Summer Collection',
       subtitle: 'Up to 15% off selected living room sets',
-      image: '/hero1.jpeg',
+      image: '/product-images/hero1.jpeg',
       link: '/products',
       active: true,
       order: 1,
@@ -89,7 +125,7 @@ async function getOrCreateCms() {
 exports.getPublicContent = async (_req, res) => {
   try {
     const cms = await getOrCreateCms();
-    const data = cms.toObject();
+    const data = normalizeCmsPayload(cms);
     delete data._id;
     return res.status(200).json({
       success: true,

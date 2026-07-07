@@ -13,7 +13,7 @@ const cmsSchema = new mongoose.Schema(
       },
       ctaText: { type: String, default: 'Explore Products' },
       ctaLink: { type: String, default: '/products' },
-      image: { type: String, default: '/hero1.jpeg' },
+      image: { type: String, default: '/product-images/hero1.jpeg' },
     },
     banners: [
       {

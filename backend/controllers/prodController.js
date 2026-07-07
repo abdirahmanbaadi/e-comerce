@@ -282,7 +282,7 @@ exports.createProduct = async (req, res) => {
       color,
       dimensions: dimensions || '',
       description: description || '',
-      images: productImages.length ? productImages : ['hero1.jpeg'],
+      images: productImages.length ? productImages : ['product-images/hero1.jpeg'],
     });
 
     return res.status(201).json({ success: true, message: 'New product added to database successfully!', product });

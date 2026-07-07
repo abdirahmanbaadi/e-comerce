@@ -9,7 +9,31 @@ export function formatMoney(value) {
 
 export function productImage(src) {
   if (!src) return '';
-  return src.startsWith('/') ? src : `/${src}`;
+  if (/^(https?:)?\/\//i.test(src) || /^data:/i.test(src) || /^blob:/i.test(src)) {
+    return src;
+  }
+
+  const clean = String(src).trim().replace(/^\/+/, '');
+  if (!clean) return '';
+
+  if (clean === 'hero1.jpeg') return '/product-images/hero1.jpeg';
+
+  // Backward compatibility for old product image folders after migration.
+  if (/^(bedroom|chair|dining-room|living-room|office|outdoor)\//.test(clean)) {
+    const fileName = clean.split('/').pop();
+    return `/product-images/${fileName}`;
+  }
+
+  // Keep uploaded admin images working.
+  if (clean.startsWith('uploads/')) return `/${clean}`;
+
+  // Product images can be stored either as "product-images/..." or just file name.
+  if (clean.startsWith('product-images/')) return `/${clean}`;
+  if (/\.(png|jpe?g|gif|webp|svg)$/i.test(clean) && !clean.includes('/')) {
+    return `/product-images/${clean}`;
+  }
+
+  return `/${clean}`;
 }
 
 export function formatChatTime(dateVal) {

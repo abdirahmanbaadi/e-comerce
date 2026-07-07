@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import MainNavbar from '../components/MainNavbar';
+import StoreNavbar from '../features/nav/StoreNavbar';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { validateCartItems, validateCouponCode } from '../utils/cartApi';
 import { DELIVERY_DISTRICTS, fetchDeliveryDistricts, getDistrictFee } from '../utils/data';
 import { formatMoney, productImage } from '../utils/format';
 import { showTopFloatNotification } from '../utils/notifications';
-import '../styles/pages/Cart.css';
 
 const EMPTY_DISTRICT = { value: '0', label: 'Select district', fee: 0 };
 
@@ -237,17 +236,21 @@ export default function Cart() {
   const isEmpty = cartItems.length === 0;
 
   return (
-    <div className="cart-page">
-      <MainNavbar cartActive />
+    <div className="min-h-screen overflow-x-hidden bg-base font-sans text-[#111]">
+      <StoreNavbar cartActive />
 
-      <section className="cart-hero">
+      <section className="border-b border-black/[0.06] bg-[radial-gradient(circle_at_top_left,rgba(216,161,40,0.13),transparent_34%),linear-gradient(135deg,#FAF8F2_0%,#F4EFE6_100%)] py-7 pb-[22px] text-center">
         <div className="container">
-          <span className="cart-label">Shopping Cart</span>
-          <h1 className="cart-title">Review Your Furniture Cart</h1>
+          <span className="mb-1.5 inline-block text-[0.76rem] font-extrabold uppercase tracking-[3px] text-gold">
+            Shopping Cart
+          </span>
+          <h1 className="m-0 font-display text-[2rem] font-bold leading-[1.15] text-deepGreen md:text-[2.5rem]">
+            Review Your Furniture Cart
+          </h1>
         </div>
       </section>
 
-      <section className="cart-section">
+      <section className="py-7 pb-16">
         <div className="container">
           {!isEmpty && (
             <div className="cart-layout">

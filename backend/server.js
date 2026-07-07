@@ -213,10 +213,10 @@ const seedDatabase = async () => {
           availability: "In Stock",
           color: "Sand Beige",
           images: [
-            "chair/bloom-round-accent-chair-set-main.jpeg.png",
-            "chair/bloom-round-accent-chair-set-angle-1.jpeg.png",
-            "chair/bloom-round-accent-chair-set-angle-2.jpeg.png",
-            "chair/bloom-round-accent-chair-set-angle-3.jpeg.png"
+            "product-images/bloom-round-accent-chair-set-main.jpeg.png",
+            "product-images/bloom-round-accent-chair-set-angle-1.jpeg.png",
+            "product-images/bloom-round-accent-chair-set-angle-2.jpeg.png",
+            "product-images/bloom-round-accent-chair-set-angle-3.jpeg.png"
           ]
         },
         {
@@ -238,10 +238,10 @@ const seedDatabase = async () => {
           availability: "Out of Stock",
           color: "Olive Green",
           images: [
-            "chair/olive-curve-lounge-chair-main.jpeg.png",
-            "chair/olive-curve-lounge-chair-angle-1.jpeg.png",
-            "chair/olive-curve-lounge-chair-angle-2.jpeg.png",
-            "chair/olive-curve-lounge-chair-angle-3.jpeg.png"
+            "product-images/olive-curve-lounge-chair-main.jpeg.png",
+            "product-images/olive-curve-lounge-chair-angle-1.jpeg.png",
+            "product-images/olive-curve-lounge-chair-angle-2.jpeg.png",
+            "product-images/olive-curve-lounge-chair-angle-3.jpeg.png"
           ]
         },
         {
@@ -263,10 +263,10 @@ const seedDatabase = async () => {
           availability: "In Stock",
           color: "Blush Pink",
           images: [
-            "bedroom/blush-velvet-arch-bed-main.jpeg.jpeg",
-            "bedroom/blush-velvet-arch-bed-angle-1.jpeg.jpeg",
-            "bedroom/blush-velvet-arch-bed-angle-2.jpeg.jpeg",
-            "bedroom/blush-velvet-arch-bed-main.jpeg.jpeg"
+            "product-images/blush-velvet-arch-bed-main.jpeg.jpeg",
+            "product-images/blush-velvet-arch-bed-angle-1.jpeg.jpeg",
+            "product-images/blush-velvet-arch-bed-angle-2.jpeg.jpeg",
+            "product-images/blush-velvet-arch-bed-main.jpeg.jpeg"
           ]
         },
         {
@@ -288,10 +288,10 @@ const seedDatabase = async () => {
           availability: "In Stock",
           color: "Sage Green & Natural Wood",
           images: [
-            "bedroom/sage-wood-platform-bed-main.jpeg.jpeg",
-            "bedroom/sage-wood-platform-bed-angle-1.jpeg.jpeg",
-            "bedroom/sage-wood-platform-bed-angle-2.jpeg.jpeg",
-            "bedroom/sage-wood-platform-bed-main.jpeg.jpeg"
+            "product-images/sage-wood-platform-bed-main.jpeg.jpeg",
+            "product-images/sage-wood-platform-bed-angle-1.jpeg.jpeg",
+            "product-images/sage-wood-platform-bed-angle-2.jpeg.jpeg",
+            "product-images/sage-wood-platform-bed-main.jpeg.jpeg"
           ]
         },
         {
@@ -313,10 +313,10 @@ const seedDatabase = async () => {
           availability: "In Stock",
           color: "Cream White",
           images: [
-            "bedroom/linen-upholstered-king-bed.png",
-            "bedroom/sage-wood-platform-bed-angle-1.jpeg.jpeg",
-            "bedroom/sage-wood-platform-bed-angle-2.jpeg.jpeg",
-            "bedroom/linen-upholstered-king-bed.png"
+            "product-images/linen-upholstered-king-bed.png",
+            "product-images/sage-wood-platform-bed-angle-1.jpeg.jpeg",
+            "product-images/sage-wood-platform-bed-angle-2.jpeg.jpeg",
+            "product-images/linen-upholstered-king-bed.png"
           ]
         },
         {
@@ -338,10 +338,10 @@ const seedDatabase = async () => {
           availability: "In Stock",
           color: "Ivory White",
           images: [
-            "living-room/ivory-cloud-sofa-set-main.jpeg.jpeg",
-            "living-room/ivory-cloud-sofa-set-angle-1.jpeg.jpeg",
-            "living-room/ivory-cloud-sofa-set-angle-2.jpeg.jpeg",
-            "living-room/ivory-cloud-sofa-set-main.jpeg.jpeg"
+            "product-images/ivory-cloud-sofa-set-main.jpeg.jpeg",
+            "product-images/ivory-cloud-sofa-set-angle-1.jpeg.jpeg",
+            "product-images/ivory-cloud-sofa-set-angle-2.jpeg.jpeg",
+            "product-images/ivory-cloud-sofa-set-main.jpeg.jpeg"
           ]
         },
         {
@@ -363,10 +363,10 @@ const seedDatabase = async () => {
           availability: "In Stock",
           color: "Ivory & Gold",
           images: [
-            "living-room/ivory-luxe-living-room-set-main.jpeg.jpeg",
-            "living-room/ivory-luxe-living-room-set-angle-1.jpeg.jpeg",
-            "living-room/ivory-luxe-living-room-set-angle-2.jpeg.jpeg",
-            "living-room/ivory-luxe-living-room-set-angle-3.jpeg.jpeg"
+            "product-images/ivory-luxe-living-room-set-main.jpeg.jpeg",
+            "product-images/ivory-luxe-living-room-set-angle-1.jpeg.jpeg",
+            "product-images/ivory-luxe-living-room-set-angle-2.jpeg.jpeg",
+            "product-images/ivory-luxe-living-room-set-angle-3.jpeg.jpeg"
           ]
         },
         {
@@ -388,10 +388,10 @@ const seedDatabase = async () => {
           availability: "In Stock",
           color: "Walnut Brown & Gray",
           images: [
-            "living-room/walnut-frame-sofa-set-main.jpeg.jpeg",
-            "living-room/walnut-frame-sofa-set-angle-1.jpeg.jpeg",
-            "living-room/walnut-frame-sofa-set-angle-2.jpeg.jpeg",
-            "living-room/walnut-frame-sofa-set-angle-3.jpeg.jpeg"
+            "product-images/walnut-frame-sofa-set-main.jpeg.jpeg",
+            "product-images/walnut-frame-sofa-set-angle-1.jpeg.jpeg",
+            "product-images/walnut-frame-sofa-set-angle-2.jpeg.jpeg",
+            "product-images/walnut-frame-sofa-set-angle-3.jpeg.jpeg"
           ]
         },
         {
@@ -413,10 +413,10 @@ const seedDatabase = async () => {
           availability: "In Stock",
           color: "Emerald Green & Gold",
           images: [
-            "dining-room/emerald-luxe-dining-set-main.jpeg.jpeg",
-            "dining-room/emerald-luxe-dining-set-angle-1.jpeg.jpeg",
-            "dining-room/emerald-luxe-dining-set-angle-2.jpeg.jpeg",
-            "dining-room/emerald-luxe-dining-set-angle-3.jpeg.jpeg"
+            "product-images/emerald-luxe-dining-set-main.jpeg.jpeg",
+            "product-images/emerald-luxe-dining-set-angle-1.jpeg.jpeg",
+            "product-images/emerald-luxe-dining-set-angle-2.jpeg.jpeg",
+            "product-images/emerald-luxe-dining-set-angle-3.jpeg.jpeg"
           ]
         },
         {
@@ -438,10 +438,10 @@ const seedDatabase = async () => {
           availability: "In Stock",
           color: "Sage Green & Walnut Wood",
           images: [
-            "dining-room/walnut-sage-dining-set-main.jpeg.jpeg",
-            "dining-room/walnut-sage-dining-set-angle-1.jpeg.jpeg",
-            "dining-room/walnut-sage-dining-set-angle-2.jpeg.jpeg",
-            "dining-room/walnut-sage-dining-set-angle-3.jpeg.jpeg"
+            "product-images/walnut-sage-dining-set-main.jpeg.jpeg",
+            "product-images/walnut-sage-dining-set-angle-1.jpeg.jpeg",
+            "product-images/walnut-sage-dining-set-angle-2.jpeg.jpeg",
+            "product-images/walnut-sage-dining-set-angle-3.jpeg.jpeg"
           ]
         }
       ];

@@ -21,19 +21,19 @@ export function getLastOrderDetails() {
     items: [
       {
         title: 'Luxe 3-Seater Sofa',
-        image: '/living-room/ivory-cloud-sofa-set-main.jpeg.jpeg',
+        image: '/product-images/ivory-cloud-sofa-set-main.jpeg.jpeg',
         quantity: 1,
         price: 650,
       },
       {
         title: 'Bloom Accent Chair Set',
-        image: '/chair/bloom-round-accent-chair-set-main.jpeg.png',
+        image: '/product-images/bloom-round-accent-chair-set-main.jpeg.png',
         quantity: 1,
         price: 150,
       },
       {
         title: 'Blush Velvet Arch Bed',
-        image: '/bedroom/blush-velvet-arch-bed-main.jpeg.jpeg',
+        image: '/product-images/blush-velvet-arch-bed-main.jpeg.jpeg',
         quantity: 1,
         price: 850,
       },

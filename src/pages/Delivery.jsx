@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { apiUrl } from '../utils/data';
 import { showTopFloatNotification } from '../utils/notifications';
-import '../styles/pages/Delivery.css';
 
 function normalizePhone(phone) {
   return (phone || '').replace(/\D/g, '');

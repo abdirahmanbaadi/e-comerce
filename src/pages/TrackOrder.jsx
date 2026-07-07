@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import MainNavbar from '../components/MainNavbar';
+import StoreNavbar from '../features/nav/StoreNavbar';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { apiUrl } from '../utils/data';
 import { showTopFloatNotification } from '../utils/notifications';
-import '../styles/pages/TrackOrder.css';
 
 const ORDER_STEPS = [
   {
@@ -247,21 +246,25 @@ export default function TrackOrder() {
   }
 
   return (
-    <div className="trackOrder-page">
-      <MainNavbar />
+    <div className="min-h-screen overflow-x-hidden bg-base font-sans text-[#111]">
+      <StoreNavbar />
 
-      <section className="track-hero text-center">
+      <section className="border-b border-black/[0.06] bg-[radial-gradient(circle_at_top_left,rgba(216,161,40,0.14),transparent_34%),linear-gradient(135deg,#FAF8F2_0%,#F4EFE6_100%)] py-[70px] pb-11 text-center">
         <div className="container">
-          <span className="track-label">Delivery Tracking</span>
-          <h1 className="track-title">Track Your Furniture Order</h1>
-          <p className="track-desc">
+          <span className="mb-2.5 inline-block text-[0.76rem] font-extrabold uppercase tracking-[3px] text-gold">
+            Delivery Tracking
+          </span>
+          <h1 className="mb-3 font-display text-[2.4rem] font-bold text-deepGreen md:text-[3.2rem]">
+            Track Your Furniture Order
+          </h1>
+          <p className="mx-auto mb-0 max-w-[680px] text-[0.98rem] leading-[1.8] text-[#5f5f5f]">
             Enter your Order ID to view payment status, delivery progress, and estimated delivery
             time inside Mogadishu.
           </p>
         </div>
       </section>
 
-      <section className="track-section">
+      <section className="py-14 pb-20">
         <div className="container">
           <form className="track-search-card" onSubmit={trackOrder}>
             <div className="row g-3 align-items-end">
