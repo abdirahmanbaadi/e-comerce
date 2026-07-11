@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useNotifications } from '../../hooks/useNotifications';
 import { AppSearchField } from '../nav/StoreNavbar';
 
 // =============================================================================
@@ -14,7 +13,7 @@ const MENU_ITEMS = [
   { id: 'products', label: 'Products', icon: 'fa-couch' },
   { id: 'stock', label: 'Stock Management', icon: 'fa-cubes' },
   { id: 'payments', label: 'Payments', icon: 'fa-credit-card' },
-  { id: 'delivery', label: 'Delivery', icon: 'fa-truck' },
+  { id: 'delivery', label: 'Delivery', icon: 'fa-truck', badgeKey: 'delivery' },
   { id: 'driver-applications', label: 'Driver Applications', icon: 'fa-id-card', badgeKey: 'drivers' },
   { id: 'support', label: 'Support / Help', icon: 'fa-headset', badgeKey: 'support' },
   { id: 'reviews', label: 'Reviews', icon: 'fa-star' },
@@ -171,6 +170,11 @@ const TYPE_ICON = {
   new_order: { icon: 'fa-bag-shopping', color: '#10b981', tab: 'orders' },
   driver_application: { icon: 'fa-id-card', color: '#f59e0b', tab: 'driver-applications' },
   new_support_ticket: { icon: 'fa-headset', color: '#3b82f6', tab: 'support' },
+  support_message: { icon: 'fa-headset', color: '#3b82f6', tab: 'support' },
+  driver_rejected: { icon: 'fa-truck', color: '#ef4444', tab: 'delivery' },
+  delivery_accepted: { icon: 'fa-circle-check', color: '#10b981', tab: 'delivery' },
+  order_status_changed: { icon: 'fa-arrows-rotate', color: '#3b82f6', tab: 'orders' },
+  delivery_unassigned: { icon: 'fa-truck', color: '#f59e0b', tab: 'delivery' },
 };
 
 function tabForNotification(n) {
@@ -191,6 +195,9 @@ export function AdminHeader({
   onLogout,
   headerSearch,
   onHeaderSearchChange,
+  notifications = [],
+  onMarkNotificationRead,
+  onRefreshNotifications,
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [msgOpen, setMsgOpen] = useState(false);
@@ -200,7 +207,9 @@ export function AdminHeader({
   const msgRef = useRef(null);
   const profileRef = useRef(null);
 
-  const { items, markRead, refresh } = useNotifications({ enabled: true, pollMs: 15000 });
+  const items = notifications;
+  const markRead = onMarkNotificationRead || (async () => false);
+  const refresh = onRefreshNotifications || (() => {});
 
   useClickOutside(notifRef, () => setNotifOpen(false));
   useClickOutside(msgRef, () => setMsgOpen(false));
@@ -210,16 +219,32 @@ export function AdminHeader({
   const searchEnabled = SEARCH_TABS.has(activeTab);
   const searchPlaceholder = SEARCH_PLACEHOLDERS[activeTab] || 'Search...';
 
-  const generalNotifications = items.filter((n) => n.type !== 'new_support_ticket');
-  const supportMessages = items.filter((n) => n.type === 'new_support_ticket');
+  const generalNotifications = items.filter(
+    (n) => n.type !== 'new_support_ticket' && n.type !== 'support_message'
+  );
+  const supportMessages = items.filter(
+    (n) => n.type === 'new_support_ticket' || n.type === 'support_message'
+  );
   const generalUnread = generalNotifications.filter((n) => n.unread).length;
   const supportUnread = supportMessages.filter((n) => n.unread).length;
 
   const handleNotifClick = async (n) => {
     if (n.unread) await markRead(n.id);
-    onTabChange(tabForNotification(n));
+    const tab = tabForNotification(n);
+    onTabChange(tab);
     setNotifOpen(false);
     setMsgOpen(false);
+
+    const supportTypes = new Set(['new_support_ticket', 'support_message']);
+    const ticketId =
+      n.metadata?.ticketId || (supportTypes.has(n.type) ? n.relatedId : null);
+    if (ticketId && (tab === 'support' || supportTypes.has(n.type))) {
+      window.setTimeout(() => {
+        if (typeof window.selectSupportTicket === 'function') {
+          window.selectSupportTicket(ticketId);
+        }
+      }, 150);
+    }
   };
 
   const closeAllDropdowns = () => {

@@ -13,6 +13,8 @@ const orderActivitySchema = new mongoose.Schema(
         'payment_updated',
         'driver_assigned',
         'driver_reassigned',
+        'driver_accepted',
+        'driver_rejected',
         'order_cancelled',
         'estimate_updated',
       ],

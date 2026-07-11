@@ -1,25 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getLastOrderDetails, getOrderTotalFormatted } from '../../utils/notificationOrderContext';
+import {
+  getLastOrderDetails,
+  getOrderTotalFormatted,
+  fetchOrderForNotification,
+  showTopFloatNotification,
+} from '../../utils/notifications';
 import { apiUrl } from '../../utils/data';
 import { formatMoney } from '../../utils/format';
-import { showTopFloatNotification } from '../../utils/notifications';
 
 /* ═══ SECTION: MODAL SHELL ═══ */
 export function ModalBackdrop({ children, onClose, maxWidth = 'max-w-lg', className = '' }) {
   useEffect(() => {
     if (!onClose) return undefined;
     const onKey = (e) => e.key === 'Escape' && onClose();
+    const prevOverflow = document.body.style.overflow;
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      document.body.style.overflow = prevOverflow;
     };
   }, [onClose]);
 
-  return (
+  if (typeof document === 'undefined' || !document.body) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[1050] flex items-center justify-center bg-black/45 p-4"
       onClick={onClose}
@@ -28,7 +36,8 @@ export function ModalBackdrop({ children, onClose, maxWidth = 'max-w-lg', classN
       <div className={`w-full ${maxWidth} ${className}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -193,9 +202,6 @@ export const fieldLabelClass = 'mb-1.5 block text-[0.8rem] font-bold text-[#1111
 
 /* ═══ SECTION: NOTIFICATION MODALS ═══ */
 
-const FALLBACK_ADMIN_REPLY =
-  'We reviewed your issue and found that your EVC Plus payment was not completed successfully. Please try the payment again using the same phone number you used before. If the problem continues, our support team will be happy to help you further.';
-
 const WEEKEND_OFFER = {
   productTitle: 'Ivory Cloud Sofa Set',
   image: '/product-images/ivory-cloud-sofa-set-main.jpeg.jpeg',
@@ -207,8 +213,8 @@ function SuccessCircle({ children, className = 'bg-[#e2ece9]' }) {
   );
 }
 
-function OrderConfirmedModal({ onClose, onViewDetails }) {
-  const order = getLastOrderDetails();
+function OrderConfirmedModal({ onClose, onViewDetails, order: orderProp }) {
+  const order = orderProp || getLastOrderDetails();
 
   return (
     <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
@@ -242,8 +248,8 @@ function OrderConfirmedModal({ onClose, onViewDetails }) {
   );
 }
 
-function OrderDetailsModal({ onClose }) {
-  const order = getLastOrderDetails();
+function OrderDetailsModal({ onClose, order: orderProp }) {
+  const order = orderProp || getLastOrderDetails();
   const items = order.items?.length ? order.items : [];
 
   return (
@@ -470,15 +476,26 @@ function OrderProcessingModal({ onClose }) {
   );
 }
 
-function SupportRepliedModal({ onClose, userName, repliedTicket, onSendFollowUp, sending }) {
-  const firstName = userName?.trim().split(' ')[0] || 'Customer';
-  const [adminReply, setAdminReply] = useState('');
-  const [loadingReply, setLoadingReply] = useState(Boolean(repliedTicket?.id));
+function SupportRepliedModal({ onClose, userName, notificationItem, onSendFollowUp, sending }) {
+  const firstName = (userName || '').trim().split(' ')[0] || 'Customer';
+  const meta = notificationItem?.metadata || {};
+  const ticketId = String(meta.ticketId || notificationItem?.relatedId || '').trim();
+  const subject = String(meta.subject || notificationItem?.title || '').trim();
+  const seededReply = String(meta.replyText || '').trim();
+
+  const [adminReply, setAdminReply] = useState(seededReply);
+  const [loadingReply, setLoadingReply] = useState(!seededReply);
   const [replyText, setReplyText] = useState('');
 
+  const hasAdminReply = Boolean(adminReply);
+
   useEffect(() => {
-    if (!repliedTicket?.id) {
-      setAdminReply(FALLBACK_ADMIN_REPLY);
+    if (!ticketId) {
+      setLoadingReply(false);
+      return undefined;
+    }
+    if (seededReply) {
+      setAdminReply(seededReply);
       setLoadingReply(false);
       return undefined;
     }
@@ -489,28 +506,23 @@ function SupportRepliedModal({ onClose, userName, repliedTicket, onSendFollowUp,
     (async () => {
       const token = localStorage.getItem('token');
       if (!token) {
-        if (!cancelled) {
-          setAdminReply(repliedTicket.lastMessageText || FALLBACK_ADMIN_REPLY);
-          setLoadingReply(false);
-        }
+        if (!cancelled) setLoadingReply(false);
         return;
       }
 
       try {
-        const response = await fetch(apiUrl(`/api/support/chats/${repliedTicket.id}/messages`), {
+        const response = await fetch(apiUrl(`/api/support/chats/${encodeURIComponent(ticketId)}/messages`), {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await response.json();
-        if (cancelled) return;
-        if (data.success) {
-          const adminMessages = (data.messages || []).filter((m) => m.senderRole === 'admin');
-          const lastAdmin = adminMessages[adminMessages.length - 1];
-          setAdminReply(lastAdmin?.messageText || repliedTicket.lastMessageText || FALLBACK_ADMIN_REPLY);
-        } else {
-          setAdminReply(repliedTicket.lastMessageText || FALLBACK_ADMIN_REPLY);
-        }
+        if (cancelled || !data?.success) return;
+
+        const adminMessages = (data.messages || []).filter((m) => m?.senderRole === 'admin');
+        const lastAdmin = adminMessages[adminMessages.length - 1];
+        const text = String(lastAdmin?.messageText ?? '').trim();
+        if (text) setAdminReply(text);
       } catch {
-        if (!cancelled) setAdminReply(repliedTicket.lastMessageText || FALLBACK_ADMIN_REPLY);
+        /* show empty state below */
       } finally {
         if (!cancelled) setLoadingReply(false);
       }
@@ -519,70 +531,88 @@ function SupportRepliedModal({ onClose, userName, repliedTicket, onSendFollowUp,
     return () => {
       cancelled = true;
     };
-  }, [repliedTicket]);
+  }, [ticketId, seededReply]);
 
   const handleReply = async (e) => {
     e.preventDefault();
+    if (!hasAdminReply) return;
+
     const text = replyText.trim();
-    if (!text) return;
+    if (!text || !ticketId || !onSendFollowUp) return;
 
-    if (repliedTicket?.id && onSendFollowUp) {
-      const ok = await onSendFollowUp(repliedTicket.id, text);
-      if (ok) {
-        showTopFloatNotification('✅ Fariintaada waa la diray!');
-        setReplyText('');
-      }
-      return;
+    const ok = await onSendFollowUp(ticketId, text);
+    if (ok) {
+      showTopFloatNotification('✅ Fariintaada waa la diray!');
+      setReplyText('');
     }
-
-    showTopFloatNotification('✅ Your reply has been sent successfully!');
-    setReplyText('');
   };
 
   return (
-    <ModalBackdrop onClose={onClose} maxWidth="max-w-[580px]">
-      <div className={`${premiumCardClass} px-8 py-9`}>
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={premiumCardClass}>
         <CloseAbsoluteBtn onClose={onClose} />
-        <PremiumDeco className="mb-5">
+        <PremiumDeco>
           <SuccessCircle>
             <i className="fa-solid fa-comment-dots text-[2.1rem] text-deepGreen" />
           </SuccessCircle>
         </PremiumDeco>
-        <h2 className="mb-2 font-display text-[2.1rem] font-bold text-[#2b3a30]">Support Replied</h2>
-        <p className="mx-auto mb-5 max-w-[420px] text-[0.9rem] text-[#666666]">
-          {repliedTicket?.subject
-            ? `Waxaan ka soo jawaabnay cabashadaada: "${repliedTicket.subject}"`
+        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-[#2b3a30]">Support Replied</h2>
+        <GoldStarSeparator />
+        <p className="mx-auto mb-5 max-w-[380px] text-[0.92rem] leading-relaxed text-[#666666]">
+          {subject
+            ? `We replied to your message about "${subject}".`
             : 'Our support team has replied to your message.'}
         </p>
-        <div className="mb-5 rounded-xl border border-[#f0eee8] bg-[#FAF8F5] p-5 text-left">
-          <p className="mb-3 text-[0.92rem] font-bold text-[#333333]">Hello {firstName},</p>
-          <p className="m-0 text-[0.88rem] leading-relaxed text-[#444444]">{loadingReply ? 'Loading reply...' : adminReply}</p>
-        </div>
-        <p className="mb-2 text-left text-[0.82rem] text-[#777777]">If you are still facing this issue, please leave a message below.</p>
-        <form onSubmit={handleReply} className="mb-5">
-          <div className="flex items-center gap-2 rounded-xl border border-black/[0.08] bg-white px-3 py-2 focus-within:border-deepGreen focus-within:shadow-[0_0_0_3px_rgba(7,61,53,0.08)]">
-            <input
-              type="text"
-              className="min-w-0 flex-1 border-0 bg-transparent text-[0.88rem] outline-none"
-              placeholder="Write your message here..."
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              disabled={sending}
-            />
-            <button type="submit" className="border-0 bg-transparent text-[1.1rem] text-deepGreen hover:text-[#0b5e52] disabled:opacity-50" disabled={sending || !replyText.trim()}>
-              <i className="fa-regular fa-paper-plane" />
-            </button>
-          </div>
-        </form>
-        <div className="flex justify-end">
-          <BtnCloseFooter onClick={onClose} className="max-w-[140px] flex-none rounded-lg text-[0.9rem]" />
-        </div>
+
+        <InfoBox>
+          <p className="mb-2 text-[0.88rem] font-bold text-[#333333]">Hello {firstName},</p>
+          {loadingReply ? (
+            <p className="m-0 flex items-center justify-center gap-2 text-[0.88rem] text-[#666666]">
+              <i className="fa-solid fa-spinner fa-spin text-deepGreen" />
+              Loading reply...
+            </p>
+          ) : hasAdminReply ? (
+            <p className="m-0 text-left text-[0.88rem] leading-relaxed text-[#444444]">{adminReply}</p>
+          ) : (
+            <p className="m-0 text-left text-[0.88rem] text-[#888888]">Reply not available yet. Please check again shortly.</p>
+          )}
+        </InfoBox>
+
+        {hasAdminReply ? (
+          <form onSubmit={handleReply} className="mb-5">
+            <p className="mb-2 text-left text-[0.82rem] text-[#777777]">Need more help? Send a follow-up message.</p>
+            <div className="flex items-center gap-2 rounded-xl border border-black/[0.08] bg-white px-3 py-2">
+              <input
+                type="text"
+                className="min-w-0 flex-1 border-0 bg-transparent text-[0.88rem] outline-none"
+                placeholder="Write your message here..."
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                disabled={sending}
+              />
+              <button
+                type="submit"
+                className="border-0 bg-transparent text-[1.1rem] text-deepGreen disabled:opacity-50"
+                disabled={sending || !replyText.trim()}
+                aria-label="Send message"
+              >
+                <i className="fa-regular fa-paper-plane" />
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        <BtnCloseFooter onClick={onClose} className="mx-auto w-full max-w-[160px]" />
       </div>
     </ModalBackdrop>
   );
 }
 
-function WishlistAvailableModal({ onClose, navigate }) {
+function WishlistAvailableModal({ onClose, navigate, item }) {
+  const meta = item?.metadata || {};
+  const productTitle = meta.productTitle || 'Wishlist Item';
+  const image = meta.image || '/product-images/sage-wood-platform-bed-main.jpeg.jpeg';
+
   return (
     <ModalBackdrop onClose={onClose} maxWidth="max-w-[580px]">
       <div className={`${premiumCardClass} px-8 py-9`}>
@@ -597,10 +627,12 @@ function WishlistAvailableModal({ onClose, navigate }) {
         <h2 className="mb-2 font-display text-[2.1rem] font-bold text-deepGreen">Wishlist Product Available</h2>
         <p className="mx-auto mb-5 max-w-[420px] text-[0.9rem] text-[#666666]">Good news! A product from your wishlist is now available.</p>
         <div className="mx-auto mb-5 flex max-w-[400px] items-center gap-4 rounded-xl border border-black/[0.05] bg-[#FAF8F5] p-4 text-left">
-          <img src="/product-images/sage-wood-platform-bed-main.jpeg.jpeg" alt="Sage Wood Platform Bed" className="h-[85px] w-[110px] rounded-lg border border-black/[0.05] object-cover" />
+          <img src={image} alt={productTitle} className="h-[85px] w-[110px] rounded-lg border border-black/[0.05] object-cover" />
           <div>
-            <h4 className="mb-1 text-[0.95rem] font-bold text-[#2b3a30]">Sage Wood Platform Bed</h4>
-            <p className="mb-2 text-[0.8rem] font-medium text-[#888888]">Solid Walnut • Timber Finish</p>
+            <h4 className="mb-1 text-[0.95rem] font-bold text-[#2b3a30]">{productTitle}</h4>
+            {meta.price ? (
+              <p className="mb-2 text-[0.95rem] font-extrabold text-deepGreen">{formatMoney(meta.price)}</p>
+            ) : null}
             <span className="text-[1.05rem] font-extrabold text-deepGreen">Now Available</span>
           </div>
         </div>
@@ -611,7 +643,7 @@ function WishlistAvailableModal({ onClose, navigate }) {
           <BtnDeepGreen
             className="max-w-[160px] flex-none"
             onClick={() => {
-              localStorage.setItem('openProductModalOnLoad', 'Sage Wood Platform Bed');
+              localStorage.setItem('openProductModalOnLoad', productTitle);
               navigate('/products');
               onClose();
             }}
@@ -627,7 +659,16 @@ function WishlistAvailableModal({ onClose, navigate }) {
   );
 }
 
-function WeekendOfferModal({ onClose, navigate }) {
+function WeekendOfferModal({ onClose, navigate, item }) {
+  const meta = item?.metadata || {};
+  const promoCode = meta.promoCode || 'WEEKEND15';
+  const description = meta.description || 'Make your weekends more comfortable with timeless sofas at a special price.';
+  const discountLabel = meta.discountPercent
+    ? `${meta.discountPercent}% OFF`
+    : meta.discountAmount
+      ? `${formatMoney(meta.discountAmount)} OFF`
+      : '15% OFF';
+
   return (
     <ModalBackdrop onClose={onClose} maxWidth="max-w-[850px]">
       <div className="relative overflow-hidden rounded-3xl bg-base shadow-[0_15px_45px_rgba(0,0,0,0.08)]">
@@ -645,21 +686,19 @@ function WeekendOfferModal({ onClose, navigate }) {
           </div>
           <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#faf8f5] px-6 py-8 md:px-10 md:pb-8 md:pt-10">
             <span className="absolute right-[52px] top-5 rounded-full border border-deepGreen/10 bg-[#e5ece9] px-3.5 py-1.5 text-[0.72rem] font-bold uppercase text-deepGreen">
-              15% OFF
+              {discountLabel}
             </span>
             <h2 className="mb-0 mt-2 pr-20 font-display text-[1.85rem] font-bold leading-tight text-[#111111] md:text-[2.35rem]">
-              Weekend Sofa Offer
+              {item?.title || 'Weekend Offer'}
             </h2>
             <hr className="my-3.5 h-0.5 w-[60px] border-0 bg-[#d4cebc]" />
-            <p className="mb-5 text-left text-[0.92rem] leading-relaxed text-[#666666]">
-              Make your weekends more comfortable with timeless sofas at a special price.
-            </p>
+            <p className="mb-5 text-left text-[0.92rem] leading-relaxed text-[#666666]">{description}</p>
             <div className="mb-6 flex max-w-[320px] overflow-hidden rounded-xl border-[1.5px] border-dashed border-[#ebdcb9] bg-white">
               <div className="border-r border-dashed border-[#ebdcb9] bg-base px-4 py-2.5 text-[0.8rem] font-bold uppercase tracking-wide text-[#888888]">
                 Use Code
               </div>
               <div className="flex-1 px-4 py-2.5 text-center text-[1.15rem] font-extrabold tracking-widest text-[#8c7a6b]">
-                WEEKEND15
+                {promoCode}
               </div>
             </div>
             <div className="mb-4 flex items-center gap-2 text-left text-[0.86rem] text-[#555555]">
@@ -828,17 +867,39 @@ function NotificationDetailModal({
   item,
   onClose,
   user,
-  repliedTicket,
   onSendFollowUp,
   sendingFollowUp,
 }) {
   const navigate = useNavigate();
-  const order = getLastOrderDetails();
+  const [order, setOrder] = useState(() => getLastOrderDetails());
   const [subModal, setSubModal] = useState(null);
+
+  const orderId = item?.orderId || item?.metadata?.orderId || item?.relatedId;
 
   useEffect(() => {
     setSubModal(null);
   }, [item?.modalType, item?.index]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const type = String(item?.type || '');
+    const isSupportRelated = type.startsWith('support_') || type === 'new_support_ticket';
+    const isOrderRelated = !isSupportRelated && (type.includes('order') || type.includes('payment'));
+
+    if (!item || !orderId || !isOrderRelated) {
+      setOrder(getLastOrderDetails());
+      return undefined;
+    }
+
+    (async () => {
+      const fetched = await fetchOrderForNotification(orderId);
+      if (!cancelled) setOrder(fetched || getLastOrderDetails());
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [item?.id, orderId, item?.type]);
 
   if (!item && !subModal) return null;
 
@@ -848,7 +909,7 @@ function NotificationDetailModal({
   };
 
   if (subModal === 'orderDetails') {
-    return <OrderDetailsModal onClose={() => { setSubModal(null); onClose(); }} />;
+    return <OrderDetailsModal order={order} onClose={() => { setSubModal(null); onClose(); }} />;
   }
 
   if (subModal === 'retryPayment') {
@@ -870,7 +931,7 @@ function NotificationDetailModal({
 
   switch (item.modalType) {
     case 'order-confirmed':
-      return <OrderConfirmedModal onClose={onClose} onViewDetails={() => setSubModal('orderDetails')} />;
+      return <OrderConfirmedModal order={order} onClose={onClose} onViewDetails={() => setSubModal('orderDetails')} />;
     case 'payment-success':
       return <PaymentSuccessModal order={order} onClose={onClose} />;
     case 'payment-failed':
@@ -880,17 +941,17 @@ function NotificationDetailModal({
     case 'support-replied':
       return (
         <SupportRepliedModal
-          userName={user?.fullName}
-          repliedTicket={repliedTicket}
+          userName={user?.fullName || ''}
+          notificationItem={item}
           onSendFollowUp={onSendFollowUp}
           sending={sendingFollowUp}
           onClose={onClose}
         />
       );
     case 'wishlist-available':
-      return <WishlistAvailableModal navigate={navigate} onClose={onClose} />;
+      return <WishlistAvailableModal item={item} navigate={navigate} onClose={onClose} />;
     case 'weekend-offer':
-      return <WeekendOfferModal navigate={navigate} onClose={onClose} />;
+      return <WeekendOfferModal item={item} navigate={navigate} onClose={onClose} />;
     case 'delivery-assigned':
     case 'review-moderated':
       return <SimpleAlertModal item={item} onClose={onClose} />;
@@ -954,32 +1015,47 @@ export default function ProfileNotificationsTab({
   notifications,
 }) {
   const { user } = useAuth();
-  const { items, loading, markRead, markAllRead } = notifications;
+  const {
+    items = [],
+    loading = false,
+    error = null,
+    unreadCount = 0,
+    markRead = async () => false,
+    markAllRead = async () => false,
+  } = notifications || {};
   const [filter, setFilter] = useState('all');
   const [activeModal, setActiveModal] = useState(null);
 
   const visibleItems = useMemo(() => {
-    const merged = items.map((item) => {
-      if (item.type === 'support_replied' && supportChat?.repliedTicket) {
+    const list = Array.isArray(items) ? items : [];
+    const merged = list.map((item) => {
+      if (!item) return null;
+      if (item.type === 'support_replied') {
+        const subject = item.metadata?.subject;
         return {
           ...item,
-          desc: `Waxaan ka soo jawaabnay fariintaada: "${supportChat.repliedTicket.subject}"`,
+          desc: subject
+            ? `Waxaan ka soo jawaabnay fariintaada: "${subject}"`
+            : item.desc,
           unread: !item.read,
         };
       }
       return item;
-    });
+    }).filter(Boolean);
     return filter === 'unread' ? merged.filter((item) => item.unread) : merged;
-  }, [items, filter, supportChat?.repliedTicket]);
+  }, [items, filter]);
 
   useEffect(() => {
-    onUnreadChange?.(notifications.unreadCount);
-  }, [notifications.unreadCount, onUnreadChange]);
+    onUnreadChange?.(unreadCount);
+  }, [unreadCount, onUnreadChange]);
 
   const handleCardClick = (item) => {
-    if (item.unread) markRead(item.id);
+    if (!item?.id) return;
     setActiveModal(item);
+    if (item.unread) markRead(item.id);
   };
+
+  const closeModal = () => setActiveModal(null);
 
   return (
     <div>
@@ -1020,11 +1096,25 @@ export default function ProfileNotificationsTab({
       </div>
 
       <div className="flex-1 overflow-y-auto pr-1">
-        {loading && items.length === 0 ? (
+        {loading && (!Array.isArray(items) || items.length === 0) ? (
           <p className="p-4 text-[#666666]">Loading notifications...</p>
         ) : null}
 
-        {!loading && visibleItems.length === 0 ? (
+        {error && (!Array.isArray(items) || items.length === 0) ? (
+          <p className="p-4 text-[0.88rem] text-[#666666]">
+            {error}
+            {String(error).toLowerCase().includes('session') ? (
+              <>
+                {' '}
+                <Link to="/login" className="font-bold text-deepGreen underline">
+                  Dib u soo gal
+                </Link>
+              </>
+            ) : null}
+          </p>
+        ) : null}
+
+        {!loading && !error && visibleItems.length === 0 ? (
           <p className="p-4 text-[#666666]">No notifications yet.</p>
         ) : null}
 
@@ -1069,14 +1159,15 @@ export default function ProfileNotificationsTab({
         </div>
       </div>
 
-      <NotificationDetailModal
-        item={activeModal}
-        onClose={() => setActiveModal(null)}
-        user={user}
-        repliedTicket={supportChat?.repliedTicket}
-        onSendFollowUp={supportChat?.sendTicketMessage}
-        sendingFollowUp={supportChat?.sending}
-      />
+      {activeModal ? (
+        <NotificationDetailModal
+          item={activeModal}
+          onClose={closeModal}
+          user={user}
+          onSendFollowUp={supportChat?.sendTicketMessage}
+          sendingFollowUp={supportChat?.sending}
+        />
+      ) : null}
     </div>
   );
 }

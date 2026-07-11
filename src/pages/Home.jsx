@@ -35,8 +35,6 @@ export default function Home() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [hero, setHero] = useState(DEFAULT_HERO);
-  const [banners, setBanners] = useState([]);
-  const [promotions, setPromotions] = useState([]);
 
   useEffect(() => {
     syncAuth();
@@ -56,15 +54,6 @@ export default function Home() {
               image: cmsHero.image ? productImage(cmsHero.image) : DEFAULT_HERO.image,
             });
           }
-          setBanners(
-            (data.cms.banners || [])
-              .filter((b) => b.active)
-              .map((banner) => ({
-                ...banner,
-                image: banner.image ? productImage(banner.image) : banner.image,
-              }))
-          );
-          setPromotions((data.cms.promotions || []).filter((p) => p.active));
         }
       })
       .catch(() => {});
@@ -102,7 +91,7 @@ export default function Home() {
       <StoreNavbar />
 
       <section
-        className="flex min-h-[65vh] items-center bg-cover bg-center bg-no-repeat py-[70px] md:min-h-[calc(100vh-65px)]"
+        className="flex min-h-[50vh] items-center bg-cover bg-center bg-no-repeat py-12 md:min-h-[58vh] md:py-16"
         style={heroBackgroundStyle(hero.image)}
       >
         <div className="container">
@@ -135,54 +124,8 @@ export default function Home() {
         </div>
       </section>
 
-      {banners.length > 0 && (
-        <section className="container py-4">
-          <div className="row g-3">
-            {banners.slice(0, 3).map((banner) => (
-              <div key={banner.id} className="col-md-4">
-                <Link to={banner.link || '/products'} className="text-decoration-none">
-                  <div className="h-100 rounded-4 bg-white p-3 shadow-sm">
-                    {banner.image && (
-                      <img
-                        src={productImage(banner.image)}
-                        alt={banner.title}
-                        className="mb-2 w-100 rounded-3 object-cover"
-                        style={{ maxHeight: 120 }}
-                      />
-                    )}
-                    <h4 className="mb-1 text-success">{banner.title}</h4>
-                    <p className="small mb-0 text-muted">{banner.subtitle}</p>
-                  </div>
-                </Link>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {promotions.length > 0 && (
-        <section className="container py-3">
-          <div className="row g-3">
-            {promotions.slice(0, 2).map((promo) => (
-              <div key={promo.id || promo.code} className="col-md-6">
-                <div
-                  className="h-100 rounded-4 p-4 text-white"
-                  style={{ background: 'linear-gradient(135deg, #073D35, #0a5c4d)' }}
-                >
-                  <h4 className="mb-2">{promo.description || promo.code}</h4>
-                  <p className="small mb-3 opacity-75">{promo.subtitle || 'Use this code at checkout'}</p>
-                  {promo.code && (
-                    <span className="badge bg-light px-3 py-2 text-success">Code: {promo.code}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <main id="products-section" className="container py-[75px]">
-        <div className="mx-auto mb-[38px] max-w-[760px] text-center">
+      <main id="products-section" className="container pb-14 pt-8 md:pt-10">
+        <div className="mx-auto mb-8 max-w-[760px] text-center md:mb-10">
           <span className="mb-2.5 inline-block text-[0.76rem] font-extrabold uppercase tracking-[3px] text-gold">
             Curated for Your Home
           </span>
@@ -197,7 +140,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {featuredProducts.map((product) => (
             <ProductCard
               key={product.id}

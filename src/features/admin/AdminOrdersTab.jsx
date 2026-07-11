@@ -23,6 +23,8 @@ import {
   getOrderPaymentLabel,
   orderStatusBadgeClass,
   paymentBadgeClass,
+  getDriverAssignmentMeta,
+  buildDriverAssignmentHint,
   isOrderInDateRange,
   formatActivityLabel,
   formatActivityIcon,
@@ -527,7 +529,8 @@ function OrderEditModal({ open, order, onClose, onSaved }) {
                   </select>
                   <p className="mt-1.5 text-[0.75rem] text-gray-500 [.admin-dark_&]:text-gray-400">
                     <i className="fa-solid fa-circle-info me-1" aria-hidden="true" />
-                    Offline drivers are blocked. Busy drivers accept new orders until they reach 3 active deliveries.
+                    {buildDriverAssignmentHint(order) ||
+                      'Offline drivers are blocked. Busy drivers accept new orders until they reach 3 active deliveries.'}
                   </p>
                 </div>
                 <div>
@@ -596,7 +599,6 @@ function exportOrdersToCSV(ordersList) {
 
 export default function AdminOrdersTab({ headerSearch = '' }) {
   const [orders, setOrders] = useState([]);
-  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [localSearch, setLocalSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -612,7 +614,7 @@ export default function AdminOrdersTab({ headerSearch = '' }) {
     if (!quiet) setLoading(true);
     try {
       const res = await fetchWithTimeout(
-        apiUrl('/api/orders?limit=500'),
+        apiUrl('/api/orders?limit=120'),
         { headers: authHeaders(false) },
         ADMIN_FETCH_TIMEOUT
       );
@@ -632,26 +634,11 @@ export default function AdminOrdersTab({ headerSearch = '' }) {
     }
   }, []);
 
-  const loadStats = useCallback(async () => {
-    if (!token()) return;
-    try {
-      const res = await fetchWithTimeout(
-        apiUrl('/api/admin/dashboard-stats'),
-        { headers: authHeaders(false) },
-        ADMIN_FETCH_TIMEOUT
-      );
-      const data = await res.json();
-      if (data.success) setStats(data.stats);
-    } catch {
-      /* stats optional */
-    }
-  }, []);
-
   const refresh = useCallback(
     async ({ quiet = false } = {}) => {
-      await Promise.all([loadOrders({ quiet }), loadStats()]);
+      await loadOrders({ quiet });
     },
-    [loadOrders, loadStats]
+    [loadOrders]
   );
 
   useEffect(() => {
@@ -724,7 +711,21 @@ export default function AdminOrdersTab({ headerSearch = '' }) {
 
   const handleExport = () => exportOrdersToCSV(filtered);
 
-  const trends = stats?.trends || {};
+  const orderStats = useMemo(() => {
+    const totalOrders = orders.length;
+    let pendingOrders = 0;
+    let deliveredOrders = 0;
+    let cancelledOrders = 0;
+    orders.forEach((order) => {
+      const status = (order.status || '').toLowerCase();
+      if (status === 'delivered') deliveredOrders += 1;
+      else if (status === 'cancelled') cancelledOrders += 1;
+      else pendingOrders += 1;
+    });
+    return { totalOrders, pendingOrders, deliveredOrders, cancelledOrders };
+  }, [orders]);
+
+  const trends = {};
 
   return (
     <div className="animate-cardRise">
@@ -824,11 +825,36 @@ export default function AdminOrdersTab({ headerSearch = '' }) {
                         {order.customer}
                       </td>
                       <td>
-                        <span
-                          className={`inline-block rounded-md px-2 py-1 text-[0.72rem] font-extrabold ${orderStatusBadgeClass(status)}`}
-                        >
-                          {status}
-                        </span>
+                        <div className="space-y-1">
+                          <span
+                            className={`inline-block rounded-md px-2 py-1 text-[0.72rem] font-extrabold ${orderStatusBadgeClass(status)}`}
+                          >
+                            {status}
+                          </span>
+                          {(() => {
+                            const assignment = getDriverAssignmentMeta(order);
+                            if (!assignment) return null;
+                            return (
+                              <div>
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[0.65rem] font-extrabold ${assignment.cls}`}
+                                  title={assignment.reason || undefined}
+                                >
+                                  <i className={`fa-solid ${assignment.icon}`} aria-hidden="true" />
+                                  {assignment.label}
+                                </span>
+                                {assignment.reason && (
+                                  <div
+                                    className="mt-0.5 max-w-[200px] truncate text-[0.65rem] text-red-600 [.admin-dark_&]:text-red-300"
+                                    title={assignment.reason}
+                                  >
+                                    {assignment.reason}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </td>
                       <td>
                         <span
@@ -920,14 +946,14 @@ export default function AdminOrdersTab({ headerSearch = '' }) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <OrderStatCard
             label="Total Orders"
-            value={(stats?.totalOrders ?? 0).toLocaleString()}
+            value={(orderStats.totalOrders ?? 0).toLocaleString()}
             trend={trends.orders}
             icon="fa-bag-shopping"
             iconClass="bg-blue-500/10 text-blue-500"
           />
           <OrderStatCard
             label="Pending Orders"
-            value={(stats?.pendingOrders ?? 0).toLocaleString()}
+            value={(orderStats.pendingOrders ?? 0).toLocaleString()}
             trend={null}
             trendFallback="Active"
             icon="fa-clock"
@@ -935,14 +961,14 @@ export default function AdminOrdersTab({ headerSearch = '' }) {
           />
           <OrderStatCard
             label="Delivered Orders"
-            value={(stats?.deliveredOrders ?? 0).toLocaleString()}
+            value={(orderStats.deliveredOrders ?? 0).toLocaleString()}
             trend={trends.orders}
             icon="fa-circle-check"
             iconClass="bg-emerald-500/10 text-emerald-500"
           />
           <OrderStatCard
             label="Cancelled Orders"
-            value={(stats?.cancelledOrders ?? 0).toLocaleString()}
+            value={(orderStats.cancelledOrders ?? 0).toLocaleString()}
             trend={null}
             trendFallback="—"
             icon="fa-circle-xmark"

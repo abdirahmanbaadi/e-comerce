@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { apiUrl } from '../../utils/data';
-import { DEFAULT_NOTIFICATION_PREFERENCES } from '../../utils/notificationPrefs';
-import { showTopFloatNotification } from '../../utils/notifications';
+import { DEFAULT_NOTIFICATION_PREFERENCES, showTopFloatNotification } from '../../utils/notifications';
 
 /* ═══ SECTION: MODAL SHELL (ACCOUNT) ═══ */
 export function ModalBackdrop({ children, onClose, maxWidth = 'max-w-lg', className = '' }) {
@@ -687,7 +686,7 @@ export default function ProfileSettingsTab() {
       >
         <form id="verificationNumberForm" onSubmit={handleVerificationSave}>
           <div className="mb-3">
-            <label className="form-label fw-bold text-dark" style={{ fontSize: '0.8rem' }}>
+            <label className="mb-1.5 block text-[0.8rem] font-bold text-[#111111]" htmlFor="verificationNumberInput">
               Phone Number
             </label>
             <input
@@ -719,16 +718,12 @@ export default function ProfileSettingsTab() {
         }
       >
         <form id="securityNotificationsForm" onSubmit={handleSecurityNotifSave}>
-          <div className="d-flex align-items-center justify-content-between mb-3">
-            <span className="fw-bold text-dark" style={{ fontSize: '0.85rem' }}>
-              Email Security Alerts
-            </span>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-[0.85rem] font-bold text-[#111111]">Email Security Alerts</span>
             <input type="checkbox" checked={securityEmail} onChange={(e) => setSecurityEmail(e.target.checked)} />
           </div>
-          <div className="d-flex align-items-center justify-content-between">
-            <span className="fw-bold text-dark" style={{ fontSize: '0.85rem' }}>
-              SMS Security Alerts
-            </span>
+          <div className="flex items-center justify-between">
+            <span className="text-[0.85rem] font-bold text-[#111111]">SMS Security Alerts</span>
             <input type="checkbox" checked={securitySms} onChange={(e) => setSecuritySms(e.target.checked)} />
           </div>
         </form>

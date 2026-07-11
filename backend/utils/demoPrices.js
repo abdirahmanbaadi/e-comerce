@@ -1,6 +1,6 @@
-/** Demo/test prices for Waafi checkout — must match src/utils/data.js */
-const DEMO_PRODUCT_PRICES = [0.001, 0.003, 0.001, 0.002, 0.003, 0.001, 0.002, 0.001, 0.003, 0.002];
-const DEMO_PRODUCT_OLD_PRICES = [0.002, 0.004, 0.002, 0.003, 0.004, 0.002, 0.003, 0.002, 0.004, 0.003];
+/** Demo/test prices for Waafi checkout — minimum $0.01 (Waafi/EVC rejects sub-cent amounts) */
+const DEMO_PRODUCT_PRICES = [0.01, 0.03, 0.01, 0.02, 0.03, 0.01, 0.02, 0.01, 0.03, 0.02];
+const DEMO_PRODUCT_OLD_PRICES = [0.02, 0.04, 0.02, 0.03, 0.04, 0.02, 0.03, 0.02, 0.04, 0.03];
 
 function slotIndex(productId, index = 0) {
   return typeof productId === 'number' ? productId - 1 : index;

@@ -1,0 +1,19 @@
+# Backend API — deploy on Render (https://render.com)
+# After deploy, set VITE_API_URL on Netlify to the Render service URL.
+services:
+  - type: web
+    name: mogadishu-furniture-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: '20'
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://mogadishu-furniture.netlify.app,http://localhost:5173

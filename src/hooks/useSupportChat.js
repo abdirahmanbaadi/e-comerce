@@ -11,7 +11,7 @@ function sortTicketsByLatest(tickets) {
   });
 }
 
-export function useSupportChat(enabled) {
+export function useSupportChat(enabled, { onAdminReply } = {}) {
   const [tickets, setTickets] = useState([]);
   const [activeTicketId, setActiveTicketId] = useState(null);
   const [activeTicket, setActiveTicket] = useState(null);
@@ -19,6 +19,16 @@ export function useSupportChat(enabled) {
   const [view, setView] = useState('form');
   const [sending, setSending] = useState(false);
   const sseRef = useRef(null);
+  const activeTicketIdRef = useRef(null);
+  const onAdminReplyRef = useRef(onAdminReply);
+
+  useEffect(() => {
+    activeTicketIdRef.current = activeTicketId;
+  }, [activeTicketId]);
+
+  useEffect(() => {
+    onAdminReplyRef.current = onAdminReply;
+  }, [onAdminReply]);
 
   const loadChats = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -95,9 +105,13 @@ export function useSupportChat(enabled) {
           body: JSON.stringify({ subject, messageText }),
         });
         const data = await response.json();
+        if (response.status === 401) {
+          showTopFloatNotification('❌ Session expired. Fadlan dib u soo gal.', 'danger');
+          return false;
+        }
         if (data.success) {
           showTopFloatNotification('✅ Fariintaada kowaad waa la diray!');
-          await loadChats();
+          loadChats();
           if (data.ticket?.id) {
             await openTicket(data.ticket.id);
           }
@@ -119,7 +133,18 @@ export function useSupportChat(enabled) {
   const sendTicketMessage = useCallback(
     async (ticketId, messageText) => {
       const token = localStorage.getItem('token');
-      if (!ticketId || !messageText.trim() || !token) return false;
+      if (!token) {
+        showTopFloatNotification('❌ Fadlan marka hore soo gal!', 'danger');
+        return false;
+      }
+      if (!ticketId) {
+        showTopFloatNotification('❌ Fadlan dooro wadahadal marka hore.', 'danger');
+        return false;
+      }
+      if (!messageText.trim()) {
+        showTopFloatNotification('❌ Fariintu ma noqon karto madhan.', 'danger');
+        return false;
+      }
 
       setSending(true);
       try {
@@ -132,18 +157,22 @@ export function useSupportChat(enabled) {
           body: JSON.stringify({ messageText: messageText.trim() }),
         });
         const data = await response.json();
+        if (response.status === 401) {
+          showTopFloatNotification('❌ Session expired. Fadlan dib u soo gal.', 'danger');
+          return false;
+        }
         if (data.success) {
           if (ticketId === activeTicketId) {
             await reloadMessages();
           }
-          await loadChats();
+          loadChats();
           return true;
         }
         showTopFloatNotification(`❌ ${data.message || 'Failed to send message'}`, 'danger');
         return false;
       } catch (error) {
         console.error(error);
-        showTopFloatNotification('❌ Failed to send message!', 'danger');
+        showTopFloatNotification('❌ Failed to send message. Hubi in server-ku shaqeynayo.', 'danger');
         return false;
       } finally {
         setSending(false);
@@ -215,12 +244,20 @@ export function useSupportChat(enabled) {
                 }
                 return sortTicketsByLatest([...prev, data.ticket]);
               });
+
+              if (data.ticket.id === activeTicketIdRef.current) {
+                setActiveTicket(data.ticket);
+              }
             } else {
               loadChats();
             }
 
-            if (data.type === 'message' && data.message?.ticketId === activeTicketId) {
-              reloadMessages();
+            if (data.type === 'message' && data.message) {
+              const isAdminReply = data.message.senderRole === 'admin';
+
+              if (isAdminReply) {
+                onAdminReplyRef.current?.(data.ticket, data.message);
+              }
             }
           }
         } catch (e) {
@@ -250,7 +287,7 @@ export function useSupportChat(enabled) {
         sseRef.current = null;
       }
     };
-  }, [enabled, activeTicketId, loadChats, reloadMessages]);
+  }, [enabled, loadChats, reloadMessages]);
 
   useEffect(() => {
     if (enabled && activeTicketId && view === 'chat') {

@@ -194,8 +194,8 @@ export default function Products() {
       <StoreNavbar />
 
       <main className="bg-white py-10 pb-20">
-        <div className="container">
-          <div className="shop-top mb-6 flex flex-wrap items-center justify-between gap-5">
+        <div className="container mb-6">
+          <div className="shop-top flex flex-wrap items-center justify-between gap-5">
             <div>
               <h1 className="m-0 font-display text-[2.2rem] font-bold text-deepGreen md:text-[2.7rem]">
                 All Products
@@ -226,9 +226,10 @@ export default function Products() {
               />
             </div>
           </div>
+        </div>
 
-          <div className="products-layout">
-            <aside className="filter-sidebar">
+        <div className="shop-layout-shell">
+          <aside className="filter-sidebar">
               <div className="filter-main-title">Filter Options</div>
 
               <div className="filter-group">
@@ -320,7 +321,7 @@ export default function Products() {
               </div>
             </aside>
 
-            <section>
+          <section className="shop-products-panel min-w-0">
               <div className="active-filter-row">
                 <span className="active-filter-label">Active Filter</span>
                 <div id="activeFiltersContainer">
@@ -358,7 +359,7 @@ export default function Products() {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredProducts.map((product) => (
                     <ProductCard
                       key={product.id}
@@ -372,7 +373,6 @@ export default function Products() {
                 </div>
               )}
             </section>
-          </div>
         </div>
       </main>
 

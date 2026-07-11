@@ -1,5 +1,6 @@
 const CmsContent = require('../models/CmsContent');
 const { logUserActivity } = require('../services/activityService');
+const { onPromotionActivated } = require('../services/notificationService');
 const { validateCmsUpdate } = require('../utils/cmsValidation');
 
 function normalizeCmsAssetPath(path) {
@@ -105,19 +106,39 @@ const DEFAULT_CMS = {
     },
   ],
   deliveryFees: [
-    { district: 'Hodan', fee: 0.001 },
-    { district: 'Wadajir', fee: 0.001 },
-    { district: 'Karaan', fee: 0.002 },
-    { district: 'Hamarweyne', fee: 0.001 },
-    { district: 'Dayniile', fee: 0.002 },
-    { district: 'Yaqshid', fee: 0.001 },
+    { district: 'Hodan', fee: 0.01 },
+    { district: 'Wadajir', fee: 0.01 },
+    { district: 'Karaan', fee: 0.02 },
+    { district: 'Hamarweyne', fee: 0.01 },
+    { district: 'Dayniile', fee: 0.02 },
+    { district: 'Yaqshid', fee: 0.01 },
   ],
 };
+
+function migrateLegacyDemoDeliveryFees(cms) {
+  if (!cms?.deliveryFees?.length) return false;
+  let changed = false;
+  cms.deliveryFees.forEach((row) => {
+    const fee = Number(row.fee);
+    if (fee === 0.001) {
+      row.fee = 0.01;
+      changed = true;
+    } else if (fee === 0.002) {
+      row.fee = 0.02;
+      changed = true;
+    }
+  });
+  return changed;
+}
 
 async function getOrCreateCms() {
   let cms = await CmsContent.findOne({ id: 'main' });
   if (!cms) {
     cms = await CmsContent.create(DEFAULT_CMS);
+    return cms;
+  }
+  if (migrateLegacyDemoDeliveryFees(cms)) {
+    await cms.save();
   }
   return cms;
 }
@@ -163,8 +184,22 @@ exports.updateContent = async (req, res) => {
       changedSections.push('banners');
     }
     if (Array.isArray(promotions)) {
+      const previousPromos = cms.promotions || [];
+      const previousByKey = new Map(
+        previousPromos.map((promo) => [promo.id || promo.code, promo])
+      );
+
       cms.promotions = promotions;
       changedSections.push('promotions');
+
+      for (const promo of promotions) {
+        if (!promo?.active) continue;
+        const key = promo.id || promo.code;
+        const previous = previousByKey.get(key);
+        if (!previous || !previous.active) {
+          await onPromotionActivated(promo);
+        }
+      }
     }
     if (Array.isArray(faqs)) {
       cms.faqs = faqs;

@@ -2,6 +2,7 @@ const Product = require('../models/Product');
 const Review = require('../models/Review');
 const Order = require('../models/Order');
 const { applyDemoPricesToProduct, applyDemoPricesToProducts } = require('../utils/demoPrices');
+const { onProductBackInStock } = require('../services/notificationService');
 
 function parseListParam(value) {
   if (!value) return [];
@@ -301,6 +302,7 @@ exports.updateProduct = async (req, res) => {
     }
 
     const updateFields = { ...req.body };
+    const wasOutOfStock = (product.stockVal ?? 0) <= 0 || product.stock === 'out-of-stock';
 
     // Parse numeric fields if they exist
     if (updateFields.price) updateFields.price = parseFloat(updateFields.price);
@@ -325,6 +327,11 @@ exports.updateProduct = async (req, res) => {
 
     Object.assign(product, updateFields);
     await product.save();
+
+    const nowInStock = (product.stockVal ?? 0) > 0 && product.stock === 'in-stock';
+    if (wasOutOfStock && nowInStock) {
+      onProductBackInStock(product).catch((err) => console.error('Wishlist stock notification failed:', err));
+    }
 
     return res.status(200).json({ success: true, message: 'Product updated successfully!', product });
   } catch (error) {

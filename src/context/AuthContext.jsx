@@ -2,8 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useNavigate } from 'react-router-dom';
 import { apiUrl, initializeLocalStorage } from '../utils/data';
 import { AUTH_UPDATED_EVENT, notifyAuthUpdated, readAuthUser } from '../utils/authStorage';
-import { storeNotificationPreferences } from '../utils/notificationPrefs';
-import { showTopFloatNotification } from '../utils/notifications';
+import { storeNotificationPreferences, showTopFloatNotification } from '../utils/notifications';
 
 const AuthContext = createContext(null);
 
@@ -88,6 +87,34 @@ export function AuthProvider({ children }) {
       }
       if (!response.ok) {
         return { success: false, message: `Server error (${response.status}). Check backend is running.` };
+      }
+      if (data.success && data.token && data.user) {
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userEmail', data.user.email);
+        localStorage.setItem('userFullName', `${data.user.firstName} ${data.user.lastName || ''}`.trim());
+        localStorage.setItem('userPhone', data.user.phone || '');
+        localStorage.setItem('userAvatar', data.user.avatar || '');
+        localStorage.setItem('userAddress', data.user.address || '');
+        localStorage.setItem('userRole', data.user.role || 'user');
+        localStorage.removeItem('driverApplicationStatus');
+        if (data.user.notificationPreferences) {
+          storeNotificationPreferences(data.user.notificationPreferences);
+        }
+        setUser({
+          isLoggedIn: true,
+          email: data.user.email,
+          fullName: `${data.user.firstName} ${data.user.lastName || ''}`.trim(),
+          phone: data.user.phone || '',
+          avatar: data.user.avatar || '',
+          address: data.user.address || '',
+          role: data.user.role || 'user',
+          driverApplicationStatus: 'none',
+          token: data.token,
+          notificationPreferences: data.user.notificationPreferences || storeNotificationPreferences({}),
+        });
+        notifyAuthUpdated();
+        window.dispatchEvent(new CustomEvent('user-logged-in'));
       }
       return data;
     } catch {

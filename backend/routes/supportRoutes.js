@@ -12,5 +12,6 @@ router.post('/chats/:ticketId/messages', protect, supportController.addMessage);
 
 // Admin-only endpoints
 router.get('/admin/chats', protect, authorize('admin'), supportController.getAdminConversations);
+router.patch('/admin/chats/:ticketId/close', protect, authorize('admin'), supportController.closeConversation);
 
 module.exports = router;

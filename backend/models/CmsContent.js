@@ -47,7 +47,7 @@ const cmsSchema = new mongoose.Schema(
     deliveryFees: [
       {
         district: String,
-        fee: { type: Number, default: 0.001 },
+        fee: { type: Number, default: 0.01 },
       },
     ],
   },

@@ -59,12 +59,43 @@ function ItemIcon({ icon, active }) {
   );
 }
 
+function MobileTabPill({ active, children, className = '', ...props }) {
+  return (
+    <button
+      type="button"
+      className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-[0.82rem] font-semibold transition-all ${
+        active
+          ? 'border-deepGreen/20 bg-deepGreen text-white shadow-[0_4px_14px_rgba(7,61,53,0.18)]'
+          : 'border-black/[0.08] bg-white text-[#555555] hover:border-deepGreen/15 hover:text-deepGreen'
+      } ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MobileTabLink({ active, children, className = '', ...props }) {
+  return (
+    <Link
+      className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-[0.82rem] font-semibold no-underline transition-all ${
+        active
+          ? 'border-deepGreen/20 bg-deepGreen text-white shadow-[0_4px_14px_rgba(7,61,53,0.18)]'
+          : 'border-black/[0.08] bg-white text-[#555555] hover:border-deepGreen/15 hover:text-deepGreen'
+      } ${className}`}
+      {...props}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export default function ProfileSidebar({ activeTab, unreadCount, onTabChange }) {
   const { logout, user } = useAuth();
 
   return (
-    <aside className="sticky top-0 flex h-screen flex-col gap-6 overflow-hidden border-r border-black/[0.04] bg-[#FAF9F6] px-6 py-8 max-lg:relative max-lg:h-auto max-lg:overflow-visible max-lg:p-6">
-      <Link to="/" className="mb-6 flex items-center gap-3 no-underline">
+    <aside className="sticky top-0 z-20 flex h-screen flex-col gap-6 overflow-hidden border-r border-black/[0.04] bg-[#FAF9F6] px-6 py-8 max-lg:relative max-lg:h-auto max-lg:gap-4 max-lg:overflow-visible max-lg:border-b max-lg:border-r-0 max-lg:p-4">
+      <Link to="/" className="mb-6 flex items-center gap-3 no-underline max-lg:mb-2">
         <div className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center">
           <span className="absolute inset-0 rotate-45 rounded-[10px] border-2 border-gold" aria-hidden="true" />
           <span className="relative z-[1] font-display text-[1.1rem] font-bold text-gold">MF</span>
@@ -80,7 +111,34 @@ export default function ProfileSidebar({ activeTab, unreadCount, onTabChange }) 
         </div>
       </Link>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="scrollbar-hide -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 lg:hidden">
+        {TABS.map((tab) => {
+          if (tab.href) {
+            return (
+              <MobileTabLink key={tab.id} to={tab.href}>
+                <i className={`${tab.icon} text-[0.85rem]`} />
+                {tab.label}
+              </MobileTabLink>
+            );
+          }
+
+          return (
+            <MobileTabPill
+              key={tab.id}
+              active={activeTab === tab.id}
+              onClick={() => onTabChange(tab.id)}
+            >
+              <i className={`${tab.icon} text-[0.85rem]`} />
+              {tab.label}
+              {tab.badge && unreadCount > 0 && (
+                <span className="inline-flex h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true" />
+              )}
+            </MobileTabPill>
+          );
+        })}
+      </div>
+
+      <div className="hidden flex-col gap-1.5 lg:flex">
         {TABS.map((tab) => {
           if (tab.href) {
             return (
@@ -132,6 +190,21 @@ export default function ProfileSidebar({ activeTab, unreadCount, onTabChange }) 
           <ItemIcon icon="fa-solid fa-house" />
           Back to Home
         </SidebarLink>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 border-t border-black/[0.06] pt-3 lg:hidden">
+        <SidebarLink to="/" className="!w-auto !px-3 !py-2 text-[0.85rem]">
+          <ItemIcon icon="fa-solid fa-house" />
+          Home
+        </SidebarLink>
+        <button
+          type="button"
+          className={`${itemBase} !w-auto !px-3 !py-2 text-[0.85rem] text-red-600 hover:bg-red-600/[0.05] hover:text-[#911810]`}
+          onClick={logout}
+        >
+          <i className="fa-solid fa-arrow-right-from-bracket text-[0.95rem] text-red-600" />
+          Logout
+        </button>
       </div>
     </aside>
   );

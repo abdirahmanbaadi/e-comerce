@@ -1,33 +1,29 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import StoreNavbar from '../features/nav/StoreNavbar';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { apiUrl } from '../utils/data';
+import { formatMoney } from '../utils/format';
 import { showTopFloatNotification } from '../utils/notifications';
 
-const ORDER_STEPS = [
-  {
-    key: 'processing',
-    title: 'Processing',
-    text: 'Your order is being prepared and verified.',
-  },
-  {
-    key: 'shipped',
-    title: 'Shipped',
-    text: 'Your order has left our warehouse and is on the way.',
-  },
-  {
-    key: 'delivered',
-    title: 'Delivered',
-    text: 'Your order has been delivered successfully.',
-  },
+const STEPS = [
+  { key: 'processing', label: 'Processing', icon: 'fa-box-open' },
+  { key: 'shipped', label: 'Shipped', icon: 'fa-truck' },
+  { key: 'delivered', label: 'Delivered', icon: 'fa-circle-check' },
 ];
 
-const STATUS_LABELS = {
+const STATUS_LABEL = {
   processing: 'Processing',
   shipped: 'Shipped',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
+};
+
+const STATUS_BADGE = {
+  processing: 'bg-[#F2ECE1] text-deepGreen ring-1 ring-gold/30',
+  shipped: 'bg-nav text-deepGreen ring-1 ring-gold/20',
+  delivered: 'bg-deepGreen text-white ring-1 ring-gold/40',
+  cancelled: 'bg-softBg text-[#666666] ring-1 ring-black/10',
 };
 
 function resolveStatus(order) {
@@ -39,76 +35,102 @@ function resolveStatus(order) {
   return 'processing';
 }
 
-function getActiveStepIndex(status) {
-  const index = ORDER_STEPS.findIndex((step) => step.key === status);
-  return index >= 0 ? index : 0;
+function stepIndex(status) {
+  const i = STEPS.findIndex((s) => s.key === status);
+  return i >= 0 ? i : 0;
 }
 
-function OrderTimeline({ status }) {
-  if (status === 'cancelled') {
-    return (
-      <div className="order-cancelled-banner" role="status">
-        <i className="fa-solid fa-ban" />
-        <div>
-          <strong>Order Cancelled</strong>
-          <p>This order was cancelled before shipment.</p>
-        </div>
-      </div>
-    );
-  }
-
-  const activeIndex = getActiveStepIndex(status);
-
+function GoldLine() {
   return (
-    <div className="timeline">
-      {ORDER_STEPS.map((step, index) => {
-        let statusClass = '';
-        if (index < activeIndex) statusClass = 'done';
-        if (index === activeIndex) statusClass = 'active';
-
-        return (
-          <div key={step.key} className={`timeline-item ${statusClass}`.trim()}>
-            <span className="timeline-dot" />
-            <h4 className="timeline-heading">{step.title}</h4>
-            <p className="timeline-text">{step.text}</p>
-          </div>
-        );
-      })}
+    <div className="my-3 flex items-center justify-center gap-3">
+      <span className="h-px w-10 bg-gold/35" />
+      <span className="text-[0.7rem] text-gold">✦</span>
+      <span className="h-px w-10 bg-gold/35" />
     </div>
   );
 }
 
-function PaymentStatus({ payment, paymentType }) {
-  const isPaid = paymentType === 'paid';
+function Stepper({ status }) {
+  if (status === 'cancelled') {
+    return (
+      <p className="m-0 rounded-xl bg-softBg px-4 py-3 text-center text-[0.88rem] font-semibold text-[#666666]">
+        <i className="fa-solid fa-ban mr-2 text-gold" />
+        Order cancelled before shipment
+      </p>
+    );
+  }
+
+  const active = stepIndex(status);
+
   return (
-    <span className={`status-pill ${isPaid ? 'paid' : 'pending'}`}>
-      <i className={`fa-solid ${isPaid ? 'fa-circle-check' : 'fa-clock'}`} />
-      {payment}
-    </span>
+    <div>
+      <div className="relative mb-4 h-1 overflow-hidden rounded-full bg-[#E8E4DC]">
+        <div
+          className="absolute inset-y-0 left-0 rounded-full bg-deepGreen transition-all duration-700"
+          style={{ width: active === 0 ? '16%' : active === 1 ? '50%' : '100%' }}
+        />
+        <div
+          className="absolute inset-y-0 left-0 rounded-full bg-gold/80 transition-all duration-700"
+          style={{ width: active === 0 ? '8%' : active === 1 ? '25%' : '100%' }}
+        />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {STEPS.map((step, i) => {
+          const done = i < active;
+          const current = i === active;
+          return (
+            <div key={step.key} className="flex flex-col items-center gap-1.5 text-center">
+              <span
+                className={[
+                  'flex h-10 w-10 items-center justify-center rounded-full text-[0.88rem] transition-all',
+                  done
+                    ? 'bg-deepGreen text-white shadow-[0_4px_12px_rgba(7,61,53,0.2)]'
+                    : current
+                      ? 'bg-base text-deepGreen ring-2 ring-gold'
+                      : 'bg-softBg text-[#AAAAAA]',
+                ].join(' ')}
+              >
+                <i className={`fa-solid ${step.icon}`} />
+              </span>
+              <span
+                className={[
+                  'text-[0.72rem] font-bold',
+                  done || current ? 'text-deepGreen' : 'text-[#999999]',
+                ].join(' ')}
+              >
+                {step.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
-function OrderStatusBadge({ status }) {
+function StatChip({ icon, label, value, highlight }) {
   return (
-    <span className={`order-status-badge order-status-badge--${status}`}>
-      {STATUS_LABELS[status] || status}
-    </span>
+    <div className="rounded-xl border border-black/[0.05] bg-softBg/60 px-3 py-2.5">
+      <div className="mb-1 flex items-center gap-1.5 text-[0.65rem] font-bold uppercase tracking-wide text-[#888888]">
+        <i className={`fa-solid ${icon} text-gold`} />
+        {label}
+      </div>
+      <p className={`m-0 truncate text-[0.84rem] font-bold ${highlight || 'text-deepGreen'}`}>
+        {value || '—'}
+      </p>
+    </div>
   );
 }
 
 export default function TrackOrder() {
-  const { syncFromStorage: syncAuth, user } = useAuth();
+  const { syncFromStorage: syncAuth } = useAuth();
   const { syncFromStorage: syncCart } = useCart();
 
   const [orderId, setOrderId] = useState('');
-  const [verifyPhone, setVerifyPhone] = useState('');
   const [order, setOrder] = useState(null);
-  const [activities, setActivities] = useState([]);
   const [notFound, setNotFound] = useState('');
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-
-  const resultRef = useRef(null);
 
   useEffect(() => {
     syncAuth();
@@ -116,16 +138,13 @@ export default function TrackOrder() {
   }, [syncAuth, syncCart]);
 
   useEffect(() => {
-    const lastCode = localStorage.getItem('lastTrackingCode');
-    if (lastCode) setOrderId(lastCode);
-    if (user?.phone) setVerifyPhone(user.phone);
-  }, [user?.phone]);
+    const last = localStorage.getItem('lastTrackingCode');
+    if (last) setOrderId(last);
+  }, []);
 
-  const trackOrder = async (event) => {
-    event?.preventDefault();
-
-    const code = orderId.trim().toUpperCase();
-
+  const trackOrder = async (e) => {
+    e?.preventDefault();
+    const code = orderId.trim().toUpperCase().replace(/^#/, '');
     if (!code) {
       showTopFloatNotification('Please enter your Order ID!', 'danger');
       return;
@@ -134,337 +153,226 @@ export default function TrackOrder() {
     setLoading(true);
     setNotFound('');
     setOrder(null);
-    setActivities([]);
 
     try {
-      const phoneQuery = verifyPhone.trim()
-        ? `?phone=${encodeURIComponent(verifyPhone.trim())}`
-        : '';
-      const response = await fetch(
-        apiUrl(`/api/orders/track/${encodeURIComponent(code)}${phoneQuery}`)
-      );
-      const data = await response.json();
-
+      const res = await fetch(apiUrl(`/api/orders/track/${encodeURIComponent(code)}`));
+      const data = await res.json();
       if (data.success && data.order) {
+        localStorage.setItem('lastTrackingCode', data.order.id || code);
         setOrder({ ...data.order, status: resolveStatus(data.order) });
-        setActivities(data.activities || []);
-        requestAnimationFrame(() => {
-          resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
       } else {
-        setNotFound(data.message || 'Order not found. Please check your Order ID and try again.');
+        setNotFound(data.message || 'Order not found.');
       }
     } catch {
-      setNotFound('Could not connect to the server. Please try again later.');
+      setNotFound('Could not connect to server.');
     } finally {
       setLoading(false);
     }
   };
 
+  const resetSearch = () => {
+    setOrder(null);
+    setNotFound('');
+  };
+
   const cancelOrder = async () => {
     if (!order?.id) return;
-
-    const confirmed = window.confirm(
-      'Are you sure you want to cancel this order? This can only be done before shipment.'
-    );
-    if (!confirmed) return;
+    if (!window.confirm('Cancel this order? Only possible before shipment.')) return;
 
     setCancelling(true);
-
     const token = localStorage.getItem('token');
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    let verifyPhone = order.phone;
+    let phone = order.phone;
     if (!token) {
-      const entered = window.prompt(
-        'Enter the phone number used when ordering to confirm cancellation:'
-      );
+      const entered = window.prompt('Enter phone used at checkout:');
       if (!entered?.trim()) {
         setCancelling(false);
         return;
       }
-      verifyPhone = entered.trim();
+      phone = entered.trim();
     }
 
     try {
-      const response = await fetch(apiUrl(`/api/orders/cancel/${encodeURIComponent(order.id)}`), {
+      const res = await fetch(apiUrl(`/api/orders/cancel/${encodeURIComponent(order.id)}`), {
         method: 'PATCH',
         headers,
-        body: JSON.stringify({ phone: verifyPhone }),
+        body: JSON.stringify({ phone }),
       });
-      const data = await response.json();
-
+      const data = await res.json();
       if (data.success && data.order) {
         setOrder({ ...data.order, status: resolveStatus(data.order) });
-        setActivities((prev) => [
-          ...prev,
-          {
-            action: 'order_cancelled',
-            description: 'Order cancelled before shipment.',
-            createdAt: new Date().toISOString(),
-          },
-        ]);
-        showTopFloatNotification('Order cancelled successfully.');
+        showTopFloatNotification('Order cancelled.');
       } else {
-        showTopFloatNotification(data.message || 'Could not cancel this order.', 'danger');
+        showTopFloatNotification(data.message || 'Could not cancel.', 'danger');
       }
     } catch {
-      showTopFloatNotification('Could not connect to the server. Please try again.', 'danger');
+      showTopFloatNotification('Server error.', 'danger');
     } finally {
       setCancelling(false);
     }
   };
 
-  const orderStatus = order ? resolveStatus(order) : null;
-  const canCancel = orderStatus === 'processing';
-  const orderItems = order?.items?.length
+  const status = order ? resolveStatus(order) : null;
+  const canCancel = status === 'processing';
+  const items = order?.items?.length
     ? order.items
     : order
       ? [{ title: order.product, quantity: 1, price: order.amount }]
       : [];
-
-  const ACTIVITY_LABELS = {
-    order_placed: 'Order placed',
-    status_changed: 'Status updated',
-    payment_updated: 'Payment updated',
-    driver_assigned: 'Driver assigned',
-    driver_reassigned: 'Driver reassigned',
-    order_cancelled: 'Order cancelled',
-    estimate_updated: 'Delivery estimate updated',
-  };
-
-  function formatActivityTime(value) {
-    if (!value) return '';
-    return new Date(value).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  }
+  const isPaid = order?.paymentType === 'paid';
+  const itemSummary = items
+    .map((item) => `${item.title} ×${item.quantity || 1}`)
+    .join(' · ');
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-base font-sans text-[#111]">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-softBg font-sans text-[#111]">
       <StoreNavbar />
 
-      <section className="border-b border-black/[0.06] bg-[radial-gradient(circle_at_top_left,rgba(216,161,40,0.14),transparent_34%),linear-gradient(135deg,#FAF8F2_0%,#F4EFE6_100%)] py-[70px] pb-11 text-center">
-        <div className="container">
-          <span className="mb-2.5 inline-block text-[0.76rem] font-extrabold uppercase tracking-[3px] text-gold">
-            Delivery Tracking
-          </span>
-          <h1 className="mb-3 font-display text-[2.4rem] font-bold text-deepGreen md:text-[3.2rem]">
-            Track Your Furniture Order
-          </h1>
-          <p className="mx-auto mb-0 max-w-[680px] text-[0.98rem] leading-[1.8] text-[#5f5f5f]">
-            Enter your Order ID to view payment status, delivery progress, and estimated delivery
-            time inside Mogadishu.
-          </p>
-        </div>
-      </section>
-
-      <section className="py-14 pb-20">
-        <div className="container">
-          <form className="track-search-card" onSubmit={trackOrder}>
-            <div className="row g-3 align-items-end">
-              <div className="col-md-10">
-                <label className="form-label" htmlFor="trackingInput">
-                  Order ID
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  id="trackingInput"
-                  placeholder="Example: #MF-260703-962"
-                  value={orderId}
-                  onChange={(e) => setOrderId(e.target.value)}
-                  autoComplete="off"
-                />
-              </div>
-
-              <div className="col-md-10">
-                <label className="form-label" htmlFor="trackPhoneInput">
-                  Phone (for full address details)
-                </label>
-                <input
-                  type="tel"
-                  className="form-control"
-                  id="trackPhoneInput"
-                  placeholder="Phone used at checkout"
-                  value={verifyPhone}
-                  onChange={(e) => setVerifyPhone(e.target.value)}
-                  autoComplete="tel"
-                />
-              </div>
-
-              <div className="col-md-2">
-                <button type="submit" className="track-btn" disabled={loading}>
-                  <i className={`fa-solid ${loading ? 'fa-spinner fa-spin' : 'fa-magnifying-glass'} me-2`} />
-                  {loading ? 'Searching…' : 'Track'}
-                </button>
-              </div>
+      <main className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 py-5">
+        <div className="w-full max-w-[640px] animate-cardRise">
+          <div className="overflow-hidden rounded-[28px] border border-black/[0.06] bg-base shadow-[0_20px_50px_rgba(7,61,53,0.1)]">
+            {/* Header */}
+            <div className="border-b border-black/[0.05] bg-[linear-gradient(180deg,#FAF8F2_0%,#F4EFE6_100%)] px-6 py-5 text-center sm:px-8">
+              <span className="mb-2 inline-block text-[0.72rem] font-extrabold uppercase tracking-[2.5px] text-gold">
+                Delivery Tracking
+              </span>
+              <h1 className="mb-0 font-display text-[2rem] font-bold text-deepGreen sm:text-[2.35rem]">
+                Track Your Order
+              </h1>
+              <GoldLine />
+              <p className="mx-auto mb-0 max-w-[400px] text-[0.84rem] leading-relaxed text-[#666666]">
+                Geli Order ID-gaaga si aad u aragto xaaladda dalabkaaga.
+              </p>
             </div>
 
-            <div className="hint-box">
-              <strong>Tip:</strong> Haddii aad checkout ka timid, isticmaal Order ID-ga modal-ka kuu soo
-              baxay (tusaale: #MF-260703-962).
-            </div>
+            {/* Body */}
+            <div className="px-6 py-5 sm:px-8 sm:py-6">
+              {!order ? (
+                <form onSubmit={trackOrder}>
+                  <label htmlFor="trackingInput" className="mb-2 block text-[0.8rem] font-bold text-deepGreen">
+                    Order ID
+                  </label>
+                  <div className="flex flex-col gap-2.5 sm:flex-row">
+                    <div className="relative min-w-0 flex-1">
+                      <i className="fa-regular fa-file-lines pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gold" />
+                      <input
+                        id="trackingInput"
+                        type="text"
+                        value={orderId}
+                        onChange={(e) => setOrderId(e.target.value)}
+                        placeholder="MF-260703-962"
+                        autoComplete="off"
+                        className="w-full rounded-xl border border-black/[0.1] bg-white py-3 pl-10 pr-4 text-[0.92rem] font-semibold text-[#111111] outline-none transition focus:border-deepGreen focus:shadow-[0_0_0_3px_rgba(7,61,53,0.08)]"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border-0 bg-deepGreen px-6 py-3 text-[0.88rem] font-bold text-white transition hover:bg-[#052b25] disabled:opacity-60"
+                    >
+                      <i className={`fa-solid ${loading ? 'fa-spinner fa-spin' : 'fa-magnifying-glass'}`} />
+                      {loading ? 'Searching…' : 'Track'}
+                    </button>
+                  </div>
 
-            {notFound && (
-              <div className="not-found not-found--visible" role="alert">
-                <i className="fa-solid fa-circle-exclamation me-2" />
-                {notFound}
-              </div>
-            )}
-
-            {order && order.verificationHint && !order.phoneVerified && (
-              <div className="hint-box mt-2">
-                <strong>Privacy:</strong> {order.verificationHint}
-              </div>
-            )}
-          </form>
-
-          {order && (
-            <div className="order-result order-result--visible" ref={resultRef}>
-              <div className="order-summary-card">
-                <div className="summary-header-row">
-                  <div>
-                    <h2 className="summary-title">Order Summary</h2>
-                    <p className="summary-sub">
-                      {order.product} • {order.address}
+                  {notFound && (
+                    <p
+                      className="mt-3 flex items-center gap-2 rounded-xl border border-gold/30 bg-[#FBF7EE] px-3 py-2.5 text-[0.84rem] font-semibold text-deepGreen"
+                      role="alert"
+                    >
+                      <i className="fa-solid fa-circle-exclamation text-gold" />
+                      {notFound}
                     </p>
-                  </div>
-                  <OrderStatusBadge status={orderStatus} />
-                </div>
+                  )}
 
-                <div className="row g-3">
-                  <div className="col-md-3">
-                    <div className="info-box">
-                      <div className="info-label">Order ID</div>
-                      <div className="info-value">{order.id}</div>
+                  <p className="mt-4 mb-0 text-center text-[0.78rem] text-[#888888]">
+                    Order ID-ga waxaad ka heli kartaa SMS, email, ama{' '}
+                    <strong className="text-deepGreen">My Orders</strong>.
+                  </p>
+                </form>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="mb-0.5 text-[0.68rem] font-bold uppercase tracking-wider text-[#888888]">
+                        Order ID
+                      </p>
+                      <p className="truncate font-display text-[1.25rem] font-bold text-deepGreen">{order.id}</p>
                     </div>
-                  </div>
-
-                  <div className="col-md-3">
-                    <div className="info-box">
-                      <div className="info-label">Customer</div>
-                      <div className="info-value">{order.customer}</div>
-                    </div>
-                  </div>
-
-                  <div className="col-md-3">
-                    <div className="info-box">
-                      <div className="info-label">Total Amount</div>
-                      <div className="info-value">{order.amount}</div>
-                    </div>
-                  </div>
-
-                  <div className="col-md-3">
-                    <div className="info-box">
-                      <div className="info-label">Payment</div>
-                      <PaymentStatus payment={order.payment} paymentType={order.paymentType} />
-                    </div>
-                  </div>
-
-                  <div className="col-md-4">
-                    <div className="info-box">
-                      <div className="info-label">Delivery Address</div>
-                      <div className="info-value">{order.address}</div>
-                    </div>
-                  </div>
-
-                  <div className="col-md-4">
-                    <div className="info-box">
-                      <div className="info-label">Driver</div>
-                      <div className="info-value">{order.driver}</div>
-                    </div>
-                  </div>
-
-                  <div className="col-md-4">
-                    <div className="info-box">
-                      <div className="info-label">Preferred Delivery</div>
-                      <div className="info-value">
-                        {order.deliveryDate || order.deliveryTime
-                          ? `${order.deliveryDate || '—'}${order.deliveryTime ? ` at ${order.deliveryTime}` : ''}`
-                          : 'Not specified'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="col-md-4">
-                    <div className="info-box">
-                      <div className="info-label">Estimated Delivery</div>
-                      <div className="info-value">{order.estimate}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {orderItems.length > 0 && (
-                <div className="order-summary-card mt-3">
-                  <h3 className="summary-title" style={{ fontSize: '1.1rem' }}>Order Items</h3>
-                  <ul className="list-unstyled mb-0 mt-3">
-                    {orderItems.map((item, index) => (
-                      <li
-                        key={`${item.title}-${index}`}
-                        className="d-flex justify-content-between align-items-center py-2 border-bottom"
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={`rounded-full px-3 py-1 text-[0.68rem] font-extrabold uppercase tracking-wide ${STATUS_BADGE[status] || STATUS_BADGE.processing}`}
                       >
-                        <span>
-                          {item.title}
-                          <span className="text-muted ms-2">×{item.quantity || 1}</span>
-                        </span>
-                        <span className="fw-semibold">
-                          {typeof item.price === 'number'
-                            ? `$${Number(item.price * (item.quantity || 1)).toFixed(3)}`
-                            : item.price || '—'}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                        {STATUS_LABEL[status]}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={resetSearch}
+                        title="Track another order"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-black/[0.08] bg-white text-[#888888] transition hover:border-gold/40 hover:text-deepGreen"
+                      >
+                        <i className="fa-solid fa-rotate-left text-[0.78rem]" />
+                      </button>
+                    </div>
+                  </div>
 
-              <div className="timeline-card">
-                <div className="timeline-card-header">
-                  <h2 className="timeline-title">Order Status</h2>
+                  <Stepper status={status} />
+
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <StatChip icon="fa-user" label="Customer" value={order.customer} />
+                    <StatChip icon="fa-tag" label="Total" value={order.amount} />
+                    <StatChip
+                      icon={isPaid ? 'fa-circle-check' : 'fa-clock'}
+                      label="Payment"
+                      value={order.payment}
+                      highlight={isPaid ? 'text-deepGreen' : 'text-gold'}
+                    />
+                    <StatChip icon="fa-calendar-days" label="ETA" value={order.estimate} />
+                  </div>
+
+                  <div className="rounded-xl border border-black/[0.05] bg-softBg/50 px-4 py-3">
+                    <p className="mb-1 text-[0.65rem] font-bold uppercase tracking-wide text-[#888888]">
+                      Items
+                    </p>
+                    <p className="mb-2 line-clamp-2 text-[0.84rem] font-semibold text-[#333333]">{itemSummary}</p>
+                    <div className="flex items-start gap-2 border-t border-black/[0.05] pt-2">
+                      <i className="fa-solid fa-location-dot mt-0.5 shrink-0 text-[0.8rem] text-gold" />
+                      <p className="m-0 line-clamp-2 text-[0.8rem] leading-snug text-[#666666]">
+                        {order.address || '—'}
+                      </p>
+                    </div>
+                    {order.driver && order.driver !== 'Not assigned yet' && (
+                      <div className="mt-2 flex items-center gap-2 text-[0.8rem] text-[#666666]">
+                        <i className="fa-solid fa-id-badge text-gold" />
+                        Driver: <span className="font-semibold text-deepGreen">{order.driver}</span>
+                      </div>
+                    )}
+                    {items.length === 1 && typeof items[0].price === 'number' && (
+                      <p className="mb-0 mt-2 text-right text-[0.88rem] font-bold text-deepGreen">
+                        {formatMoney(items[0].price * (items[0].quantity || 1))}
+                      </p>
+                    )}
+                  </div>
+
                   {canCancel && (
                     <button
                       type="button"
-                      className="cancel-order-btn"
                       onClick={cancelOrder}
                       disabled={cancelling}
+                      className="w-full rounded-xl border border-black/[0.1] bg-white py-2.5 text-[0.82rem] font-bold text-[#666666] transition hover:border-gold/40 hover:text-deepGreen disabled:opacity-60"
                     >
-                      <i className={`fa-solid ${cancelling ? 'fa-spinner fa-spin' : 'fa-xmark'}`} />
+                      <i className={`fa-solid ${cancelling ? 'fa-spinner fa-spin' : 'fa-xmark'} mr-1.5 text-gold`} />
                       {cancelling ? 'Cancelling…' : 'Cancel Order'}
                     </button>
                   )}
                 </div>
-                <OrderTimeline status={orderStatus} />
-
-                {activities.length > 0 && (
-                  <div className="order-activity-log mt-4 pt-3 border-top">
-                    <h3 className="timeline-title" style={{ fontSize: '1rem' }}>Activity Log</h3>
-                    <ul className="list-unstyled mb-0 mt-3">
-                      {activities.map((entry, index) => (
-                        <li key={entry.id || index} className="mb-3">
-                          <div className="fw-semibold">
-                            {ACTIVITY_LABELS[entry.action] || entry.action}
-                          </div>
-                          {entry.description && (
-                            <div className="text-secondary small">{entry.description}</div>
-                          )}
-                          <div className="text-muted small">{formatActivityTime(entry.createdAt)}</div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
-      </section>
+      </main>
     </div>
   );
 }

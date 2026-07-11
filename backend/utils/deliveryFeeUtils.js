@@ -1,12 +1,12 @@
 const CmsContent = require('../models/CmsContent');
 
 const FALLBACK_FEES = [
-  { district: 'Hodan', fee: 0.001 },
-  { district: 'Wadajir', fee: 0.001 },
-  { district: 'Karaan', fee: 0.002 },
-  { district: 'Hamarweyne', fee: 0.001 },
-  { district: 'Dayniile', fee: 0.002 },
-  { district: 'Yaqshid', fee: 0.001 },
+  { district: 'Hodan', fee: 0.01 },
+  { district: 'Wadajir', fee: 0.01 },
+  { district: 'Karaan', fee: 0.02 },
+  { district: 'Hamarweyne', fee: 0.01 },
+  { district: 'Dayniile', fee: 0.02 },
+  { district: 'Yaqshid', fee: 0.01 },
 ];
 
 function parseDistrictFromAddress(address) {

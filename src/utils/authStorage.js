@@ -1,4 +1,4 @@
-import { readNotificationPreferences } from './notificationPrefs';
+import { readNotificationPreferences } from './notifications';
 
 export const AUTH_UPDATED_EVENT = 'auth-updated';
 

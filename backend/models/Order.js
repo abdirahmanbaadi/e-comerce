@@ -43,6 +43,20 @@ const orderSchema = new mongoose.Schema(
       default: '',
       index: true,
     },
+    assignmentStatus: {
+      type: String,
+      enum: ['none', 'pending', 'accepted', 'rejected'],
+      default: 'none',
+      index: true,
+    },
+    assignmentRejectReason: {
+      type: String,
+      default: '',
+    },
+    lastRejectedDriverId: {
+      type: String,
+      default: '',
+    },
     estimate: {
       type: String,
       default: 'Processing your order',

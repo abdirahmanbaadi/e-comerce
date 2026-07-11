@@ -4,11 +4,8 @@ import StoreNavbar from '../features/nav/StoreNavbar';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { validateCartItems, validateCouponCode } from '../utils/cartApi';
-import { DELIVERY_DISTRICTS, fetchDeliveryDistricts, getDistrictFee } from '../utils/data';
 import { formatMoney, productImage } from '../utils/format';
 import { showTopFloatNotification } from '../utils/notifications';
-
-const EMPTY_DISTRICT = { value: '0', label: 'Select district', fee: 0 };
 
 export default function Cart() {
   const navigate = useNavigate();
@@ -31,16 +28,6 @@ export default function Cart() {
   const [discountAmount, setDiscountAmount] = useState(
     () => Number(localStorage.getItem('cartDiscount')) || 0
   );
-  const [districtKey, setDistrictKey] = useState(
-    () => localStorage.getItem('cartDistrict') || '0'
-  );
-  const [districts, setDistricts] = useState([
-    EMPTY_DISTRICT,
-    ...DELIVERY_DISTRICTS.map((d) => ({
-      ...d,
-      label: `${d.value} - ${formatMoney(d.fee)}`,
-    })),
-  ]);
   const [validating, setValidating] = useState(false);
   const [stockHints, setStockHints] = useState({});
 
@@ -48,32 +35,6 @@ export default function Cart() {
     syncFromStorage();
     syncAuth();
   }, [syncFromStorage, syncAuth]);
-
-  useEffect(() => {
-    fetchDeliveryDistricts().then((list) => {
-      setDistricts([
-        EMPTY_DISTRICT,
-        ...list.map((d) => ({
-          ...d,
-          label: `${d.value} - ${formatMoney(d.fee)}`,
-        })),
-      ]);
-    });
-
-    const refreshDistricts = () => {
-      fetchDeliveryDistricts(true).then((list) => {
-        setDistricts([
-          EMPTY_DISTRICT,
-          ...list.map((d) => ({
-            ...d,
-            label: `${d.value} - ${formatMoney(d.fee)}`,
-          })),
-        ]);
-      });
-    };
-    window.addEventListener('delivery-fees-updated', refreshDistricts);
-    return () => window.removeEventListener('delivery-fees-updated', refreshDistricts);
-  }, []);
 
   useEffect(() => {
     if (cartItems.length === 0) {
@@ -121,22 +82,14 @@ export default function Cart() {
     [cartItems]
   );
 
-  const deliveryFee = useMemo(() => {
-    if (cartItems.length === 0) return 0;
-    const district = districts.find((d) => d.value === districtKey);
-    return district?.fee || 0;
-  }, [cartItems.length, districtKey, districts]);
-
   const discount = cartItems.length > 0 ? discountAmount : 0;
-  const total = Math.max(subtotal + deliveryFee - discount, 0);
+  const total = Math.max(subtotal - discount, 0);
 
   useEffect(() => {
     localStorage.setItem('cartSubtotal', String(subtotal));
     localStorage.setItem('cartDiscount', String(discount));
-    localStorage.setItem('cartDeliveryFee', String(deliveryFee));
-    localStorage.setItem('cartDistrict', districtKey);
     localStorage.setItem('cartTotal', String(total));
-  }, [subtotal, discount, deliveryFee, total, districtKey]);
+  }, [subtotal, discount, total]);
 
   const applyCoupon = async () => {
     const couponValue = couponInput.trim();
@@ -205,11 +158,6 @@ export default function Cart() {
   };
 
   const handleProceedToCheckout = async () => {
-    if (!districtKey || districtKey === '0') {
-      showTopFloatNotification('Please select a delivery district before checkout.', 'danger');
-      return;
-    }
-
     setValidating(true);
     try {
       const data = await validateCartItems(cartItems);
@@ -396,7 +344,7 @@ export default function Cart() {
                 </div>
                 <div className="summary-row">
                   <span>Shipping</span>
-                  <span>{formatMoney(deliveryFee)}</span>
+                  <span className="text-[0.88rem] font-bold text-[#888]">At checkout</span>
                 </div>
                 <div className="summary-row">
                   <span>Coupon Discount</span>
@@ -405,21 +353,6 @@ export default function Cart() {
                 <div className="summary-row">
                   <span className="summary-total">Total</span>
                   <span className="summary-total">{formatMoney(total)}</span>
-                </div>
-
-                <div className="district-box">
-                  <label htmlFor="districtSelect">Delivery District *</label>
-                  <select
-                    id="districtSelect"
-                    value={districtKey}
-                    onChange={(e) => setDistrictKey(e.target.value)}
-                  >
-                    {districts.map(({ value, label }) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
                 </div>
 
                 <button

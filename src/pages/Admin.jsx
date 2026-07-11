@@ -89,12 +89,20 @@ export default function Admin() {
 
   const isAdmin = user?.isLoggedIn && user?.role === 'admin';
 
-  const { items: adminNotifications } = useNotifications({ enabled: isAdmin, pollMs: 15000 });
+  const { items: adminNotifications, markRead, refresh: refreshNotifications } = useNotifications({
+    enabled: isAdmin,
+    pollMs: 30000,
+  });
 
   const badgeCounts = useMemo(
     () => ({
-      support: adminNotifications.filter((n) => n.type === 'new_support_ticket' && n.unread).length,
+      support: adminNotifications.filter(
+        (n) => ['new_support_ticket', 'support_message'].includes(n.type) && n.unread
+      ).length,
       drivers: adminNotifications.filter((n) => n.type === 'driver_application' && n.unread).length,
+      delivery: adminNotifications.filter(
+        (n) => ['driver_rejected', 'delivery_accepted'].includes(n.type) && n.unread
+      ).length,
     }),
     [adminNotifications]
   );
@@ -117,9 +125,6 @@ export default function Admin() {
   const handleTabChange = useCallback((tab) => {
     setSidebarMobile(false);
     setActiveTab(tab);
-    if (window.switchTab) {
-      window.switchTab(tab);
-    }
   }, []);
 
   const handleToggleSidebar = useCallback(() => {
@@ -160,8 +165,9 @@ export default function Admin() {
         >
           <div
             id="adminDataLoading"
-            className="absolute inset-0 z-40 hidden items-center justify-center bg-white/70 backdrop-blur-[2px] dark:bg-[#0b1412]/70"
+            className="pointer-events-none absolute inset-0 z-40 hidden items-center justify-center bg-white/70 backdrop-blur-[2px] dark:bg-[#0b1412]/70"
             aria-live="polite"
+            aria-hidden="true"
           >
             <div className="flex items-center gap-3 rounded-2xl border border-deepGreen/10 bg-white px-5 py-3.5 text-[0.88rem] font-bold text-deepGreen shadow-[0_8px_24px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#1a2421] dark:text-[#d7e2de]">
               <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" />
@@ -179,6 +185,9 @@ export default function Admin() {
             onLogout={logout}
             headerSearch={headerSearch}
             onHeaderSearchChange={handleHeaderSearchChange}
+            notifications={adminNotifications}
+            onMarkNotificationRead={markRead}
+            onRefreshNotifications={refreshNotifications}
           />
 
           {activeTab === 'dashboard' && (

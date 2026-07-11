@@ -1,6 +1,6 @@
 const Order = require('../models/Order');
 const PaymentTransaction = require('../models/PaymentTransaction');
-const { processWaafiPurchase } = require('../services/waafiService');
+const { processWaafiPurchase, WAAFI_MIN_USD } = require('../services/waafiService');
 const { logPaymentTransaction, isWaafiConfigured } = require('../services/paymentService');
 const { onOrderUpdated } = require('../services/notificationService');
 const { normalizePhone } = require('../utils/phoneUtils');
@@ -214,6 +214,12 @@ exports.waafiPurchase = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Payment amount must be greater than zero.',
+      });
+    }
+    if (payAmount < WAAFI_MIN_USD) {
+      return res.status(400).json({
+        success: false,
+        message: `EVC Plus minimum charge is $${WAAFI_MIN_USD.toFixed(2)} USD. Demo cart total is too small — add another item or contact support.`,
       });
     }
     if (Math.abs(expectedAmount - payAmount) > 0.0001) {

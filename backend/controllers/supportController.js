@@ -3,6 +3,7 @@ const SupportMessage = require('../models/SupportMessage');
 const {
   onSupportAdminReply,
   onSupportTicketCreated,
+  onSupportCustomerMessage,
 } = require('../services/notificationService');
 
 // Active SSE clients list
@@ -110,7 +111,7 @@ exports.createConversation = async (req, res) => {
       message: messageData
     });
 
-    await onSupportTicketCreated(ticket);
+    onSupportTicketCreated(ticket).catch((err) => console.error('Support notification failed:', err.message));
 
     return res.status(201).json({
       success: true,
@@ -216,7 +217,13 @@ exports.addMessage = async (req, res) => {
     });
 
     if (role === 'admin') {
-      await onSupportAdminReply(ticket);
+      onSupportAdminReply(ticket, messageText).catch((err) =>
+        console.error('Support notification failed:', err.message)
+      );
+    } else {
+      onSupportCustomerMessage(ticket, messageText).catch((err) =>
+        console.error('Support notification failed:', err.message)
+      );
     }
 
     return res.status(201).json({
@@ -243,6 +250,41 @@ exports.getAdminConversations = async (req, res) => {
     return res.status(200).json({ success: true, count: tickets.length, tickets });
   } catch (error) {
     console.error('Error in getAdminConversations:', error);
+    return res.status(500).json({ success: false, message: 'Waxaa dhacay khalad dhanka server-ka ah.' });
+  }
+};
+
+// 6. Close a support ticket (Admin)
+exports.closeConversation = async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+
+    const ticket = await SupportTicket.findOne({ id: ticketId });
+    if (!ticket) {
+      return res.status(404).json({ success: false, message: 'Wadahadalkaan lama helin!' });
+    }
+
+    if (ticket.status === 'Closed') {
+      return res.status(200).json({
+        success: true,
+        message: 'Ticket is already closed.',
+        ticket,
+      });
+    }
+
+    ticket.status = 'Closed';
+    await ticket.save();
+
+    const ticketData = toPlainObject(ticket);
+    broadcast({ type: 'ticket', ticket: ticketData });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Ticket closed successfully.',
+      ticket,
+    });
+  } catch (error) {
+    console.error('Error in closeConversation:', error);
     return res.status(500).json({ success: false, message: 'Waxaa dhacay khalad dhanka server-ka ah.' });
   }
 };

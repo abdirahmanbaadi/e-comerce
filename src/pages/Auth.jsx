@@ -864,10 +864,10 @@ export function RegisterPage() {
 
       if (data.success) {
         setAlert({
-          message: '✅ Registration successful! Please login to enter the website.',
+          message: '✅ Account created! Welcome to Mogadishu Modern Furniture.',
           type: 'success',
         });
-        setTimeout(() => navigate('/login'), 1800);
+        setTimeout(() => navigate('/'), 600);
       } else {
         setAlert({ message: `❌ ${data.message || 'Registration failed'}`, type: 'danger' });
       }
@@ -993,7 +993,14 @@ export function RegisterPage() {
             </label>
 
             <button type="submit" className={AUTH_SUBMIT_BTN_CLASS} disabled={submitting}>
-              {submitting ? 'Registering...' : 'Register'}
+              {submitting ? (
+                <>
+                  <i className="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true" />
+                  Creating account...
+                </>
+              ) : (
+                'Register'
+              )}
             </button>
           </form>
 

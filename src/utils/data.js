@@ -303,12 +303,12 @@ export const defaultUsers = [
   { id: "USR-1003", firstName: "Amina", lastName: "Yusuf", email: "amina@gmail.com", phone: "0613334444", address: "Karaan, Mogadishu", password: "customer123", avatar: "" }
 ];
 
-export const DEMO_PRODUCT_PRICE = 0.001;
-export const DEMO_PRODUCT_OLD_PRICE = 0.002;
+export const DEMO_PRODUCT_PRICE = 0.01;
+export const DEMO_PRODUCT_OLD_PRICE = 0.02;
 
-/** Rotating demo prices so cards don't all look identical */
-export const DEMO_PRODUCT_PRICES = [0.001, 0.003, 0.001, 0.002, 0.003, 0.001, 0.002, 0.001, 0.003, 0.002];
-export const DEMO_PRODUCT_OLD_PRICES = [0.002, 0.004, 0.002, 0.003, 0.004, 0.002, 0.003, 0.002, 0.004, 0.003];
+/** Rotating demo prices — minimum $0.01 for live Waafi/EVC */
+export const DEMO_PRODUCT_PRICES = [0.01, 0.03, 0.01, 0.02, 0.03, 0.01, 0.02, 0.01, 0.03, 0.02];
+export const DEMO_PRODUCT_OLD_PRICES = [0.02, 0.04, 0.02, 0.03, 0.04, 0.02, 0.03, 0.02, 0.04, 0.03];
 
 function demoPriceForProduct(product, index) {
   const slot = typeof product?.id === 'number' ? product.id - 1 : index;
@@ -320,8 +320,8 @@ function demoOldPriceForProduct(product, index) {
   return DEMO_PRODUCT_OLD_PRICES[((slot % DEMO_PRODUCT_OLD_PRICES.length) + DEMO_PRODUCT_OLD_PRICES.length) % DEMO_PRODUCT_OLD_PRICES.length];
 }
 
-export const DEMO_DELIVERY_FEE = 0.001;
-export const DEMO_DELIVERY_FEE_ALT = 0.002;
+export const DEMO_DELIVERY_FEE = 0.01;
+export const DEMO_DELIVERY_FEE_ALT = 0.02;
 
 export const DELIVERY_DISTRICTS = [
   { value: 'Hodan', fee: DEMO_DELIVERY_FEE },

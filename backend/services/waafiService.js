@@ -16,12 +16,41 @@ function normalizeAccountNo(phone) {
   return digits;
 }
 
+const WAAFI_MIN_USD = 0.01;
+
 function formatWaafiAmount(amount) {
   const n = Number(amount);
   if (Number.isNaN(n) || n <= 0) return 0;
-  // Keep 3 decimals for demo/test prices (e.g. $0.001) — toFixed(2) would send $0.00
-  if (n < 0.01) return Number(n.toFixed(3));
-  return Number(n.toFixed(2));
+  // Waafi docs: amount in two decimal places — sub-cent values are rejected by EVC without PIN prompt
+  return Number(Math.max(n, WAAFI_MIN_USD).toFixed(2));
+}
+
+function mapWaafiErrorMessage(data) {
+  const msg = String(data?.responseMsg || data?.params?.responseMsg || data?.message || '').trim();
+  const code = String(data?.responseCode || data?.errorCode || '');
+  const upper = msg.toUpperCase();
+
+  if (upper.includes('RCS_USER_REJECTED') || upper.includes('USER_REJECTED')) {
+    return (
+      'EVC Plus rejected the payment before PIN (Waafi: RCS_USER_REJECTED). ' +
+      'Common causes: phone is not an active EVC Plus wallet (61/77), insufficient balance, ' +
+      'or amount below $0.01. Confirm the checkout number matches your EVC SIM and try again.'
+    );
+  }
+  if (upper.includes('INSUFFICIENT') || upper.includes('HADHAAG') || code === '50333') {
+    return 'Insufficient EVC Plus balance for this payment. Top up your wallet and try again.';
+  }
+  if (upper.includes('TIMEOUT') || code === '5309') {
+    return 'Payment timed out — no PIN was entered in time. Please try again and approve promptly on your phone.';
+  }
+  if (upper.includes('CANCEL') || code === '5306') {
+    return 'Payment was cancelled on your phone. Tap Retry if you want to pay again.';
+  }
+  if (upper.includes('INVALID') && (upper.includes('KEY') || upper.includes('CREDENTIAL'))) {
+    return 'Waafi merchant credentials are invalid. Check WAAFI_* values in backend/.env.';
+  }
+
+  return msg || 'Payment was declined or timed out.';
 }
 
 function buildWaafiPayload({ accountNo, amount, referenceId, invoiceId, description }) {
@@ -92,6 +121,10 @@ async function processWaafiPurchase({ accountNo, amount, referenceId, invoiceId,
       };
     }
 
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[Waafi] response:', JSON.stringify(data).slice(0, 500));
+    }
+
     if (isWaafiSuccess(data)) {
       return {
         success: true,
@@ -106,15 +139,13 @@ async function processWaafiPurchase({ accountNo, amount, referenceId, invoiceId,
       };
     }
 
-    const declineMsg =
-      data.responseMsg ||
-      data.params?.responseMsg ||
-      data.message ||
-      'Payment was declined or timed out.';
+    const declineMsg = mapWaafiErrorMessage(data);
 
     return {
       success: false,
-      message: `${declineMsg} If no prompt appeared, confirm the checkout phone has EVC Plus and try again.`,
+      message: declineMsg,
+      responseCode: data.responseCode,
+      responseMsg: data.responseMsg,
       chargedPhone: normalizeAccountNo(accountNo),
       raw: data,
     };
@@ -130,4 +161,6 @@ async function processWaafiPurchase({ accountNo, amount, referenceId, invoiceId,
 module.exports = {
   processWaafiPurchase,
   normalizeAccountNo,
+  WAAFI_MIN_USD,
+  formatWaafiAmount,
 };

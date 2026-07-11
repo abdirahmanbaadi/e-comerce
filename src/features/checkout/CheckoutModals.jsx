@@ -130,11 +130,45 @@ export function InvoiceLetter({ order, variant = 'full' }) {
   );
 }
 
+function resolveModalVariant(order) {
+  const status = String(order?.paymentStatus || '').toLowerCase();
+  const method = String(order?.paymentMethod || '');
+
+  if (status === 'failed') {
+    return {
+      icon: 'fa-triangle-exclamation',
+      iconBg: 'bg-[#c0392b]',
+      title: 'Payment Not Completed',
+      description:
+        order.paymentFailureMessage ||
+        'Your order was saved, but EVC Plus payment did not go through. Approve the prompt on your phone and enter your PIN, then retry payment.',
+    };
+  }
+
+  if (method === 'Cash on Delivery' || status === 'pending') {
+    return {
+      icon: 'fa-check',
+      iconBg: 'bg-deepGreen',
+      title: 'Order Placed Successfully',
+      description:
+        'Your order has been received. Pay cash when your delivery arrives, or use the tracking code below to follow progress.',
+    };
+  }
+
+  return {
+    icon: 'fa-check',
+    iconBg: 'bg-deepGreen',
+    title: 'Order Confirmed & Paid',
+    description:
+      'Payment was approved on your phone. Use the tracking code below to follow your delivery.',
+  };
+}
+
 // =============================================================================
 // OrderConfirmModal
 // =============================================================================
 
-export default function OrderConfirmModal({ isOpen, order, onClose }) {
+export default function OrderConfirmModal({ isOpen, order, onClose, onRetryPayment, retryingPayment = false }) {
   const [showInvoice, setShowInvoice] = useState(false);
 
   useEffect(() => {
@@ -157,6 +191,10 @@ export default function OrderConfirmModal({ isOpen, order, onClose }) {
   }, [isOpen, onClose, showInvoice]);
 
   if (!isOpen || !order) return null;
+
+  const variant = resolveModalVariant(order);
+  const isFailed = String(order.paymentStatus || '').toLowerCase() === 'failed';
+  const canRetry = isFailed && order.paymentMethod === 'EVC Plus' && typeof onRetryPayment === 'function';
 
   if (showInvoice) {
     return (
@@ -209,16 +247,16 @@ export default function OrderConfirmModal({ isOpen, order, onClose }) {
       >
         <header className="mb-[22px] text-center">
           <div
-            className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-deepGreen text-[1.35rem] text-white"
+            className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full text-[1.35rem] text-white ${variant.iconBg}`}
             aria-hidden="true"
           >
-            <i className="fa-solid fa-check" />
+            <i className={`fa-solid ${variant.icon}`} />
           </div>
           <h2 id="orderConfirmTitle" className="mb-2 font-display text-[1.75rem] font-bold leading-tight text-deepGreen">
-            Order Placed Successfully
+            {variant.title}
           </h2>
           <p className="mx-auto mb-0 max-w-[360px] text-[0.875rem] leading-relaxed text-gray-500">
-            Your order has been received. Use the tracking code below to follow your delivery.
+            {variant.description}
           </p>
         </header>
 
@@ -239,7 +277,13 @@ export default function OrderConfirmModal({ isOpen, order, onClose }) {
             </div>
             <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-5 py-[13px]">
               <dt className="m-0 bg-transparent text-[0.8125rem] font-semibold text-gray-400">Payment</dt>
-              <dd className="m-0 text-right text-[0.875rem] font-bold text-gray-900">{order.payment}</dd>
+              <dd
+                className={`m-0 text-right text-[0.875rem] font-bold ${
+                  isFailed ? 'text-[#c0392b]' : 'text-gray-900'
+                }`}
+              >
+                {order.payment}
+              </dd>
             </div>
             {order.transactionId && (
               <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-5 py-[13px]">
@@ -270,7 +314,19 @@ export default function OrderConfirmModal({ isOpen, order, onClose }) {
           </div>
         </section>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className={`grid grid-cols-1 gap-2 ${canRetry ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
+          {canRetry && (
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border-0 bg-[#c0392b] px-1.5 py-[11px] text-center font-[inherit] text-[0.72rem] font-bold leading-tight text-white transition hover:bg-[#a93226] disabled:cursor-not-allowed disabled:opacity-60 max-[480px]:px-4 max-[480px]:py-3 max-[480px]:text-[0.8125rem] sm:col-span-2"
+              disabled={retryingPayment}
+              onClick={onRetryPayment}
+            >
+              <i className="fa-solid fa-rotate-right shrink-0 text-[0.85rem]" />
+              {retryingPayment ? 'Processing…' : 'Retry Payment'}
+            </button>
+          )}
+
           <Link
             to="/track-order"
             className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border-0 bg-deepGreen px-1.5 py-[11px] text-center font-[inherit] text-[0.72rem] font-bold leading-tight text-white no-underline transition hover:bg-[#052b25] max-[480px]:px-4 max-[480px]:py-3 max-[480px]:text-[0.8125rem]"
@@ -281,22 +337,24 @@ export default function OrderConfirmModal({ isOpen, order, onClose }) {
           </Link>
 
           <Link
-            to="/products"
+            to={isFailed ? '/profile' : '/products'}
             className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border-[1.5px] border-gray-300 bg-white px-1.5 py-[11px] text-center font-[inherit] text-[0.72rem] font-bold leading-tight text-deepGreen no-underline transition hover:border-deepGreen hover:bg-gray-50 max-[480px]:px-4 max-[480px]:py-3 max-[480px]:text-[0.8125rem]"
             onClick={onClose}
           >
-            <i className="fa-solid fa-bag-shopping shrink-0 text-[0.85rem]" />
-            Continue Shopping
+            <i className={`fa-solid ${isFailed ? 'fa-user' : 'fa-bag-shopping'} shrink-0 text-[0.85rem]`} />
+            {isFailed ? 'My Orders' : 'Continue Shopping'}
           </Link>
 
-          <button
-            type="button"
-            className="inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border-0 bg-gold px-1.5 py-[11px] text-center font-[inherit] text-[0.72rem] font-bold leading-tight text-deepGreen transition hover:bg-[#c8921f] max-[480px]:px-4 max-[480px]:py-3 max-[480px]:text-[0.8125rem]"
-            onClick={() => setShowInvoice(true)}
-          >
-            <i className="fa-solid fa-file-invoice shrink-0 text-[0.85rem]" />
-            View Invoice
-          </button>
+          {!canRetry && (
+            <button
+              type="button"
+              className="inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border-0 bg-gold px-1.5 py-[11px] text-center font-[inherit] text-[0.72rem] font-bold leading-tight text-deepGreen transition hover:bg-[#c8921f] max-[480px]:px-4 max-[480px]:py-3 max-[480px]:text-[0.8125rem]"
+              onClick={() => setShowInvoice(true)}
+            >
+              <i className="fa-solid fa-file-invoice shrink-0 text-[0.85rem]" />
+              View Invoice
+            </button>
+          )}
         </div>
       </div>
     </div>

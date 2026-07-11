@@ -20,10 +20,15 @@ export function getDeliveryBadge(status) {
   }
 }
 
-export function getPaymentBadge(paymentType) {
-  const isPaid = paymentType === 'paid';
-  return {
-    label: isPaid ? 'Paid' : 'Pending',
-    className: isPaid ? 'paid' : 'pending',
-  };
+export function getPaymentBadge(paymentType, paymentLabel) {
+  const normalized = String(paymentType || '').toLowerCase();
+  const labelText = String(paymentLabel || '').toLowerCase();
+
+  if (normalized === 'paid' || labelText === 'paid') {
+    return { label: 'Paid', className: 'paid' };
+  }
+  if (normalized === 'failed' || labelText === 'failed') {
+    return { label: 'Failed', className: 'failed' };
+  }
+  return { label: 'Pending', className: 'pending' };
 }

@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @layer base {
   :root {
     --deep-green: #073d35;
@@ -701,6 +712,32 @@
 
     .saved-actions {
       justify-content: flex-start;
+    }
+  }
+
+  @media (max-width: 576px) {
+    .cart-item {
+      padding: 14px 14px 16px;
+    }
+
+    .product-cell {
+      gap: 10px;
+    }
+
+    .cart-img {
+      width: 72px;
+      height: 64px;
+    }
+
+    .cart-col-price,
+    .cart-col-qty,
+    .cart-col-subtotal {
+      padding-left: 0;
+    }
+
+    .remove-btn {
+      justify-self: end;
+      margin-top: 2px;
     }
   }
 
@@ -1653,6 +1690,38 @@
     .shop-controls-right .products-search-input:focus {
       width: 100%;
     }
+
+    .shop-layout-shell {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+
+    .active-filter-row {
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .active-chip {
+      padding: 7px 12px;
+      font-size: 0.76rem;
+    }
+  }
+
+  .shop-layout-shell {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+    width: 100%;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding-left: clamp(10px, 1.2vw, 18px);
+    padding-right: clamp(16px, 2.5vw, 36px);
+  }
+
+  .shop-products-panel {
+    min-width: 0;
+    padding-right: clamp(0px, 1vw, 8px);
   }
 
   .products-layout {
@@ -1666,7 +1735,8 @@
     position: sticky;
     top: 76px;
     background: #ffffff;
-    padding-right: 20px;
+    padding-left: 0;
+    padding-right: 16px;
     border-right: 1px solid rgba(0, 0, 0, 0.08);
     max-height: calc(100vh - 90px);
     overflow-y: auto;
@@ -1804,6 +1874,17 @@
   }
 
   @media (max-width: 991px) {
+    .shop-layout-shell {
+      grid-template-columns: 1fr;
+      gap: 0;
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+
+    .shop-products-panel {
+      padding-right: 0;
+    }
+
     .products-layout {
       grid-template-columns: 1fr;
     }
@@ -1815,6 +1896,7 @@
       border-bottom: 1px solid rgba(0, 0, 0, 0.08);
       padding-right: 0;
       padding-bottom: 20px;
+      margin-bottom: 20px;
     }
   }
 
@@ -2132,6 +2214,35 @@
     }
   }
 
+  @media (max-width: 576px) {
+    .checkout-card,
+    .checkout-page .summary-card {
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .card-title-main,
+    .checkout-page .summary-title {
+      font-size: 1.6rem;
+      margin-bottom: 12px;
+    }
+
+    .order-item {
+      gap: 10px;
+      padding: 10px 0;
+    }
+
+    .order-img {
+      width: 58px;
+      height: 54px;
+    }
+
+    .evc-pin-card {
+      border-radius: 16px;
+      padding: 20px 16px;
+    }
+  }
+
   /* Delivery driver page */
   .delivery-page {
     min-height: 100vh;
@@ -2307,6 +2418,65 @@
 
   .delivery-card--done {
     opacity: 0.75;
+  }
+
+  .delivery-card--pending {
+    border-color: rgba(216, 161, 40, 0.45);
+    box-shadow: 0 10px 28px rgba(216, 161, 40, 0.12);
+  }
+
+  .delivery-card--pending .delivery-step-badge {
+    background: #fff7e6;
+    color: #b45309;
+  }
+
+  .delivery-reject-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    background: rgba(7, 61, 53, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .delivery-reject-modal {
+    width: min(420px, 100%);
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+  }
+
+  .delivery-reject-modal h3 {
+    margin: 0 0 8px;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #073d35;
+  }
+
+  .delivery-reject-modal p {
+    margin: 0 0 12px;
+    font-size: 0.88rem;
+    color: #666;
+  }
+
+  .delivery-reject-input {
+    width: 100%;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 0.88rem;
+    resize: vertical;
+    margin-bottom: 14px;
+  }
+
+  .delivery-reject-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
   }
 
   .delivery-card-top {

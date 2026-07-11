@@ -85,9 +85,13 @@ async function registerOtpFailure(user) {
 
 async function linkGuestOrdersToUser(user) {
   const normalized = normalizePhone(user.phone);
+  if (!normalized) return;
+
+  const suffix = normalized.slice(-9);
   const guestOrders = await Order.find({
     $or: [{ userId: '' }, { userId: null }, { userId: { $exists: false } }],
-  });
+    phone: { $regex: `${suffix}$` },
+  }).limit(50);
 
   for (const order of guestOrders) {
     if (normalizePhone(order.phone) === normalized) {
@@ -118,8 +122,8 @@ exports.register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'This email is already registered!' });
     }
 
-    // Check if user exists by phone
-    const phoneExists = await User.findOne({ phone });
+    // Check if user exists by phone (normalized match)
+    const phoneExists = await findUserByPhone(User, phone);
     if (phoneExists) {
       return res.status(400).json({ success: false, message: 'This phone number is already registered!' });
     }
@@ -147,12 +151,12 @@ exports.register = async (req, res) => {
     sendWelcomeEmail(user).catch((err) => console.error('Welcome email failed:', err.message));
     linkGuestOrdersToUser(user).catch((err) => console.error('Link guest orders failed:', err.message));
 
-    await logUserActivity({
+    logUserActivity({
       userId: user.id,
       action: 'register',
       description: 'New customer account registered.',
       metadata: { email: user.email, phone: user.phone },
-    });
+    }).catch((err) => console.error('Activity log failed:', err.message));
 
     return res.status(201).json({
       success: true,
@@ -162,6 +166,12 @@ exports.register = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, message: 'This email or phone is already registered!' });
+    }
     return res.status(500).json({ success: false, message: 'A server error occurred during registration.' });
   }
 };

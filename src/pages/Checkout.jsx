@@ -8,6 +8,7 @@ import { validateCartItems } from '../utils/cartApi';
 import { apiUrl, DELIVERY_DISTRICTS, fetchDeliveryDistricts, findDistrictByDeliveryFee, getDistrictFee, normalizePhoneNumber } from '../utils/data';
 import { formatMoney, productImage } from '../utils/format';
 import { showTopFloatNotification } from '../utils/notifications';
+import { submitWaafiPayment } from '../utils/waafiPayment';
 
 const DEFAULT_DISTRICTS = DELIVERY_DISTRICTS.map((d) => ({
   ...d,
@@ -42,6 +43,7 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [evcAwaitingPin, setEvcAwaitingPin] = useState(false);
   const [confirmOrder, setConfirmOrder] = useState(null);
+  const [retryingPayment, setRetryingPayment] = useState(false);
   const [districts, setDistricts] = useState(DEFAULT_DISTRICTS);
   const [waafiConfigured, setWaafiConfigured] = useState(true);
 
@@ -190,6 +192,14 @@ export default function Checkout() {
       paymentMethod === 'EVC Plus' ? 'EVC Plus - Pending Confirmation' : 'Cash on Delivery';
 
     try {
+      const latestDistricts = await fetchDeliveryDistricts(true);
+      const resolvedDeliveryFee = form.district
+        ? getDistrictFee(form.district, latestDistricts)
+        : deliveryFee;
+      if (resolvedDeliveryFee !== deliveryFee) {
+        setDeliveryFee(resolvedDeliveryFee);
+      }
+
       const validation = await validateCartItems(cartItems);
       if (!validation.success || !validation.valid) {
         showTopFloatNotification(validation.message || 'Cart validation failed. Return to cart.', 'danger');
@@ -211,7 +221,7 @@ export default function Checkout() {
         (sum, item) => sum + item.price * item.quantity,
         0
       );
-      const freshTotal = Math.max(freshSubtotal + deliveryFee - discount, 0);
+      const freshTotal = Math.max(freshSubtotal + resolvedDeliveryFee - discount, 0);
 
       const orderPayload = {
         phone: form.phone.trim(),
@@ -219,7 +229,7 @@ export default function Checkout() {
         email: form.email.trim(),
         amount: formatMoney(freshTotal),
         subtotal: freshSubtotal,
-        deliveryFee,
+        deliveryFee: resolvedDeliveryFee,
         discount,
         couponCode,
         address: `${form.address.trim()}, ${form.district} District, Mogadishu`,
@@ -261,6 +271,7 @@ export default function Checkout() {
       let paymentLabelFinal = paymentLabel;
 
       let paymentTransactionId = '';
+      let paymentFailureMessage = '';
 
       if (paymentMethod === 'EVC Plus') {
         setEvcAwaitingPin(true);
@@ -290,6 +301,7 @@ export default function Checkout() {
         } else {
           paymentStatus = 'Failed';
           paymentLabelFinal = 'EVC Plus - Payment Failed';
+          paymentFailureMessage = payData.message || '';
           showTopFloatNotification(
             payData.message ||
               'Payment not completed. Approve the EVC prompt on your phone and enter your PIN, then try again.',
@@ -317,7 +329,7 @@ export default function Checkout() {
           total: freshTotal,
           subtotal: freshSubtotal,
           discount,
-          deliveryFee,
+          deliveryFee: resolvedDeliveryFee,
           items: freshItems,
         })
       );
@@ -340,6 +352,7 @@ export default function Checkout() {
         payment: paymentLabelFinal,
         paymentMethod,
         paymentStatus,
+        paymentFailureMessage,
         paymentReference: paymentMethod === 'EVC Plus' ? paymentReference : '',
         transactionId: paymentTransactionId,
         date: new Date().toLocaleDateString('en-US', {
@@ -350,7 +363,7 @@ export default function Checkout() {
         items: freshItems.map((item) => ({ ...item })),
         subtotal: freshSubtotal,
         discount,
-        deliveryFee,
+        deliveryFee: resolvedDeliveryFee,
         total: formatMoney(freshTotal),
       });
     } catch {
@@ -364,13 +377,52 @@ export default function Checkout() {
     }
   };
 
+  const handleRetryPayment = async () => {
+    if (!confirmOrder || confirmOrder.paymentStatus !== 'Failed') return;
+
+    setRetryingPayment(true);
+    setEvcAwaitingPin(true);
+    try {
+      const amount = Number(String(confirmOrder.total).replace(/[^0-9.]/g, '')) || 0;
+      const { data } = await submitWaafiPayment({
+        orderId: confirmOrder.trackingCode,
+        accountNo: confirmOrder.phone,
+        amount,
+        paymentReference: confirmOrder.paymentReference,
+        description: `Retry payment for ${confirmOrder.trackingCode}`,
+      });
+
+      if (data.success) {
+        setConfirmOrder((prev) => ({
+          ...prev,
+          paymentStatus: 'Paid',
+          payment: 'EVC Plus - Paid via Waafi',
+          transactionId: data.transactionId || prev.transactionId,
+          paymentFailureMessage: '',
+        }));
+        showTopFloatNotification('Payment approved on your phone. Order confirmed!');
+      } else {
+        setConfirmOrder((prev) => ({
+          ...prev,
+          paymentFailureMessage: data.message || prev.paymentFailureMessage,
+        }));
+        showTopFloatNotification(data.message || 'Payment failed. Please try again.', 'danger');
+      }
+    } catch {
+      showTopFloatNotification('Could not connect to the payment server.', 'danger');
+    } finally {
+      setRetryingPayment(false);
+      setEvcAwaitingPin(false);
+    }
+  };
+
   const showError = (field) => errors[field];
 
   return (
     <div className="checkout-page min-h-screen bg-base font-sans text-[#111]">
       <StoreNavbar />
 
-      <section className="border-b border-black/[0.06] bg-[radial-gradient(circle_at_top_left,rgba(216,161,40,0.13),transparent_34%),linear-gradient(135deg,#FAF8F2_0%,#F4EFE6_100%)] py-16 pb-10 text-center">
+      <section className="border-b border-black/[0.06] bg-[radial-gradient(circle_at_top_left,rgba(216,161,40,0.13),transparent_34%),linear-gradient(135deg,#FAF8F2_0%,#F4EFE6_100%)] py-16 pb-10 text-center max-sm:py-11 max-sm:pb-8">
         <div className="container">
           <span className="mb-2.5 inline-block text-[0.76rem] font-extrabold uppercase tracking-[3px] text-gold">
             Secure Checkout
@@ -385,7 +437,7 @@ export default function Checkout() {
         </div>
       </section>
 
-      <section className="checkout-section checkout-section--visible py-12 pb-20">
+      <section className="checkout-section checkout-section--visible py-12 pb-20 max-sm:py-8 max-sm:pb-14">
           <div className="container">
             <div className="checkout-layout">
               <div>
@@ -540,66 +592,67 @@ export default function Checkout() {
                   <h2 className="card-title-main">Payment Method</h2>
 
                   {!waafiConfigured && (
-                    <div className="login-note" style={{ marginBottom: 16, borderColor: '#f59e0b' }}>
-                      <strong>EVC Plus unavailable:</strong> Waafi is not configured on the server. Use Cash on Delivery or ask admin to add WAAFI credentials.
+                    <div className="login-note mb-4 border-[#f59e0b]">
+                      <strong>EVC Plus unavailable:</strong> Waafi is not configured. Use Cash on Delivery.
                     </div>
                   )}
 
-                  <label className="payment-option">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="EVC Plus"
-                      checked={paymentMethod === 'EVC Plus'}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      className={`flex min-h-[118px] flex-col items-start rounded-xl border-2 p-4 text-left transition-all ${
+                        paymentMethod === 'EVC Plus'
+                          ? 'border-deepGreen bg-deepGreen/[0.04] shadow-[0_4px_14px_rgba(7,61,53,0.1)]'
+                          : 'border-black/10 bg-white hover:border-deepGreen/35'
+                      } ${!waafiConfigured ? 'cursor-not-allowed opacity-50' : ''}`}
                       disabled={!waafiConfigured}
-                      onChange={() => setPaymentMethod('EVC Plus')}
-                    />
-                    <div>
-                      <div className="payment-title">
-                        <i className="fa-solid fa-mobile-screen-button me-2" />
-                        EVC Plus Mobile Money
-                      </div>
-                      <p className="payment-desc">
-                        Waafi API sends a payment request to the <strong>same phone number</strong> you enter
-                        in Contact Details above. Your phone will show an EVC Plus prompt — approve it and
-                        enter your mobile money PIN to pay.
-                      </p>
-                      {paymentMethod === 'EVC Plus' && form.phone.trim() && (
-                        <div className="login-note evc-phone-note">
-                          <i className="fa-solid fa-mobile-screen me-1" />
-                          Charge target: <strong>{form.phone.trim()}</strong>
-                          <div className="small text-muted mt-1 mb-0">
-                            1. Place order → 2. Check this phone → 3. Approve EVC → 4. Enter PIN
-                          </div>
-                        </div>
-                      )}
-                      {paymentMethod === 'EVC Plus' && (
-                        <div className="payment-ref-box">
-                          <div className="payment-ref-label">Payment Reference</div>
-                          <div className="payment-ref-value">{paymentReference}</div>
-                        </div>
-                      )}
-                    </div>
-                  </label>
+                      onClick={() => setPaymentMethod('EVC Plus')}
+                    >
+                      <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-deepGreen/10 text-deepGreen">
+                        <i className="fa-solid fa-mobile-screen-button" />
+                      </span>
+                      <span className="text-[0.95rem] font-extrabold text-[#111]">EVC Plus</span>
+                      <span className="mt-1 text-[0.78rem] font-semibold leading-snug text-[#666]">
+                        Pay with mobile money
+                      </span>
+                    </button>
 
-                  <label className="payment-option">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="Cash on Delivery"
-                      checked={paymentMethod === 'Cash on Delivery'}
-                      onChange={() => setPaymentMethod('Cash on Delivery')}
-                    />
-                    <div>
-                      <div className="payment-title">
-                        <i className="fa-solid fa-money-bill-wave me-2" />
-                        Cash on Delivery
-                      </div>
-                      <p className="payment-desc">
-                        Pay when your furniture order is delivered to your address.
+                    <button
+                      type="button"
+                      className={`flex min-h-[118px] flex-col items-start rounded-xl border-2 p-4 text-left transition-all ${
+                        paymentMethod === 'Cash on Delivery'
+                          ? 'border-deepGreen bg-deepGreen/[0.04] shadow-[0_4px_14px_rgba(7,61,53,0.1)]'
+                          : 'border-black/10 bg-white hover:border-deepGreen/35'
+                      }`}
+                      onClick={() => setPaymentMethod('Cash on Delivery')}
+                    >
+                      <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-deepGreen/10 text-deepGreen">
+                        <i className="fa-solid fa-money-bill-wave" />
+                      </span>
+                      <span className="text-[0.95rem] font-extrabold text-[#111]">Cash on Delivery</span>
+                      <span className="mt-1 text-[0.78rem] font-semibold leading-snug text-[#666]">
+                        Pay when delivered
+                      </span>
+                    </button>
+                  </div>
+
+                  {paymentMethod === 'EVC Plus' && (
+                    <div className="mt-4 rounded-xl border border-gold/35 bg-gold/[0.08] px-4 py-3 text-[0.82rem] leading-relaxed text-[#555]">
+                      <p className="mb-2 font-bold text-[#333]">
+                        <i className="fa-solid fa-circle-info me-1 text-gold" />
+                        EVC Plus will charge the phone number above.
                       </p>
+                      {form.phone.trim() ? (
+                        <p className="mb-1">
+                          Target: <strong>{form.phone.trim()}</strong> · Ref:{' '}
+                          <strong>{paymentReference}</strong>
+                        </p>
+                      ) : (
+                        <p className="mb-1">Enter your phone number in the form above.</p>
+                      )}
+                      <p className="mb-0">Approve the prompt on your phone and enter your PIN after placing the order.</p>
                     </div>
-                  </label>
+                  )}
                 </div>
               </div>
 
@@ -700,6 +753,8 @@ export default function Checkout() {
         isOpen={!!confirmOrder}
         order={confirmOrder}
         onClose={() => setConfirmOrder(null)}
+        onRetryPayment={handleRetryPayment}
+        retryingPayment={retryingPayment}
       />
     </div>
   );

@@ -1,7 +1,14 @@
 const User = require('../models/User');
-const { onDriverApplication } = require('../services/notificationService');
-const { countActiveDeliveries, MAX_ACTIVE_DELIVERIES, canDriverAcceptAssignment } = require('../services/driverService');
 const Order = require('../models/Order');
+const { onDriverApplication, onDriverAssignmentAccepted, onDriverAssignmentRejected } = require('../services/notificationService');
+const { logOrderActivity } = require('../services/orderActivityService');
+const {
+  countActiveDeliveries,
+  MAX_ACTIVE_DELIVERIES,
+  canDriverAcceptAssignment,
+  syncDriverStatus,
+  driverLabelFromUser,
+} = require('../services/driverService');
 
 function formatDriverApplication(app) {
   if (!app) return { status: 'none' };
@@ -316,5 +323,121 @@ exports.getMyStatus = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to load driver status.' });
+  }
+};
+
+function withResolvedStatus(order) {
+  const plain = order.toObject ? order.toObject() : { ...order };
+  const step = typeof plain.currentStep === 'number' ? plain.currentStep : 1;
+  if (plain.status) return plain;
+  if (step === 0) plain.status = 'cancelled';
+  else if (step >= 5) plain.status = 'delivered';
+  else if (step >= 4) plain.status = 'shipped';
+  else plain.status = 'processing';
+  return plain;
+}
+
+exports.acceptAssignment = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await Order.findOne({ id: orderId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+    if (order.assignedDriverId !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'This delivery is not assigned to you.' });
+    }
+    if (order.assignmentStatus !== 'pending') {
+      return res.status(400).json({ success: false, message: 'This assignment is no longer pending.' });
+    }
+
+    order.assignmentStatus = 'accepted';
+    if (order.currentStep < 3) {
+      order.currentStep = 3;
+    }
+    order.status = 'processing';
+    order.estimate = 'Driver accepted — preparing dispatch';
+    await order.save();
+
+    await syncDriverStatus(req.user.id);
+    await onDriverAssignmentAccepted(order);
+
+    await logOrderActivity({
+      orderId: order.id,
+      action: 'driver_accepted',
+      description: `${req.user.firstName} accepted the delivery assignment.`,
+      actorId: req.user.id,
+      actorRole: 'delivery',
+      metadata: { driverId: req.user.id },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Delivery accepted. You can start when ready.',
+      order: withResolvedStatus(order),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to accept delivery.' });
+  }
+};
+
+exports.rejectAssignment = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { reason } = req.body;
+    const trimmedReason = String(reason || '').trim();
+
+    if (!trimmedReason) {
+      return res.status(400).json({ success: false, message: 'Please provide a reason for declining.' });
+    }
+
+    const order = await Order.findOne({ id: orderId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+    if (order.assignedDriverId !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'This delivery is not assigned to you.' });
+    }
+    if (order.assignmentStatus !== 'pending') {
+      return res.status(400).json({ success: false, message: 'This assignment is no longer pending.' });
+    }
+
+    const driver = await User.findOne({ id: req.user.id });
+    const driverName = driver ? driverLabelFromUser(driver) : 'Driver';
+
+    order.lastRejectedDriverId = req.user.id;
+    order.assignmentRejectReason = trimmedReason;
+    order.assignmentStatus = 'none';
+    order.assignedDriverId = '';
+    order.driver = 'Not assigned yet';
+    order.estimate = 'Driver declined — assign another driver';
+    await order.save();
+
+    await syncDriverStatus(req.user.id);
+    await onDriverAssignmentRejected(order, {
+      driverId: req.user.id,
+      driverName,
+      reason: trimmedReason,
+    });
+
+    await logOrderActivity({
+      orderId: order.id,
+      action: 'driver_rejected',
+      description: `${driver?.firstName || 'Driver'} declined: ${trimmedReason}`,
+      actorId: req.user.id,
+      actorRole: 'delivery',
+      metadata: { driverId: req.user.id, reason: trimmedReason },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Delivery declined. Admin has been notified.',
+      order: withResolvedStatus(order),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to decline delivery.' });
   }
 };

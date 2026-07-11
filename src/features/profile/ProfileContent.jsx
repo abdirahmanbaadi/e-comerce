@@ -7,6 +7,7 @@ import { formatChatTime, formatMoney, productImage } from '../../utils/format';
 import { downloadInvoice } from '../../utils/invoiceActions';
 import { getDeliveryBadge, getPaymentBadge, resolveOrderStatus } from '../../utils/orderStatus';
 import { showTopFloatNotification } from '../../utils/notifications';
+import RetryPaymentModal from '../checkout/RetryPaymentModal';
 import { AppSearchField } from '../nav/StoreNavbar';
 
 /* ═══ SECTION: INFO TAB ═══ */
@@ -289,6 +290,7 @@ function countOrderItems(order) {
 const STATUS_BADGE = {
   paid: 'bg-[rgba(8,116,67,0.08)] text-[#087443]',
   pending: 'bg-[rgba(216,161,40,0.08)] text-[#A07000]',
+  failed: 'bg-[rgba(192,57,43,0.08)] text-[#c0392b]',
   delivered: 'bg-[rgba(8,116,67,0.08)] text-[#087443]',
   processing: 'bg-[rgba(216,161,40,0.08)] text-[#A07000]',
   'out-for-delivery': 'bg-[rgba(43,89,219,0.08)] text-[#2B59DB]',
@@ -306,6 +308,7 @@ export function ProfileOrdersTab() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [cancellingId, setCancellingId] = useState('');
+  const [retryOrder, setRetryOrder] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -348,7 +351,7 @@ export function ProfileOrdersTab() {
     return orders.filter((order) => {
       const orderId = `#${order.id}`.toLowerCase();
       const delivery = getDeliveryBadge(order.status);
-      const payment = getPaymentBadge(order.paymentType);
+      const payment = getPaymentBadge(order.paymentType, order.payment);
       const deliveryKey = delivery.className;
       const paymentKey = payment.label.toLowerCase();
 
@@ -357,6 +360,7 @@ export function ProfileOrdersTab() {
         statusFilter === 'all' ||
         (statusFilter === 'paid' && paymentKey === 'paid') ||
         (statusFilter === 'pending' && paymentKey === 'pending') ||
+        (statusFilter === 'failed' && paymentKey === 'failed') ||
         deliveryKey === statusFilter;
 
       return matchesSearch && matchesStatus;
@@ -436,6 +440,7 @@ export function ProfileOrdersTab() {
               <option value="all">All Status</option>
               <option value="paid">Paid</option>
               <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
               <option value="delivered">Delivered</option>
               <option value="out-for-delivery">Out for Delivery</option>
               <option value="processing">Processing</option>
@@ -491,11 +496,14 @@ export function ProfileOrdersTab() {
               {!loading &&
                 filteredOrders.map((order) => {
                   const imgSrc = findProductImage(products, order.product);
-                  const payment = getPaymentBadge(order.paymentType);
+                  const payment = getPaymentBadge(order.paymentType, order.payment);
                   const delivery = getDeliveryBadge(order.status);
                   const amountNum = parseFloat(String(order.amount).replace(/[^0-9.]/g, '')) || 0;
                   const itemCount = countOrderItems(order);
                   const canCancel = resolveOrderStatus(order) === 'processing';
+                  const canRetry =
+                    payment.className === 'failed' &&
+                    String(order.paymentMethod || '').toLowerCase().includes('evc');
 
                   return (
                     <tr key={order.id} className="border-b border-black/[0.05]">
@@ -568,6 +576,15 @@ export function ProfileOrdersTab() {
                           >
                             PDF
                           </button>
+                          {canRetry && (
+                            <button
+                              type="button"
+                              className={`${actionLinkClass} text-[#c0392b]`}
+                              onClick={() => setRetryOrder(order)}
+                            >
+                              Retry Payment
+                            </button>
+                          )}
                           {canCancel && (
                             <button
                               type="button"
@@ -587,6 +604,22 @@ export function ProfileOrdersTab() {
           </table>
         </div>
       </div>
+
+      {retryOrder && (
+        <RetryPaymentModal
+          order={retryOrder}
+          userPhone={retryOrder.phone || user?.phone || ''}
+          onClose={() => setRetryOrder(null)}
+          onSuccess={() => {
+            setOrders((prev) =>
+              prev.map((entry) =>
+                entry.id === retryOrder.id ? { ...entry, paymentType: 'paid', payment: 'Paid' } : entry
+              )
+            );
+            setRetryOrder(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -729,6 +762,11 @@ export function ProfileHelpTab({ supportChat }) {
         ? 'bg-green-600 text-white'
         : 'bg-gray-500 text-white';
 
+  const userMessages = useMemo(
+    () => messages.filter((msg) => msg.senderRole === 'user'),
+    [messages]
+  );
+
   return (
     <div>
       <h1 className="mb-1.5 font-display text-[2.2rem] font-extrabold text-deepGreen">Help & Support</h1>
@@ -847,31 +885,25 @@ export function ProfileHelpTab({ supportChat }) {
                 className="mb-2 flex max-h-80 flex-grow flex-col overflow-y-auto rounded-xl border border-black/[0.03] bg-[#f9f9f9] p-2"
                 id="customerChatMessagesList"
               >
-                {messages.map((msg) => {
-                  const isSent = msg.senderRole === 'user';
-                  return (
-                    <div
-                      key={msg.id || `${msg.createdAt}-${msg.messageText}`}
-                      className={`mb-2 flex w-full ${isSent ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`relative max-w-[80%] rounded-xl px-3.5 py-2.5 text-[0.82rem] leading-snug ${
-                          isSent
-                            ? 'rounded-br-sm bg-deepGreen text-white'
-                            : 'rounded-bl-sm border border-black/[0.05] bg-gray-200 text-gray-800'
-                        }`}
-                      >
-                        <div className="mb-0.5 text-[0.65rem] font-bold opacity-85">
-                          {isSent ? 'Aniga' : 'Support Team'}
-                        </div>
-                        {msg.messageText}
-                        <span className="mt-1 block text-right text-[0.6rem] opacity-70">
-                          {formatChatTime(msg.createdAt)}
-                        </span>
-                      </div>
+                {activeTicket?.status === 'Replied' ? (
+                  <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-[0.78rem] leading-relaxed text-green-800">
+                    <i className="fa-regular fa-bell mr-1.5" />
+                    Support wuu ka soo jawaabay. Jawaabta buuxda waxaad ka arki kartaa{' '}
+                    <strong>Notifications → Support Replied</strong>.
+                  </div>
+                ) : null}
+
+                {userMessages.map((msg) => (
+                  <div key={msg.id || `${msg.createdAt}-${msg.messageText}`} className="mb-2 flex w-full justify-end">
+                    <div className="relative max-w-[80%] rounded-xl rounded-br-sm bg-deepGreen px-3.5 py-2.5 text-[0.82rem] leading-snug text-white">
+                      <div className="mb-0.5 text-[0.65rem] font-bold opacity-85">Aniga</div>
+                      {msg.messageText}
+                      <span className="mt-1 block text-right text-[0.6rem] opacity-70">
+                        {formatChatTime(msg.createdAt)}
+                      </span>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
 
               <form className="flex shrink-0 gap-2" onSubmit={handleChatSubmit}>

@@ -72,6 +72,46 @@ export function paymentBadgeClass(payment) {
   return 'bg-amber-100 text-amber-800 [.admin-dark_&]:bg-amber-500/15 [.admin-dark_&]:text-amber-300';
 }
 
+export function getDriverAssignmentMeta(order) {
+  const status = order?.assignmentStatus || 'none';
+  if (status === 'pending') {
+    return {
+      label: 'Driver pending',
+      cls: 'bg-amber-100 text-amber-800 [.admin-dark_&]:bg-amber-500/15 [.admin-dark_&]:text-amber-300',
+      icon: 'fa-clock',
+    };
+  }
+  if (status === 'accepted' && order?.assignedDriverId) {
+    return {
+      label: 'Driver accepted',
+      cls: 'bg-emerald-100 text-emerald-800 [.admin-dark_&]:bg-emerald-500/15 [.admin-dark_&]:text-emerald-300',
+      icon: 'fa-circle-check',
+    };
+  }
+  if (order?.assignmentRejectReason) {
+    return {
+      label: 'Driver rejected',
+      cls: 'bg-red-100 text-red-800 [.admin-dark_&]:bg-red-500/15 [.admin-dark_&]:text-red-300',
+      icon: 'fa-circle-xmark',
+      reason: order.assignmentRejectReason,
+    };
+  }
+  return null;
+}
+
+export function buildDriverAssignmentHint(order) {
+  const meta = getDriverAssignmentMeta(order);
+  if (!meta) return '';
+  if (meta.reason) return `Last driver declined: "${meta.reason}". Assign another driver.`;
+  if (order.assignmentStatus === 'pending') {
+    return 'Waiting for the assigned driver to accept or decline this delivery.';
+  }
+  if (order.assignmentStatus === 'accepted') {
+    return 'Driver accepted this delivery. You can reassign if needed.';
+  }
+  return '';
+}
+
 export function parseOrderDate(order) {
   if (order.createdAt) return new Date(order.createdAt);
   if (order.date) {

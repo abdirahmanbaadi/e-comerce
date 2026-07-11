@@ -3,14 +3,14 @@ const OrderActivity = require('../models/OrderActivity');
 const PaymentTransaction = require('../models/PaymentTransaction');
 const User = require('../models/User');
 const Product = require('../models/Product');
-const { onOrderCreated, onOrderUpdated, userAllowsEmailAlerts } = require('../services/notificationService');
+const { onOrderCreated, onOrderUpdated, onDriverAssignmentPending, onDriverUnassigned, userAllowsEmailAlerts } = require('../services/notificationService');
 const { sendOrderConfirmationEmail } = require('../services/emailService');
 const { logUserActivity } = require('../services/activityService');
 const { resolveCoupon } = require('./couponController');
 const { logPaymentTransaction } = require('../services/paymentService');
 const { logOrderActivity } = require('../services/orderActivityService');
 const { resolveDistrictDeliveryFee } = require('../utils/deliveryFeeUtils');
-const { normalizePhone } = require('../utils/phoneUtils');
+const { normalizePhone, findUserByPhone } = require('../utils/phoneUtils');
 const {
   maskPhone,
   maskCustomerName,
@@ -36,6 +36,14 @@ function withResolvedStatus(order) {
   const plain = order.toObject ? order.toObject() : { ...order };
   plain.status = resolveOrderStatus(plain);
   return plain;
+}
+
+function isAssignmentAccepted(order) {
+  const status = order.assignmentStatus || 'none';
+  if (status === 'accepted') return true;
+  if (status === 'pending' || status === 'rejected') return false;
+  if (order.assignedDriverId && (order.currentStep || 0) >= 3) return true;
+  return false;
 }
 
 async function deliveryCanAccessOrder(user, order) {
@@ -217,6 +225,12 @@ exports.placeOrder = async (req, res) => {
 
     const orderEmail = email || req.user?.email || '';
 
+    let linkedUserId = req.user?.id || '';
+    if (!linkedUserId && phone) {
+      const matchedUser = await findUserByPhone(User, phone);
+      linkedUserId = matchedUser?.id || '';
+    }
+
     const newOrder = await Order.create({
       id: orderId,
       phone,
@@ -234,7 +248,7 @@ exports.placeOrder = async (req, res) => {
       product,
       items: Array.isArray(items) ? items : [],
       email: orderEmail,
-      userId: req.user?.id || '',
+      userId: linkedUserId,
       deliveryDate: deliveryDate || '',
       deliveryTime: deliveryTime || '',
       date: dateString,
@@ -264,11 +278,11 @@ exports.placeOrder = async (req, res) => {
 
     await decrementStockForItems(newOrder.items);
 
-    await onOrderCreated(newOrder, { userId: req.user?.id });
+    await onOrderCreated(newOrder, { userId: linkedUserId });
 
-    if (req.user?.id) {
+    if (linkedUserId) {
       await logUserActivity({
-        userId: req.user.id,
+        userId: linkedUserId,
         action: 'order_placed',
         description: `Order ${orderId} placed.`,
         metadata: { orderId, amount, product },
@@ -332,7 +346,6 @@ function sanitizeOrderForPublicTrack(order, verifyPhone) {
 exports.trackOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const verifyPhone = req.query.phone || req.body?.phone || '';
 
     if (!orderId) {
       return res.status(400).json({ success: false, message: 'Please enter Order ID!' });
@@ -347,7 +360,7 @@ exports.trackOrder = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      order: sanitizeOrderForPublicTrack(order, verifyPhone),
+      order: withResolvedStatus(order),
       activities,
     });
   } catch (error) {
@@ -425,7 +438,7 @@ exports.cancelOrder = async (req, res) => {
 };
 
 const ORDER_LIST_FIELDS =
-  'id customer amount address phone product date payment paymentType status currentStep estimate driver assignedDriverId userId items subtotal deliveryFee discount paymentMethod createdAt updatedAt';
+  'id customer amount address phone product date payment paymentType status currentStep estimate driver assignedDriverId assignmentStatus assignmentRejectReason userId items subtotal deliveryFee discount paymentMethod createdAt updatedAt';
 
 function parseLimit(value, fallback = 0) {
   const n = Number(value);
@@ -521,15 +534,24 @@ exports.assignDriver = async (req, res) => {
       });
     }
 
-    const previousStatus = resolveOrderStatus(order);
     const previousDriverId = order.assignedDriverId;
     const isReassigning = Boolean(previousDriverId && previousDriverId !== driver.id);
+
+    if (previousDriverId && previousDriverId !== driver.id) {
+      const previousDriver = await User.findOne({ id: previousDriverId });
+      await onDriverUnassigned(order, {
+        driverId: previousDriverId,
+        driverName: previousDriver ? driverLabelFromUser(previousDriver) : 'Driver',
+        reason: 'Admin assigned another driver to this order.',
+      });
+    }
 
     if (previousDriverId !== driver.id) {
       const activeOnOtherOrders = await Order.countDocuments({
         assignedDriverId: driver.id,
         id: { $ne: order.id },
-        currentStep: { $gte: 3, $lt: 5 },
+        assignmentStatus: { $in: ['pending', 'accepted'] },
+        currentStep: { $lt: 5 },
         status: { $nin: ['cancelled'] },
       });
       if (activeOnOtherOrders >= MAX_ACTIVE_DELIVERIES) {
@@ -543,11 +565,9 @@ exports.assignDriver = async (req, res) => {
 
     order.assignedDriverId = driver.id;
     order.driver = driverLabelFromUser(driver);
-    if (order.currentStep < 3) {
-      order.currentStep = 3;
-      order.status = 'processing';
-      order.estimate = order.estimate || 'Driver assigned — preparing dispatch';
-    }
+    order.assignmentStatus = 'pending';
+    order.assignmentRejectReason = '';
+    order.estimate = 'Awaiting driver acceptance';
 
     await order.save();
 
@@ -556,28 +576,24 @@ exports.assignDriver = async (req, res) => {
     }
     await syncDriverStatus(driver.id);
 
-    await onOrderUpdated(order, {
-      driverAssigned: previousDriverId !== driver.id,
-      status: resolveOrderStatus(order),
-      statusChanged: previousStatus !== resolveOrderStatus(order),
-    });
+    await onDriverAssignmentPending(order, driver);
 
     await logOrderActivity({
       orderId: order.id,
       action: isReassigning ? 'driver_reassigned' : 'driver_assigned',
       description: isReassigning
-        ? `Driver reassigned to ${driver.firstName}.`
-        : `Driver ${driver.firstName} assigned.`,
+        ? `Delivery request sent to ${driver.firstName} (awaiting acceptance).`
+        : `Delivery request sent to ${driver.firstName} (awaiting acceptance).`,
       actorId: req.user?.id || '',
       actorRole: req.user?.role || 'admin',
-      metadata: { driverId: driver.id, driverName: order.driver },
+      metadata: { driverId: driver.id, driverName: order.driver, assignmentStatus: 'pending' },
     });
 
     return res.status(200).json({
       success: true,
       message: isReassigning
-        ? `Order reassigned to ${driver.firstName}.`
-        : `Order assigned to ${driver.firstName}.`,
+        ? `Order reassigned to ${driver.firstName}. Waiting for driver acceptance.`
+        : `Order sent to ${driver.firstName}. Waiting for driver acceptance.`,
       order: withResolvedStatus(order),
     });
   } catch (error) {
@@ -605,6 +621,13 @@ exports.updateOrder = async (req, res) => {
       const allowed = await deliveryCanAccessOrder(req.user, order);
       if (!allowed) {
         return res.status(403).json({ success: false, message: 'This order is not assigned to you.' });
+      }
+
+      if (!isAssignmentAccepted(order)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please accept this delivery assignment before updating the order.',
+        });
       }
 
       if (currentStep !== undefined) order.currentStep = parseInt(currentStep, 10);

@@ -24,6 +24,8 @@ import {
   isDriverSelectable,
   driverOptionLabel,
   MAX_DRIVER_ACTIVE,
+  getDriverAssignmentMeta,
+  buildDriverAssignmentHint,
 } from './adminShared.js';
 
 const BTN_OUTLINE_SUCCESS =
@@ -42,10 +44,10 @@ const DELIVERY_STAGES = [
 ];
 
 const DEFAULT_FEES = {
-  Hodan: 0.001,
-  Wadajir: 0.001,
-  Karaan: 0.002,
-  Hamarweyne: 0.001,
+  Hodan: 0.01,
+  Wadajir: 0.01,
+  Karaan: 0.02,
+  Hamarweyne: 0.01,
 };
 
 function getStockVal(p) {
@@ -715,7 +717,7 @@ export function AdminDeliveryTab() {
     try {
       const headers = authHeaders(false);
       const [ordersRes, driversRes] = await Promise.all([
-        fetchWithTimeout(apiUrl('/api/orders?limit=500'), { headers }, ADMIN_FETCH_TIMEOUT),
+        fetchWithTimeout(apiUrl('/api/orders?limit=120'), { headers }, ADMIN_FETCH_TIMEOUT),
         fetchWithTimeout(apiUrl('/api/drivers/approved'), { headers }, ADMIN_FETCH_TIMEOUT),
       ]);
       const [ordersData, driversData] = await Promise.all([ordersRes.json(), driversRes.json()]);
@@ -758,14 +760,18 @@ export function AdminDeliveryTab() {
   }, [dispatchOrders]);
 
   const buildDriverHint = (order, driverList) => {
+    const assignmentHint = buildDriverAssignmentHint(order);
     const current = driverList.find((d) => d.id === order.assignedDriverId);
+    let hint = '';
     if (current) {
-      return `Current driver: ${current.name} (${current.activeDeliveries || 0}/${MAX_DRIVER_ACTIVE} active). Choose another driver to reassign.`;
+      hint = `Current driver: ${current.name} (${current.activeDeliveries || 0}/${MAX_DRIVER_ACTIVE} active). Choose another driver to reassign.`;
+    } else if (order.driver && order.driver !== 'Not assigned yet') {
+      hint = `Currently: ${order.driver}. Select an approved driver below to assign or reassign.`;
+    } else {
+      hint = `Offline drivers are blocked. Busy drivers accept new orders until they reach ${MAX_DRIVER_ACTIVE} active deliveries.`;
     }
-    if (order.driver && order.driver !== 'Not assigned yet') {
-      return `Currently: ${order.driver}. Select an approved driver below to assign or reassign.`;
-    }
-    return `Offline drivers are blocked. Busy drivers accept new orders until they reach ${MAX_DRIVER_ACTIVE} active deliveries.`;
+    if (assignmentHint) hint += ` ${assignmentHint}`;
+    return hint;
   };
 
   const openEditModal = (order) => {
@@ -832,21 +838,37 @@ export function AdminDeliveryTab() {
   };
 
   const renderDriverCell = (order) => {
+    const assignment = getDriverAssignmentMeta(order);
     const driver = drivers.find((d) => d.id === order.assignedDriverId);
-    if (driver) {
-      return (
-        <span className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[0.75rem] font-extrabold ${driverPillClass(driver)}`}>
-          <i className="fa-solid fa-motorcycle" aria-hidden="true" />
-          {driverPillLabel(driver)}
-        </span>
-      );
-    }
-    const fallback = order.driver || 'Not assigned';
-    return (
+    const driverPill = driver ? (
+      <span className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[0.75rem] font-extrabold ${driverPillClass(driver)}`}>
+        <i className="fa-solid fa-motorcycle" aria-hidden="true" />
+        {driverPillLabel(driver)}
+      </span>
+    ) : (
       <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-[0.78rem] font-semibold text-gray-600 [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-white/5 [.admin-dark_&]:text-gray-300">
         <i className="fa-solid fa-user-tag text-blue-500" aria-hidden="true" />
-        {fallback}
+        {order.driver || 'Not assigned'}
       </span>
+    );
+
+    return (
+      <div className="space-y-1.5">
+        {driverPill}
+        {assignment && (
+          <div>
+            <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[0.7rem] font-extrabold ${assignment.cls}`}>
+              <i className={`fa-solid ${assignment.icon}`} aria-hidden="true" />
+              {assignment.label}
+            </span>
+            {assignment.reason && (
+              <div className="mt-1 max-w-[220px] text-[0.72rem] leading-snug text-red-600 [.admin-dark_&]:text-red-300" title={assignment.reason}>
+                {assignment.reason}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     );
   };
 

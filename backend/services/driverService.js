@@ -7,6 +7,7 @@ async function countActiveDeliveries(driverId) {
   if (!driverId) return 0;
   return Order.countDocuments({
     assignedDriverId: driverId,
+    assignmentStatus: 'accepted',
     currentStep: { $gte: 3, $lt: 5 },
     status: { $nin: ['cancelled'] },
   });

@@ -23,7 +23,7 @@ const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, JWT_SECRET);
 
       // Get user from the token
-      const user = await User.findOne({ id: decoded.id });
+      const user = await User.findOne({ id: decoded.id }).select('-password').lean();
       
       if (!user) {
         return res.status(401).json({ success: false, message: 'Fadlan dib u soo gal, isticmaalahaan lama helin!' });

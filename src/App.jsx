@@ -11,10 +11,13 @@ import Checkout from './pages/Checkout';
 import { LoginPage, RegisterPage } from './pages/Auth';
 import Profile from './pages/Profile';
 import TrackOrder from './pages/TrackOrder';
+import About from './pages/About';
+import Contact from './pages/Contact';
 import ApplyDelivery from './pages/ApplyDelivery';
 import Delivery from './pages/Delivery';
 import ProtectedRoute from './components/ProtectedRoute';
 import ScrollToTop from './components/ScrollToTop';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const Admin = lazy(() => import('./pages/Admin'));
 
@@ -30,6 +33,15 @@ function AppRoutes() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/profile" element={<Profile />} />
       <Route path="/track-order" element={<TrackOrder />} />
+      <Route path="/about" element={<About />} />
+      <Route
+        path="/contact"
+        element={
+          <ErrorBoundary>
+            <Contact />
+          </ErrorBoundary>
+        }
+      />
       <Route path="/apply-delivery" element={<ApplyDelivery />} />
       <Route
         path="/delivery"

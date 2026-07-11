@@ -41,6 +41,12 @@ function getStatusMeta(status) {
       cls: 'bg-teal-100 text-teal-700 [.admin-dark_&]:bg-teal-500/15 [.admin-dark_&]:text-teal-300',
     };
   }
+  if (status === 'Closed') {
+    return {
+      label: 'Closed',
+      cls: 'bg-gray-100 text-gray-600 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-gray-300',
+    };
+  }
   return {
     label: status || 'Closed',
     cls: 'bg-gray-100 text-gray-600 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-gray-300',
@@ -165,6 +171,7 @@ export default function AdminSupportTab({ headerSearch = '' }) {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   const messagesEndRef = useRef(null);
   const sseRetryRef = useRef(null);
@@ -185,7 +192,6 @@ export default function AdminSupportTab({ headerSearch = '' }) {
       if (data.success) {
         const sorted = sortTickets(data.tickets || []);
         setTickets(sorted);
-        window.dispatchEvent(new CustomEvent('admin-dashboard-invalidate'));
       }
     } catch (err) {
       console.error('Error loading admin support data:', err);
@@ -376,6 +382,40 @@ export default function AdminSupportTab({ headerSearch = '' }) {
     }
   };
 
+  const handleCloseTicket = async () => {
+    if (!activeTicketId || !token()) return;
+    if (activeTicket?.status === 'Closed') return;
+
+    setClosing(true);
+    try {
+      const res = await fetch(apiUrl(`/api/support/admin/chats/${activeTicketId}/close`), {
+        method: 'PATCH',
+        headers: authHeaders(),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showTopFloatNotification('Ticket closed.');
+        if (data.ticket) {
+          setActiveTicket(data.ticket);
+          setTickets((prev) =>
+            sortTickets(prev.map((t) => (t.id === data.ticket.id ? { ...t, ...data.ticket } : t)))
+          );
+        } else {
+          await loadTickets({ quiet: true });
+          await loadMessages(activeTicketId, { quiet: true });
+        }
+        window.dispatchEvent(new CustomEvent('admin-support-invalidate'));
+      } else {
+        showTopFloatNotification(data.message || 'Could not close ticket.', 'danger');
+      }
+    } catch (err) {
+      console.error(err);
+      showTopFloatNotification('Could not connect to the server. Try again.', 'danger');
+    } finally {
+      setClosing(false);
+    }
+  };
+
   const displayTicket =
     filteredTickets.length === 0
       ? null
@@ -430,7 +470,7 @@ export default function AdminSupportTab({ headerSearch = '' }) {
           <>
             <header className="flex items-center gap-3 border-b border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/[0.06]">
               <TicketAvatar name={displayTicket.name} avatar={displayTicket.avatar} size={40} />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="truncate text-base font-extrabold text-gray-900 [.admin-dark_&]:text-gray-100">
                   {displayTicket.name}
                 </div>
@@ -438,6 +478,20 @@ export default function AdminSupportTab({ headerSearch = '' }) {
                   {displayTicket.email} • Ticket ID: {displayTicket.id}
                 </div>
               </div>
+              {displayTicket.status !== 'Closed' ? (
+                <button
+                  type="button"
+                  onClick={handleCloseTicket}
+                  disabled={closing}
+                  className="shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[0.78rem] font-bold text-red-700 transition hover:bg-red-100 disabled:opacity-60 [.admin-dark_&]:border-red-500/30 [.admin-dark_&]:bg-red-500/10 [.admin-dark_&]:text-red-300"
+                >
+                  {closing ? 'Closing…' : 'Close ticket'}
+                </button>
+              ) : (
+                <span className="shrink-0 rounded-xl bg-gray-100 px-3 py-2 text-[0.78rem] font-bold text-gray-600 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-gray-300">
+                  Closed
+                </span>
+              )}
             </header>
 
             <div className={CHAT_MESSAGES}>
@@ -464,6 +518,11 @@ export default function AdminSupportTab({ headerSearch = '' }) {
             </div>
 
             <div className="border-t border-gray-100 bg-white p-4 [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-[#141f1b]">
+              {displayTicket.status === 'Closed' ? (
+                <p className="m-0 text-center text-[0.85rem] text-gray-500 [.admin-dark_&]:text-gray-400">
+                  This ticket is closed. Reopen by having the customer send a new message.
+                </p>
+              ) : (
               <form className="flex items-end gap-3" onSubmit={handleSendReply}>
                 <textarea
                   id="supportReplyMessage"
@@ -484,6 +543,7 @@ export default function AdminSupportTab({ headerSearch = '' }) {
                   <i className="fa-regular fa-paper-plane" />
                 </button>
               </form>
+              )}
             </div>
           </>
         )}

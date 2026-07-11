@@ -1,7 +1,7 @@
 /**
  * STORE PRODUCTS — ProductCard + ProductModal (Tailwind only)
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { apiUrl } from '../../utils/data';
@@ -148,9 +148,43 @@ export default function ProductModal({ isOpen, product, onClose }) {
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewBlocked, setReviewBlocked] = useState('');
 
-  const images = (product?.images || []).filter(Boolean);
+  const images = [...new Set((product?.images || []).filter(Boolean))];
   const inStock = product?.stock !== 'out-of-stock';
   const wishlisted = product ? isWishlisted(product.title) : false;
+  const swipeRef = useRef({ startX: 0, dragging: false });
+  const SWIPE_THRESHOLD = 48;
+
+  const goToSlide = (direction) => {
+    if (images.length <= 1) return;
+    setActiveSlide((current) => {
+      if (direction < 0) return current > 0 ? current - 1 : images.length - 1;
+      return current < images.length - 1 ? current + 1 : 0;
+    });
+  };
+
+  const handleSwipeStart = (event) => {
+    if (images.length <= 1) return;
+    swipeRef.current = { startX: event.clientX, dragging: true };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleSwipeEnd = (event) => {
+    if (!swipeRef.current.dragging || images.length <= 1) return;
+    const delta = event.clientX - swipeRef.current.startX;
+    swipeRef.current.dragging = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (Math.abs(delta) < SWIPE_THRESHOLD) return;
+    goToSlide(delta > 0 ? -1 : 1);
+  };
+
+  const handleSwipeCancel = (event) => {
+    swipeRef.current.dragging = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen || !product) return undefined;
@@ -279,26 +313,72 @@ export default function ProductModal({ isOpen, product, onClose }) {
             {/* Images */}
             <div className="w-full md:w-1/2">
               <div className="mb-3 h-[300px] overflow-hidden rounded-[14px] border border-black/[0.05] bg-white md:h-[390px]">
-                <div className="relative h-full">
+                <div
+                  className={`relative h-full touch-pan-y select-none ${images.length > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                  onPointerDown={handleSwipeStart}
+                  onPointerUp={handleSwipeEnd}
+                  onPointerCancel={handleSwipeCancel}
+                  role={images.length > 1 ? 'region' : undefined}
+                  aria-label={images.length > 1 ? 'Product images. Swipe or drag to change image.' : undefined}
+                >
                   {images.map((img, index) => (
                     <div
-                      key={img}
-                      className={`h-full ${index === activeSlide ? 'block' : 'hidden'}`}
+                      key={`${img}-${index}`}
+                      className={`absolute inset-0 transition-opacity duration-200 ${
+                        index === activeSlide ? 'z-[1] opacity-100' : 'z-0 opacity-0 pointer-events-none'
+                      }`}
                     >
                       <img
                         src={productImage(img)}
-                        alt={product.title}
+                        alt={`${product.title} — image ${index + 1}`}
                         className="block h-full w-full object-cover"
+                        draggable={false}
+                        loading={index <= 1 ? 'eager' : 'lazy'}
                       />
                     </div>
                   ))}
+
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        className="absolute left-3 top-1/2 z-[2] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border-0 bg-white/90 text-deepGreen shadow-md transition hover:bg-white"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          goToSlide(-1);
+                        }}
+                        aria-label="Previous image"
+                      >
+                        <i className="fa-solid fa-chevron-left" />
+                      </button>
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 z-[2] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border-0 bg-white/90 text-deepGreen shadow-md transition hover:bg-white"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          goToSlide(1);
+                        }}
+                        aria-label="Next image"
+                      >
+                        <i className="fa-solid fa-chevron-right" />
+                      </button>
+                      <div className="pointer-events-none absolute bottom-3 left-1/2 z-[2] flex -translate-x-1/2 gap-1.5">
+                        {images.map((img, index) => (
+                          <span
+                            key={`${img}-${index}`}
+                            className={`h-1.5 rounded-full transition-all ${index === activeSlide ? 'w-5 bg-white' : 'w-1.5 bg-white/55'}`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2.5">
                 {images.map((img, index) => (
                   <button
-                    key={img}
+                    key={`${img}-${index}`}
                     type="button"
                     className={`h-[74px] w-[74px] cursor-pointer overflow-hidden rounded-lg border-2 bg-white p-0 transition-colors ${
                       index === activeSlide

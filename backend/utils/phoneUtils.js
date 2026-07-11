@@ -16,8 +16,13 @@ async function findUserByPhone(User, phone) {
   const normalized = normalizePhone(trimmed);
   if (!normalized) return null;
 
-  const users = await User.find();
-  return users.find((u) => normalizePhone(u.phone) === normalized) || null;
+  const candidates = await User.find({
+    phone: { $exists: true, $ne: '' },
+  })
+    .select('id phone email firstName lastName role password avatar address notificationPreferences driverApplication passwordChangedAt lastLoginAt')
+    .limit(5000);
+
+  return candidates.find((u) => normalizePhone(u.phone) === normalized) || null;
 }
 
 function maskEmail(email) {

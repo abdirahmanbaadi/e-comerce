@@ -38,6 +38,9 @@ export default function Delivery() {
   const [driverStatus, setDriverStatus] = useState('available');
   const [activeDeliveries, setActiveDeliveries] = useState(0);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [rejectOrder, setRejectOrder] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [assignmentBusy, setAssignmentBusy] = useState(null);
 
   const loadDriverStatus = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -113,6 +116,65 @@ export default function Delivery() {
       showTopFloatNotification('Could not update availability', 'danger');
     } finally {
       setStatusSaving(false);
+    }
+  };
+
+  const acceptAssignment = async (order) => {
+    setAssignmentBusy(order.id);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl(`/api/drivers/assignments/${encodeURIComponent(order.id)}/accept`), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        showTopFloatNotification('Delivery accepted!');
+        await loadOrders();
+        await loadDriverStatus();
+      } else {
+        showTopFloatNotification(data.message || 'Could not accept delivery', 'danger');
+      }
+    } catch {
+      showTopFloatNotification('Could not accept delivery', 'danger');
+    } finally {
+      setAssignmentBusy(null);
+    }
+  };
+
+  const submitReject = async () => {
+    if (!rejectOrder) return;
+    const reason = rejectReason.trim();
+    if (!reason) {
+      showTopFloatNotification('Please enter a reason for declining.', 'danger');
+      return;
+    }
+
+    setAssignmentBusy(rejectOrder.id);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl(`/api/drivers/assignments/${encodeURIComponent(rejectOrder.id)}/reject`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showTopFloatNotification('Delivery declined. Admin notified.');
+        setRejectOrder(null);
+        setRejectReason('');
+        await loadOrders();
+        await loadDriverStatus();
+      } else {
+        showTopFloatNotification(data.message || 'Could not decline delivery', 'danger');
+      }
+    } catch {
+      showTopFloatNotification('Could not decline delivery', 'danger');
+    } finally {
+      setAssignmentBusy(null);
     }
   };
 
@@ -217,16 +279,22 @@ export default function Delivery() {
             {orders.map((order) => {
               const step = order.currentStep || 1;
               const isDelivered = step >= 5 || order.status === 'delivered';
+              const isPending = order.assignmentStatus === 'pending';
+              const isAccepted =
+                order.assignmentStatus === 'accepted' ||
+                ((!order.assignmentStatus || order.assignmentStatus === 'none') && step >= 3);
               const phoneDigits = normalizePhone(order.phone);
               const telHref = phoneDigits ? `tel:${phoneDigits.startsWith('252') ? '+' : '+252'}${phoneDigits.replace(/^252|^0/, '')}` : undefined;
               const mapsQuery = encodeURIComponent(order.address || '');
-              const busy = updatingId === order.id;
+              const busy = updatingId === order.id || assignmentBusy === order.id;
 
               return (
-                <article key={order.id} className={`delivery-card ${isDelivered ? 'delivery-card--done' : ''}`}>
+                <article key={order.id} className={`delivery-card ${isDelivered ? 'delivery-card--done' : ''} ${isPending ? 'delivery-card--pending' : ''}`}>
                   <div className="delivery-card-top">
                     <span className="delivery-order-id">{order.id}</span>
-                    <span className="delivery-step-badge">{getStepLabel(step)}</span>
+                    <span className="delivery-step-badge">
+                      {isPending ? 'Awaiting your response' : getStepLabel(step)}
+                    </span>
                   </div>
                   <h3>{order.customer}</h3>
                   <p className="delivery-address">
@@ -258,7 +326,31 @@ export default function Delivery() {
                     </a>
                   </div>
 
-                  {!isDelivered && (
+                  {!isDelivered && isPending && (
+                    <div className="delivery-status-actions">
+                      <button
+                        type="button"
+                        className="delivery-btn delivery-btn--success"
+                        disabled={busy}
+                        onClick={() => acceptAssignment(order)}
+                      >
+                        Accept Delivery
+                      </button>
+                      <button
+                        type="button"
+                        className="delivery-btn delivery-btn--outline"
+                        disabled={busy}
+                        onClick={() => {
+                          setRejectOrder(order);
+                          setRejectReason('');
+                        }}
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  )}
+
+                  {!isDelivered && isAccepted && (
                     <div className="delivery-status-actions">
                       {step < 4 && (
                         <button
@@ -288,6 +380,40 @@ export default function Delivery() {
           </div>
         )}
       </main>
+
+      {rejectOrder && (
+        <div className="delivery-reject-overlay" role="presentation" onClick={() => setRejectOrder(null)}>
+          <div
+            className="delivery-reject-modal"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Decline delivery {rejectOrder.id}?</h3>
+            <p>Please tell admin why you cannot take this order.</p>
+            <textarea
+              className="delivery-reject-input"
+              rows={4}
+              placeholder="Example: Too far from my area / vehicle issue / at capacity"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+            />
+            <div className="delivery-reject-actions">
+              <button type="button" className="delivery-btn delivery-btn--outline" onClick={() => setRejectOrder(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="delivery-btn delivery-btn--primary"
+                disabled={assignmentBusy === rejectOrder.id}
+                onClick={submitReject}
+              >
+                Send decline reason
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

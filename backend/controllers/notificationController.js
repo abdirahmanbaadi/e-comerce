@@ -30,6 +30,11 @@ const UI_META = {
   driver_application: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-processing' },
   new_support_ticket: { iconType: 'support-replied', dot: 'grey', iconWrap: 'solid-brown', modalType: 'support-replied' },
   delivery_assigned: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'delivery-assigned' },
+  delivery_accepted: { iconType: 'order-confirmed', dot: 'green', iconWrap: 'solid-green', modalType: 'order-confirmed' },
+  driver_rejected: { iconType: 'payment-failed', dot: 'red', iconWrap: 'solid-red', modalType: 'payment-failed' },
+  support_message: { iconType: 'support-replied', dot: 'grey', iconWrap: 'solid-brown', modalType: 'support-replied' },
+  order_status_changed: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-processing' },
+  delivery_unassigned: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'delivery-assigned' },
   review_moderated: { iconType: 'weekend-offer', dot: 'green', iconWrap: 'solid-green', modalType: 'review-moderated' },
 };
 
