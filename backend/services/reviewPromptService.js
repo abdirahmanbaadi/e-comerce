@@ -1,10 +1,15 @@
 const Order = require('../models/Order');
 const Review = require('../models/Review');
 const Product = require('../models/Product');
-const { normalizePhone } = require('../utils/phoneUtils');
+const { normalizePhone, buildUserOrdersQuery } = require('../utils/phoneUtils');
 
-const FIRST_PROMPT_DELAY_MS = 60 * 60 * 1000;
-const REMINDER_DELAY_MS = 24 * 60 * 60 * 1000;
+const {
+  REVIEW_FIRST_PROMPT_DELAY_MS,
+  REVIEW_REMINDER_DELAY_MS,
+} = require('../config/timingConfig');
+
+const FIRST_PROMPT_DELAY_MS = REVIEW_FIRST_PROMPT_DELAY_MS;
+const REMINDER_DELAY_MS = REVIEW_REMINDER_DELAY_MS;
 const MAX_REVIEW_PROMPTS = 3;
 
 function isOrderPaid(order) {
@@ -20,11 +25,7 @@ function isOrderDelivered(order) {
 }
 
 function buildUserOrderQuery(user) {
-  if (!user?.id && !user?.phone) return null;
-  if (user.id) {
-    return { $or: [{ userId: user.id }, { phone: normalizePhone(user.phone) }] };
-  }
-  return { phone: normalizePhone(user.phone) };
+  return buildUserOrdersQuery(user);
 }
 
 async function resolveProductId(item, fallbackTitle) {

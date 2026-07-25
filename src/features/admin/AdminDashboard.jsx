@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiUrl, fetchWithTimeout } from '../../utils/data';
+import { productImage } from '../../utils/format';
 import { showTopFloatNotification } from '../../utils/notifications';
 import { useIntervalWhenVisible } from '../../hooks/useIntervalWhenVisible';
 import { getAvatarBgColor, getOrderPaymentLabel, paymentBadgeClass, getDashboardRefreshMs, getDashboardSalesRange, getDashboardTopProductsRange, ADMIN_SETTINGS_KEYS, ADM_DARK_SURFACE_SM, ADM_DARK_TEXT, ADM_DARK_TEXT_BODY, ADM_DARK_TEXT_MUTED, ADM_DARK_DIVIDE, ADM_DARK_BTN, ADM_DARK_LINK } from './adminShared.js';
@@ -19,6 +20,7 @@ const SALES_RANGE_OPTIONS = [
 ];
 
 const TOP_PRODUCTS_RANGE_OPTIONS = [
+  { id: 'all', label: 'All Time' },
   { id: 'week', label: 'Week' },
   { id: 'month', label: 'Month' },
   { id: 'year', label: 'Year' },
@@ -28,6 +30,89 @@ function parseDashboardDate(str) {
   if (!str) return null;
   const parsed = new Date(str);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isPaidDashboardOrder(order) {
+  return order.paymentType === 'paid' || String(order.payment || '').toLowerCase() === 'paid';
+}
+
+function isCancelledDashboardOrder(order) {
+  return order.currentStep === 0 || String(order.status || '').toLowerCase() === 'cancelled';
+}
+
+function isTopProductsEligibleOrder(order) {
+  if (!isPaidDashboardOrder(order) || isCancelledDashboardOrder(order)) return false;
+  const step = typeof order.currentStep === 'number' ? order.currentStep : 1;
+  return step >= 4;
+}
+
+function getTopProductsSalesDate(order) {
+  return parseDashboardDate(order.deliveredAt || order.updatedAt || order.paidAt || order.createdAt || order.date);
+}
+
+function isDateInTopProductsRange(date, range) {
+  const now = new Date();
+  if (range === 'all') return true;
+  if (range === 'week') {
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - 7);
+    return date >= weekStart && date <= now;
+  }
+  if (range === 'month') {
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    return date >= monthStart && date <= now;
+  }
+  if (range === 'year') {
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    return date >= yearStart && date <= now;
+  }
+  return true;
+}
+
+function buildTopProductsFromOrders(orders, range) {
+  const counts = new Map();
+
+  (orders || [])
+    .filter(isTopProductsEligibleOrder)
+    .forEach((order) => {
+      const salesDate = getTopProductsSalesDate(order);
+      if (!salesDate || !isDateInTopProductsRange(salesDate, range)) return;
+
+      const lineItems =
+        Array.isArray(order.items) && order.items.length > 0
+          ? order.items
+          : [{ id: null, title: order.product || 'Unknown product', quantity: 1 }];
+
+      lineItems.forEach((item) => {
+        const title = item.title || order.product || 'Unknown product';
+        const key = `${item.id ?? 'na'}-${title}`;
+        const prev = counts.get(key) || { id: item.id ?? null, title, sold: 0 };
+        prev.sold += Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+        counts.set(key, prev);
+      });
+    });
+
+  return Array.from(counts.values())
+    .sort((a, b) => b.sold - a.sold)
+    .slice(0, 10);
+}
+
+function mergeTopProductsByPeriod(apiPeriod, orders) {
+  const ranges = ['all', 'week', 'month', 'year'];
+
+  if (Array.isArray(orders) && orders.length > 0) {
+    const fromOrders = {};
+    ranges.forEach((range) => {
+      fromOrders[range] = buildTopProductsFromOrders(orders, range);
+    });
+    return fromOrders;
+  }
+
+  const base = apiPeriod && typeof apiPeriod === 'object' ? { ...apiPeriod } : {};
+  ranges.forEach((range) => {
+    if (!Array.isArray(base[range])) base[range] = [];
+  });
+  return base;
 }
 
 function isDateInSalesRange(date, range) {
@@ -300,7 +385,11 @@ function formatRelativeTime(iso) {
   return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-function SupportAvatar({ name }) {
+function SupportAvatar({ name, avatar }) {
+  const src = avatar ? productImage(avatar) : '';
+  if (src) {
+    return <img src={src} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />;
+  }
   const lower = name.toLowerCase();
   if (lower === 'hodan ali') {
     return (
@@ -442,20 +531,17 @@ function StatCard({ label, value, trend, trendEnabled = true, icon, iconWrapClas
   return <div className={className}>{content}</div>;
 }
 
-const QUICK_ACTIONS = [
-  { id: 'add-product', label: 'Add Product', icon: 'fa-plus' },
-  { id: 'view-orders', label: 'Pending Orders', icon: 'fa-clipboard-list' },
-  { id: 'open-support', label: 'Support Inbox', icon: 'fa-headset' },
-];
+const QUICK_ACTIONS = [{ id: 'add-product', label: 'Add Product', icon: 'fa-plus' }];
 
 const ORDER_STATUS_PILLS = [
   { id: 'Pending', label: 'Pending', countKey: 'pending', className: 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-200 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-slate-200' },
   { id: 'Processing', label: 'Processing', countKey: 'processing', className: 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-300 [.admin-dark_&]:bg-amber-500/15 [.admin-dark_&]:text-amber-300' },
+  { id: 'Paid', label: 'Paid', countKey: 'paid', className: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 [.admin-dark_&]:bg-emerald-500/15 [.admin-dark_&]:text-emerald-300' },
   { id: 'Delivered', label: 'Delivered', countKey: 'delivered', className: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 [.admin-dark_&]:bg-emerald-500/15 [.admin-dark_&]:text-emerald-300' },
   { id: 'Cancelled', label: 'Cancelled', countKey: 'cancelled', className: 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/15 dark:text-red-300 [.admin-dark_&]:bg-red-500/15 [.admin-dark_&]:text-red-300' },
 ];
 
-function DashboardToolbar({ loading, statusCounts, onQuickAction, onStatusFilter }) {
+function DashboardToolbar({ loading, statusCounts, activeFilter, onQuickAction, onStatusFilter }) {
   return (
     <div className={`flex flex-col gap-2.5 rounded-xl border border-deepGreen/[0.06] bg-white px-3 py-2.5 shadow-[0_2px_10px_rgba(0,0,0,0.03)] lg:flex-row lg:items-center lg:justify-between ${ADM_DARK_SURFACE_SM}`}>
       <div className="flex flex-wrap gap-2">
@@ -473,19 +559,34 @@ function DashboardToolbar({ loading, statusCounts, onQuickAction, onStatusFilter
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={`mr-1 text-[0.65rem] font-bold uppercase tracking-wide text-gray-400 ${ADM_DARK_TEXT_MUTED}`}>Orders</span>
-        {ORDER_STATUS_PILLS.map((pill) => (
+        {ORDER_STATUS_PILLS.map((pill) => {
+          const isActive = activeFilter === pill.id;
+          return (
+            <button
+              key={pill.id}
+              type="button"
+              onClick={() => onStatusFilter(pill.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.68rem] font-bold transition ${pill.className} ${
+                isActive ? 'ring-2 ring-deepGreen/35 ring-offset-1 [.admin-dark_&]:ring-emerald-400/40' : ''
+              }`}
+              aria-pressed={isActive}
+            >
+              {pill.label}
+              <span className="min-w-[1.1rem] rounded-full bg-white/70 px-1 text-center text-[0.62rem] dark:bg-black/20 [.admin-dark_&]:bg-black/20">
+                {loading ? '…' : (statusCounts?.[pill.countKey] ?? 0)}
+              </span>
+            </button>
+          );
+        })}
+        {activeFilter !== 'all' && (
           <button
-            key={pill.id}
             type="button"
-            onClick={() => onStatusFilter(pill.id)}
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.68rem] font-bold transition ${pill.className}`}
+            onClick={() => onStatusFilter('all')}
+            className="inline-flex items-center rounded-full px-2 py-1 text-[0.65rem] font-bold text-gray-500 transition hover:bg-gray-100 [.admin-dark_&]:text-gray-400 [.admin-dark_&]:hover:bg-white/10"
           >
-            {pill.label}
-            <span className="min-w-[1.1rem] rounded-full bg-white/70 px-1 text-center text-[0.62rem] dark:bg-black/20 [.admin-dark_&]:bg-black/20">
-              {loading ? '…' : (statusCounts?.[pill.countKey] ?? 0)}
-            </span>
+            Clear
           </button>
-        ))}
+        )}
       </div>
     </div>
   );
@@ -524,6 +625,17 @@ function SalesRangeSelect({ value, onChange }) {
 
 const INSIGHTS_PANEL_HEIGHT_PX = 210;
 
+function resolveTopProductsForRange(byPeriod, range) {
+  if (!byPeriod || typeof byPeriod !== 'object') return [];
+  if (range === 'all') {
+    if (Array.isArray(byPeriod.all) && byPeriod.all.length > 0) return byPeriod.all;
+    if (Array.isArray(byPeriod.year) && byPeriod.year.length > 0) return byPeriod.year;
+    if (Array.isArray(byPeriod.month) && byPeriod.month.length > 0) return byPeriod.month;
+    return Array.isArray(byPeriod.week) ? byPeriod.week : [];
+  }
+  return Array.isArray(byPeriod[range]) ? byPeriod[range] : [];
+}
+
 function TopProductsContent({ loading, products, periodLabel, onProductClick }) {
   const maxSold = Math.max(...(products || []).map((p) => p.sold || 0), 1);
 
@@ -536,10 +648,12 @@ function TopProductsContent({ loading, products, periodLabel, onProductClick }) 
     );
   }
   if (!products || products.length === 0) {
+    const emptyText =
+      periodLabel.toLowerCase() === 'all time'
+        ? 'No out-for-delivery sales yet.'
+        : `No out-for-delivery sales this ${periodLabel.toLowerCase()} yet.`;
     return (
-      <p className="py-6 text-center text-[0.8rem] text-gray-400">
-        No sales this {periodLabel.toLowerCase()} yet.
-      </p>
+      <p className="py-6 text-center text-[0.8rem] text-gray-400">{emptyText}</p>
     );
   }
 
@@ -664,7 +778,7 @@ function ProductsInsightsCarousel({
   onViewStock,
   onTopProductClick,
   onLowStockProductClick,
-  defaultTopProductsRange = 'week',
+  defaultTopProductsRange = 'month',
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [topProductsRange, setTopProductsRange] = useState(defaultTopProductsRange);
@@ -674,7 +788,10 @@ function ProductsInsightsCarousel({
     setTopProductsRange(defaultTopProductsRange);
   }, [defaultTopProductsRange]);
 
-  const filteredTopProducts = topProductsByPeriod?.[topProductsRange] ?? [];
+  const filteredTopProducts = useMemo(
+    () => resolveTopProductsForRange(topProductsByPeriod, topProductsRange),
+    [topProductsByPeriod, topProductsRange]
+  );
   const topPeriodLabel =
     TOP_PRODUCTS_RANGE_OPTIONS.find((opt) => opt.id === topProductsRange)?.label || 'Week';
 
@@ -827,10 +944,12 @@ function ProductsInsightsCarousel({
   );
 }
 
-function RecentOrdersPanel({ loading, orders, linkBtn, onViewAll, onViewOrder }) {
+function RecentOrdersPanel({ loading, orders, filterLabel, linkBtn, onViewAll, onViewOrder }) {
+  const title = filterLabel && filterLabel !== 'all' ? `Recent Orders · ${filterLabel}` : 'Recent Orders';
+
   return (
     <CardShell
-      title="Recent Orders"
+      title={title}
       className="!p-3 [&>div:first-child]:!mb-2"
       action={
         <button type="button" className={linkBtn} onClick={onViewAll}>
@@ -865,7 +984,9 @@ function RecentOrdersPanel({ loading, orders, linkBtn, onViewAll, onViewOrder })
             {!loading && orders.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-6 text-center text-[0.8rem] text-gray-400">
-                  No recent orders.
+                  {filterLabel && filterLabel !== 'all'
+                    ? `No orders match the ${filterLabel} filter.`
+                    : 'No recent orders.'}
                 </td>
               </tr>
             )}
@@ -938,11 +1059,14 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
   const [orders, setOrders] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [ordersLoading, setOrdersLoading] = useState(true);
   const [salesRange, setSalesRange] = useState(() => getDashboardSalesRange());
   const [refreshMs, setRefreshMs] = useState(() => getDashboardRefreshMs());
   const [defaultTopProductsRange, setDefaultTopProductsRange] = useState(() => getDashboardTopProductsRange());
   const [modalOrder, setModalOrder] = useState(null);
   const [supportModalTicketId, setSupportModalTicketId] = useState(null);
+  const [supportModalPreview, setSupportModalPreview] = useState(null);
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all');
   const [themeTick, setThemeTick] = useState(0);
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
@@ -950,10 +1074,14 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
   const loadDashboard = useCallback(async ({ quiet = false } = {}) => {
     const token = localStorage.getItem('token');
     if (!token) {
-      if (!quiet) setLoading(false);
+      if (!quiet) {
+        setLoading(false);
+        setOrdersLoading(false);
+      }
       return;
     }
     if (!quiet) setLoading(true);
+    if (!quiet) setOrdersLoading(true);
 
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -998,6 +1126,7 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
         );
         setTickets(sorted);
       }
+      setOrdersLoading(false);
     });
   }, []);
 
@@ -1083,18 +1212,47 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
 
   const dashQuery = headerSearch.toLowerCase().trim();
 
+  const dashboardStatusCounts = useMemo(() => {
+    const counts = {
+      pending: 0,
+      processing: 0,
+      delivered: 0,
+      cancelled: 0,
+      paid: 0,
+    };
+    orders.forEach((order) => {
+      const status = getOrderStatusLabel(order);
+      const payment = getOrderPaymentLabel(order);
+      if (status === 'Pending') counts.pending += 1;
+      else if (status === 'Processing' || status === 'Shipped') counts.processing += 1;
+      else if (status === 'Delivered') counts.delivered += 1;
+      else if (status === 'Cancelled') counts.cancelled += 1;
+      if (payment === 'Paid') counts.paid += 1;
+    });
+    return counts;
+  }, [orders]);
+
   const recentOrders = useMemo(() => {
     let list = orders.slice();
+    if (orderStatusFilter !== 'all') {
+      if (orderStatusFilter === 'Paid') {
+        list = list.filter((order) => getOrderPaymentLabel(order) === 'Paid');
+      } else {
+        list = list.filter((order) => getOrderStatusLabel(order) === orderStatusFilter);
+      }
+    }
     if (dashQuery) {
       list = list.filter((order) => {
         const status = getOrderStatusLabel(order);
-        return [order.id, order.customer, order.amount, order.date, status].some((v) =>
+        const payment = getOrderPaymentLabel(order);
+        return [order.id, order.customer, order.amount, order.date, status, payment].some((v) =>
           String(v || '').toLowerCase().includes(dashQuery)
         );
       });
     }
-    return list.slice(0, 5);
-  }, [orders, dashQuery]);
+    const limit = orderStatusFilter === 'all' ? 5 : 20;
+    return list.slice(0, limit);
+  }, [orders, dashQuery, orderStatusFilter]);
 
   const recentTickets = useMemo(() => {
     let list = tickets.slice();
@@ -1121,35 +1279,26 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
       ? `$${Number(stats.revenue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       : formatChartCurrency(salesChartData.total);
 
-  const statusCounts = stats?.orderStatusCounts;
+  const statusCounts =
+    orders.length > 0
+      ? dashboardStatusCounts
+      : {
+          pending: stats?.orderStatusCounts?.pending ?? 0,
+          processing: stats?.orderStatusCounts?.processing ?? 0,
+          delivered: stats?.orderStatusCounts?.delivered ?? 0,
+          cancelled: stats?.orderStatusCounts?.cancelled ?? 0,
+          paid: 0,
+        };
 
-  const goToOrdersWithStatus = useCallback(
-    (status) => {
-      onTabChange?.('orders');
-      window.setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('admin-orders-filter', { detail: { status } }));
-      }, 50);
-    },
-    [onTabChange]
-  );
+  const handleDashboardOrderFilter = useCallback((status) => {
+    setOrderStatusFilter((prev) => (prev === status ? 'all' : status));
+  }, []);
 
-  const handleQuickAction = useCallback(
-    (actionId) => {
-      if (actionId === 'add-product') {
-        onTabChange?.('products');
-        window.setTimeout(() => window.openAddProductModal?.(), 80);
-        return;
-      }
-      if (actionId === 'view-orders') {
-        goToOrdersWithStatus('Pending');
-        return;
-      }
-      if (actionId === 'open-support') {
-        onTabChange?.('support');
-      }
-    },
-    [onTabChange, goToOrdersWithStatus]
-  );
+  const handleQuickAction = useCallback((actionId) => {
+    if (actionId === 'add-product') {
+      window.openAddProductModal?.();
+    }
+  }, []);
 
   const handleViewOrder = (orderId) => {
     const found = orders.find((o) => o.id === orderId);
@@ -1160,8 +1309,9 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
     showTopFloatNotification('Order not found.', 'warning');
   };
 
-  const handleOpenTicket = (ticketId) => {
-    setSupportModalTicketId(ticketId);
+  const handleOpenTicket = (tkt) => {
+    setSupportModalPreview(tkt);
+    setSupportModalTicketId(tkt.id);
   };
 
   const handleDashboardRefresh = useCallback(() => {
@@ -1198,11 +1348,20 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
     [onTabChange]
   );
 
-  const topProductsByPeriod = stats?.topProductsByPeriod ?? {
-    week: stats?.topProducts ?? [],
-    month: stats?.topProducts ?? [],
-    year: stats?.topProducts ?? [],
-  };
+  const topProductsByPeriod = useMemo(
+    () =>
+      mergeTopProductsByPeriod(
+        stats?.topProductsByPeriod ?? {
+          all: stats?.topProducts ?? [],
+          week: stats?.topProducts ?? [],
+          month: stats?.topProducts ?? [],
+          year: stats?.topProducts ?? [],
+        },
+        orders
+      ),
+    [stats, orders]
+  );
+  const insightsLoading = loading || ordersLoading;
   const lowStockProducts = stats?.lowStockProducts ?? [];
   const lowStockCount = stats?.lowStockCount ?? 0;
 
@@ -1253,8 +1412,9 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
       <DashboardToolbar
         loading={loading}
         statusCounts={statusCounts}
+        activeFilter={orderStatusFilter}
         onQuickAction={handleQuickAction}
-        onStatusFilter={goToOrdersWithStatus}
+        onStatusFilter={handleDashboardOrderFilter}
       />
 
       {/* Chart + Support */}
@@ -1321,11 +1481,11 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
                       <button
                         key={tkt.id}
                         type="button"
-                        onClick={() => handleOpenTicket(tkt.id)}
+                        onClick={() => handleOpenTicket(tkt)}
                         className="group flex w-full cursor-pointer items-center justify-between gap-2 px-1 py-2.5 text-left transition hover:bg-deepGreen/[0.04] dark:hover:bg-white/[0.04] [.admin-dark_&]:hover:bg-white/[0.04]"
                       >
                         <div className="flex min-w-0 items-center gap-2">
-                          <SupportAvatar name={name} />
+                          <SupportAvatar name={name} avatar={tkt.avatar} />
                           <div className="min-w-0">
                             <span className={`block truncate text-[0.78rem] font-bold text-gray-900 ${ADM_DARK_TEXT_BODY}`}>
                               {name}
@@ -1354,7 +1514,7 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-start">
         <div className="lg:col-span-5">
           <ProductsInsightsCarousel
-            loading={loading}
+            loading={insightsLoading}
             topProductsByPeriod={topProductsByPeriod}
             lowStockProducts={lowStockProducts}
             lowStockCount={lowStockCount}
@@ -1369,6 +1529,7 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
           <RecentOrdersPanel
             loading={loading}
             orders={recentOrders}
+            filterLabel={orderStatusFilter}
             linkBtn={linkBtn}
             onViewAll={() => onTabChange?.('orders')}
             onViewOrder={handleViewOrder}
@@ -1386,7 +1547,11 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
       <DashboardSupportModal
         open={Boolean(supportModalTicketId)}
         ticketId={supportModalTicketId}
-        onClose={() => setSupportModalTicketId(null)}
+        ticketPreview={supportModalPreview}
+        onClose={() => {
+          setSupportModalTicketId(null);
+          setSupportModalPreview(null);
+        }}
         onUpdated={handleDashboardRefresh}
       />
     </div>

@@ -9,6 +9,10 @@ const {
   syncDriverStatus,
   driverLabelFromUser,
 } = require('../services/driverService');
+const {
+  buildDriverEarningsMatch,
+  sumDriverDeliveryFees,
+} = require('../utils/driverRevenueUtils');
 
 function formatDriverApplication(app) {
   if (!app) return { status: 'none' };
@@ -299,6 +303,45 @@ exports.updateMyStatus = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to update driver status.' });
+  }
+};
+
+exports.getMyEarnings = async (req, res) => {
+  try {
+    const user = await User.findOne({ id: req.user.id });
+    if (!user || user.role !== 'delivery') {
+      return res.status(403).json({ success: false, message: 'Only delivery drivers can view earnings.' });
+    }
+
+    const match = buildDriverEarningsMatch(user.id);
+    const completedOrders = await Order.find(match)
+      .select('id deliveryFee amount subtotal discount deliveredAt updatedAt currentStep')
+      .lean();
+
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - 7);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const totalRevenue = Math.round(sumDriverDeliveryFees(completedOrders) * 100) / 100;
+    const weekOrders = completedOrders.filter((order) => {
+      const when = new Date(order.deliveredAt || order.updatedAt || 0);
+      return when >= weekStart;
+    });
+    const weekRevenue = Math.round(sumDriverDeliveryFees(weekOrders) * 100) / 100;
+
+    return res.status(200).json({
+      success: true,
+      earnings: {
+        totalRevenue,
+        weekRevenue,
+        completedDeliveries: completedOrders.length,
+        weekDeliveries: weekOrders.length,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to load driver earnings.' });
   }
 };
 

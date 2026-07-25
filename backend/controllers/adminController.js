@@ -8,6 +8,7 @@ const simpleCache = require('../utils/simpleCache');
 const {
   DASHBOARD_CACHE_KEY,
   PAID_ORDER_MATCH,
+  TOP_PRODUCTS_ORDER_MATCH,
   parseMoney,
   invalidateDashboardCache,
 } = require('../utils/revenueUtils');
@@ -20,26 +21,46 @@ function calcTrendPercent(current, previous) {
 }
 
 function buildTopProductsAggregation(sinceDate) {
-  return [
+  const pipeline = [
     {
-      $match: {
-        ...PAID_ORDER_MATCH,
-        createdAt: { $gte: sinceDate },
-        status: { $ne: 'cancelled' },
-        currentStep: { $ne: 0 },
-        'items.0': { $exists: true },
+      $match: TOP_PRODUCTS_ORDER_MATCH,
+    },
+    {
+      $addFields: {
+        salesDate: { $ifNull: ['$deliveredAt', '$updatedAt'] },
+        salesItems: {
+          $cond: {
+            if: { $gt: [{ $size: { $ifNull: ['$items', []] } }, 0] },
+            then: '$items',
+            else: [
+              {
+                id: null,
+                title: { $ifNull: ['$product', 'Unknown product'] },
+                quantity: 1,
+                price: 0,
+              },
+            ],
+          },
+        },
       },
     },
-    { $unwind: '$items' },
+  ];
+
+  if (sinceDate) {
+    pipeline.push({ $match: { salesDate: { $gte: sinceDate } } });
+  }
+
+  pipeline.push(
+    { $unwind: '$salesItems' },
     {
       $group: {
-        _id: { id: '$items.id', title: '$items.title' },
-        sold: { $sum: { $ifNull: ['$items.quantity', 1] } },
+        _id: { id: '$salesItems.id', title: '$salesItems.title' },
+        sold: { $sum: { $ifNull: ['$salesItems.quantity', 1] } },
         revenue: {
           $sum: {
             $multiply: [
-              { $ifNull: ['$items.quantity', 1] },
-              { $ifNull: ['$items.price', 0] },
+              { $ifNull: ['$salesItems.quantity', 1] },
+              { $ifNull: ['$salesItems.price', 0] },
             ],
           },
         },
@@ -55,8 +76,10 @@ function buildTopProductsAggregation(sinceDate) {
         sold: 1,
         revenue: { $round: ['$revenue', 2] },
       },
-    },
-  ];
+    }
+  );
+
+  return pipeline;
 }
 
 function isPaidOrder(order) {
@@ -65,11 +88,27 @@ function isPaidOrder(order) {
 
 const SUCCESS_TXN_MATCH = { status: 'success' };
 
+function shouldRefreshTopProductsCache(cached) {
+  const byPeriod = cached?.topProductsByPeriod;
+  if (!byPeriod || !Array.isArray(byPeriod.all)) return true;
+  const hasAnyTopProducts = ['all', 'week', 'month', 'year'].some(
+    (key) => Array.isArray(byPeriod[key]) && byPeriod[key].length > 0
+  );
+  if (hasAnyTopProducts) return false;
+  const revenue = Number(cached?.revenue) || 0;
+  const paidOrders = Number(cached?.orderStatusCounts?.delivered) || 0;
+  return revenue > 0 || paidOrders > 0 || Number(cached?.totalOrders) > 0;
+}
+
 exports.getDashboardStats = async (_req, res) => {
   try {
     const cached = simpleCache.get(DASHBOARD_CACHE_KEY);
     if (cached) {
-      return res.status(200).json({ success: true, stats: cached, cached: true });
+      if (shouldRefreshTopProductsCache(cached)) {
+        simpleCache.del(DASHBOARD_CACHE_KEY);
+      } else {
+        return res.status(200).json({ success: true, stats: cached, cached: true });
+      }
     }
 
     const now = new Date();
@@ -100,6 +139,7 @@ exports.getDashboardStats = async (_req, res) => {
       topProductsWeekAgg,
       topProductsMonthAgg,
       topProductsYearAgg,
+      topProductsAllAgg,
       lowStockProducts,
       lowStockCount,
     ] = await Promise.all([
@@ -170,6 +210,7 @@ exports.getDashboardStats = async (_req, res) => {
       Order.aggregate(buildTopProductsAggregation(weekStart)),
       Order.aggregate(buildTopProductsAggregation(monthStart)),
       Order.aggregate(buildTopProductsAggregation(yearStart)),
+      Order.aggregate(buildTopProductsAggregation(null)),
       Product.find({
         status: { $ne: 'Inactive' },
         stockVal: { $gt: 0, $lte: 5 },
@@ -242,6 +283,7 @@ exports.getDashboardStats = async (_req, res) => {
         week: topProductsWeekAgg,
         month: topProductsMonthAgg,
         year: topProductsYearAgg,
+        all: topProductsAllAgg,
       },
       lowStockProducts: lowStockProducts.map((p) => ({
         id: p.id,

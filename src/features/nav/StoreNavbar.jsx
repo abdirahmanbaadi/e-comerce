@@ -9,6 +9,7 @@ import { useNotifications } from '../../hooks/useNotifications';
 import { NotificationDetailModal } from '../profile/ProfileNotifications';
 import { formatMoney, productImage } from '../../utils/format';
 import { showTopFloatNotification } from '../../utils/notifications';
+import { canUseCustomerShopping } from '../../utils/roleAccess';
 
 // =============================================================================
 // AppSearchField
@@ -298,13 +299,15 @@ function ProfileDropdown({ user, onClose, onLogout }) {
   const navigate = useNavigate();
   const isAdmin = user?.role === 'admin';
 
-  const menuItems = [
-    { key: 'profile', label: 'Profile', icon: 'fa-regular fa-circle-user', to: '/profile' },
-    ...(isAdmin
-      ? [{ key: 'dashboard', label: 'Dashboard', icon: 'fa-solid fa-table-columns', to: '/admin' }]
-      : []),
-    { key: 'settings', label: 'Settings', icon: 'fa-solid fa-gear', to: '/profile?tab=settings' },
-  ];
+  const menuItems = isAdmin
+    ? [
+        { key: 'dashboard', label: 'Dashboard', icon: 'fa-solid fa-table-columns', to: '/admin' },
+        { key: 'settings', label: 'Settings', icon: 'fa-solid fa-gear', to: '/admin' },
+      ]
+    : [
+        { key: 'profile', label: 'Profile', icon: 'fa-regular fa-circle-user', to: '/profile' },
+        { key: 'settings', label: 'Settings', icon: 'fa-solid fa-gear', to: '/profile?tab=settings' },
+      ];
 
   const displayName = user?.fullName?.trim() || 'User';
   const email = user?.email || '';
@@ -424,6 +427,7 @@ export default function StoreNavbar({ cartActive = false }) {
   const { user, logout } = useAuth();
   const { cartCount } = useCart();
   const { wishlistCount } = useWishlist();
+  const canShop = canUseCustomerShopping(user);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [wishlistOpen, setWishlistOpen] = useState(false);
@@ -601,7 +605,8 @@ export default function StoreNavbar({ cartActive = false }) {
     return (
       <div className={className}>
         {renderNotificationDropdown()}
-        {renderWishlistDropdown()}
+        {canShop ? renderWishlistDropdown() : null}
+        {canShop ? (
         <Link
           to="/cart"
           className="relative inline-flex h-8 w-8 items-center justify-center text-[1.08rem] text-[#111111] no-underline transition-all duration-300 hover:scale-[1.18] hover:text-gold hover:[transform:translateY(-2px)_scale(1.18)]"
@@ -619,6 +624,7 @@ export default function StoreNavbar({ cartActive = false }) {
             </span>
           )}
         </Link>
+        ) : null}
         {renderProfileControl()}
       </div>
     );

@@ -91,6 +91,7 @@ exports.validateCart = async (req, res) => {
         title: product.title,
         category:
           item.category || `${product.label} / ${product.materialLabel || product.materialType}`,
+        categorySlug: product.category || item.categorySlug || '',
         price: currentPrice,
         quantity: safeQty || quantity,
         image: product.images?.[0] || item.image,

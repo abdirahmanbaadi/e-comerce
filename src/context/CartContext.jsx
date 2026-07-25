@@ -1,14 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from './AuthContext';
 import {
   CART_UPDATED_EVENT,
   readCartItems,
   readSavedItems,
 } from '../utils/cartStorage';
 import { apiUrl } from '../utils/data';
+import { canUseCustomerShopping } from '../utils/roleAccess';
+import { showTopFloatNotification } from '../utils/notifications';
 
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
+  const { user } = useAuth();
   const [cartItems, setCartItems] = useState(readCartItems);
   const [savedItems, setSavedItems] = useState(readSavedItems);
   const syncTimerRef = useRef(null);
@@ -20,7 +24,7 @@ export function CartProvider({ children }) {
 
   const mergeCartWithServer = useCallback(async () => {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token || !canUseCustomerShopping(user)) return;
 
     const localCart = readCartItems();
     const localSaved = readSavedItems();
@@ -45,11 +49,11 @@ export function CartProvider({ children }) {
     } catch {
       /* keep local cart */
     }
-  }, []);
+  }, [user]);
 
   const pushCartToServer = useCallback(async (cart, saved) => {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token || !canUseCustomerShopping(user)) return;
     try {
       await fetch(apiUrl('/api/cart'), {
         method: 'PUT',
@@ -62,7 +66,7 @@ export function CartProvider({ children }) {
     } catch {
       /* ignore sync errors */
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     syncFromStorage();
@@ -102,6 +106,10 @@ export function CartProvider({ children }) {
   );
 
   const addToCart = useCallback((product, quantity = 1) => {
+    if (!canUseCustomerShopping(user)) {
+      showTopFloatNotification('Cart is disabled for admin preview and driver accounts.', 'danger');
+      return false;
+    }
     if (product.stock === 'out-of-stock') return false;
     setCartItems(prev => {
       const existing = prev.find(item => item.id === product.id);
@@ -116,6 +124,7 @@ export function CartProvider({ children }) {
           id: product.id,
           title: product.title,
           category: (product.label || product.category) + ' / ' + (product.materialLabel || product.materialType),
+          categorySlug: product.category || '',
           price: product.price,
           quantity,
           image: product.images[0],
@@ -123,7 +132,7 @@ export function CartProvider({ children }) {
       ];
     });
     return true;
-  }, []);
+  }, [user]);
 
   const updateQuantity = useCallback((id, quantity) => {
     setCartItems(prev =>

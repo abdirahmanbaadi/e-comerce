@@ -14,7 +14,7 @@ export function getDeliveryBadge(status) {
     case 'shipped':
       return { label: 'Out for Delivery', className: 'out-for-delivery' };
     case 'cancelled':
-      return { label: 'Cancelled', className: 'pending' };
+      return { label: 'Cancelled', className: 'cancelled' };
     default:
       return { label: 'Processing', className: 'processing' };
   }
@@ -31,7 +31,7 @@ export function getPaymentBadge(paymentType, paymentLabel) {
     return { label: 'Failed', className: 'failed' };
   }
   if (normalized === 'refunded' || labelText === 'refunded') {
-    return { label: 'Refunded', className: 'pending' };
+    return { label: 'Refunded', className: 'refunded' };
   }
   return { label: 'Pending', className: 'pending' };
 }

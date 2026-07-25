@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { useIntervalWhenVisible } from '../hooks/useIntervalWhenVisible';
 import { apiUrl } from '../utils/data';
+import { formatMoney } from '../utils/format';
 import { showTopFloatNotification } from '../utils/notifications';
 import DriverOrderCard from '../features/driver/DriverOrderCard';
 import DriverRejectModal from '../features/driver/DriverRejectModal';
@@ -83,6 +84,28 @@ export default function Delivery() {
   const [confirmAction, setConfirmAction] = useState(null);
   const [completedDelivery, setCompletedDelivery] = useState(null);
   const [postCompleteCounts, setPostCompleteCounts] = useState(null);
+  const [earnings, setEarnings] = useState({
+    totalRevenue: 0,
+    weekRevenue: 0,
+    completedDeliveries: 0,
+    weekDeliveries: 0,
+  });
+
+  const loadDriverEarnings = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await fetch(apiUrl('/api/drivers/my-earnings'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.earnings) {
+        setEarnings(data.earnings);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
 
   const loadDriverStatus = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -129,10 +152,14 @@ export default function Delivery() {
 
   const refreshAll = useCallback(
     async (quiet = true) => {
-      const [nextOrders] = await Promise.all([loadOrders({ quiet }), loadDriverStatus()]);
+      const [nextOrders] = await Promise.all([
+        loadOrders({ quiet }),
+        loadDriverStatus(),
+        loadDriverEarnings(),
+      ]);
       return nextOrders;
     },
-    [loadOrders, loadDriverStatus]
+    [loadOrders, loadDriverStatus, loadDriverEarnings]
   );
 
   const handleNewNotifications = useCallback(
@@ -159,6 +186,7 @@ export default function Delivery() {
   useEffect(() => {
     loadOrders();
     loadDriverStatus();
+    loadDriverEarnings();
     const onAssign = () => {
       refreshAll(true);
       setActiveTab('pending');
@@ -167,7 +195,7 @@ export default function Delivery() {
     return () => {
       window.removeEventListener('driver-assignment-updated', onAssign);
     };
-  }, [loadOrders, loadDriverStatus, refreshAll]);
+  }, [loadOrders, loadDriverStatus, loadDriverEarnings, refreshAll]);
 
   useIntervalWhenVisible(() => refreshAll(true), 30000, Boolean(user?.isLoggedIn));
 
@@ -327,6 +355,9 @@ export default function Delivery() {
       if (data.success) {
         setConfirmAction(null);
         const freshOrders = await refreshAll(true);
+        if (nextStep >= 4) {
+          window.dispatchEvent(new CustomEvent('admin-dashboard-invalidate'));
+        }
 
         if (nextStep >= 5) {
           const counts = countDriverOrdersByPhase(freshOrders);
@@ -430,6 +461,31 @@ export default function Delivery() {
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-extrabold ${statusMeta.cls}`}>
             {statusMeta.label}
           </span>
+        </section>
+
+        <section className="mb-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white px-3 py-3 shadow-sm">
+            <p className="mb-1 text-[0.62rem] font-bold uppercase tracking-wide text-emerald-700/80">
+              Delivery revenue
+            </p>
+            <p className="mb-0 text-[1.2rem] font-extrabold leading-none text-deepGreen">
+              {formatMoney(earnings.totalRevenue)}
+            </p>
+            <p className="mb-0 mt-1 text-[0.65rem] font-semibold text-gray-500">
+              {earnings.completedDeliveries} completed
+            </p>
+          </div>
+          <div className="rounded-xl border border-gold/20 bg-gradient-to-br from-[#fff9ec] to-white px-3 py-3 shadow-sm">
+            <p className="mb-1 text-[0.62rem] font-bold uppercase tracking-wide text-amber-800/80">
+              This week
+            </p>
+            <p className="mb-0 text-[1.2rem] font-extrabold leading-none text-deepGreen">
+              {formatMoney(earnings.weekRevenue)}
+            </p>
+            <p className="mb-0 mt-1 text-[0.65rem] font-semibold text-gray-500">
+              {earnings.weekDeliveries} deliveries
+            </p>
+          </div>
         </section>
 
         <section className="mb-3 rounded-xl border border-deepGreen/[0.06] bg-white px-3 py-2.5 shadow-sm">

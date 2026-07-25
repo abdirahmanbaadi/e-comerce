@@ -16,13 +16,15 @@ import ApplyDelivery from './pages/ApplyDelivery';
 import Delivery from './pages/Delivery';
 import Admin from './pages/Admin';
 import ProtectedRoute from './components/ProtectedRoute';
+import StaffRouteGuard from './components/StaffRouteGuard';
 import ScrollToTop from './components/ScrollToTop';
 import ErrorBoundary from './components/ErrorBoundary';
 import PostDeliveryReviewProvider from './components/PostDeliveryReviewProvider';
 
 function AppRoutes() {
   return (
-    <Routes>
+    <StaffRouteGuard>
+      <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/products" element={<Products />} />
       <Route path="/categories" element={<Navigate to="/products" replace />} />
@@ -63,7 +65,8 @@ function AppRoutes() {
       <Route path="/index.html" element={<Navigate to="/" replace />} />
       <Route path="*.html" element={<Navigate to="/" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </StaffRouteGuard>
   );
 }
 

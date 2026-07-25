@@ -532,6 +532,14 @@ const startServer = async () => {
       console.warn('Order expiry job skipped:', expiryErr.message);
     }
 
+    try {
+      const { startRefundSchedulerJob } = require('./services/refundSchedulerService');
+      startRefundSchedulerJob();
+      console.log('Refund scheduler started (1h delay after cancel).');
+    } catch (refundErr) {
+      console.warn('Refund scheduler skipped:', refundErr.message);
+    }
+
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
         console.error(`\nPort ${PORT} is already in use.`);

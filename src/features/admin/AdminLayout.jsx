@@ -174,10 +174,11 @@ const SEARCH_PLACEHOLDERS = {
   users: 'Search customers...',
   stock: 'Search stock...',
   delivery: 'Search deliveries...',
+  payments: 'Search payments...',
   support: 'Search messages...',
 };
 
-const SEARCH_TABS = new Set(['dashboard', 'products', 'orders', 'users', 'stock', 'delivery', 'support']);
+const SEARCH_TABS = new Set(['dashboard', 'products', 'orders', 'users', 'stock', 'delivery', 'payments', 'support']);
 
 function useClickOutside(ref, onClose) {
   useEffect(() => {

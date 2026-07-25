@@ -10,7 +10,7 @@ const { resolveCoupon } = require('./couponController');
 const { logPaymentTransaction } = require('../services/paymentService');
 const { logOrderActivity } = require('../services/orderActivityService');
 const { resolveDistrictDeliveryFee } = require('../utils/deliveryFeeUtils');
-const { normalizePhone, findUserByPhone } = require('../utils/phoneUtils');
+const { normalizePhone, findUserByPhone, buildUserOrdersQuery, parseSomaliPhoneInput, phonesMatch } = require('../utils/phoneUtils');
 const { normalizeOrderId } = require('../utils/orderIdUtils');
 const {
   maskPhone,
@@ -23,6 +23,10 @@ const {
   driverLabelFromUser,
 } = require('../services/driverService');
 const { stampDeliveredAt } = require('../services/reviewPromptService');
+const {
+  invalidateDashboardCache,
+  topProductsEligibilityChanged,
+} = require('../utils/revenueUtils');
 
 function resolveOrderStatus(order) {
   if (order.status) return order.status;
@@ -64,7 +68,11 @@ const {
   restoreStockForItems,
 } = require('../utils/stockUtils');
 const { canCustomerCancelOrder } = require('../utils/orderCancelUtils');
-const { attemptOrderRefund } = require('../services/refundService');
+const { attemptOrderRefund, isOrderPaid, isOrderRefunded } = require('../services/refundService');
+const {
+  scheduleOrderRefund,
+  REFUND_PROCESSING_DELAY_MS,
+} = require('../services/refundSchedulerService');
 
 async function resolveOrderItemPrices(items = []) {
   const resolved = [];
@@ -88,7 +96,8 @@ async function resolveOrderItemPrices(items = []) {
       ...item,
       id: product.id,
       title: product.title,
-      category: item.category || product.category,
+      category: product.category || item.categorySlug || item.category,
+      categorySlug: product.category || item.categorySlug || '',
       price,
       quantity,
       image: product.images?.[0] || item.image,
@@ -134,7 +143,7 @@ async function userCanAccessOrder(user, order) {
   if (user.role === 'admin') return true;
   if (user.role === 'delivery') return deliveryCanAccessOrder(user, order);
   if (order.userId && order.userId === user.id) return true;
-  if (user.phone && normalizePhone(user.phone) === normalizePhone(order.phone)) return true;
+  if (user.phone && phonesMatch(user.phone, order.phone)) return true;
   return false;
 }
 
@@ -143,10 +152,10 @@ function userCanCancelOrder(order, req) {
   const verifyPhone = req.body?.phone;
 
   if (user?.role === 'admin') return true;
-  if (user && (order.userId === user.id || normalizePhone(user.phone) === normalizePhone(order.phone))) {
+  if (user && (order.userId === user.id || phonesMatch(user.phone, order.phone))) {
     return true;
   }
-  if (verifyPhone && normalizePhone(verifyPhone) === normalizePhone(order.phone)) return true;
+  if (verifyPhone && phonesMatch(verifyPhone, order.phone)) return true;
   return false;
 }
 
@@ -175,6 +184,12 @@ exports.placeOrder = async (req, res) => {
     if (!phone || !customer || !amount || !address || !product) {
       return res.status(400).json({ success: false, message: 'Please fill in all required fields to complete the order!' });
     }
+
+    const phoneParsed = parseSomaliPhoneInput(phone);
+    if (!phoneParsed.ok) {
+      return res.status(400).json({ success: false, message: phoneParsed.message });
+    }
+    const canonicalPhone = phoneParsed.e164;
 
     const resolvedPaymentMethod = 'EVC Plus';
     if (paymentMethod && String(paymentMethod).trim() && String(paymentMethod).trim() !== 'EVC Plus') {
@@ -264,7 +279,7 @@ exports.placeOrder = async (req, res) => {
 
     const newOrder = await Order.create({
       id: orderId,
-      phone,
+      phone: canonicalPhone,
       customer,
       amount,
       payment: 'Pending',
@@ -298,7 +313,7 @@ exports.placeOrder = async (req, res) => {
       method: resolvedPaymentMethod,
       amount: orderAmount,
       status: 'pending',
-      phone,
+      phone: canonicalPhone,
       referenceId: paymentReference || orderId,
       message: 'EVC Plus payment pending Waafi confirmation.',
       source: 'checkout',
@@ -364,8 +379,7 @@ exports.placeOrder = async (req, res) => {
 
 function sanitizeOrderForPublicTrack(order, verifyPhone) {
   const plain = withResolvedStatus(order);
-  const phoneVerified =
-    verifyPhone && normalizePhone(verifyPhone) === normalizePhone(order.phone);
+  const phoneVerified = verifyPhone && phonesMatch(verifyPhone, order.phone);
 
   if (phoneVerified) {
     return { ...plain, phoneVerified: true };
@@ -438,7 +452,24 @@ exports.cancelOrder = async (req, res) => {
       });
     }
 
-    const refund = await attemptOrderRefund(order);
+    const refundScheduled = scheduleOrderRefund(order);
+    let refund = {
+      attempted: false,
+      success: false,
+      scheduled: false,
+      message: 'No payment to refund.',
+    };
+
+    if (refundScheduled) {
+      refund = {
+        attempted: false,
+        success: false,
+        scheduled: true,
+        message: `Refund scheduled — EVC Plus credit within ${Math.round(REFUND_PROCESSING_DELAY_MS / (60 * 60 * 1000))} hour(s).`,
+      };
+    } else if (isOrderPaid(order) && isOrderRefunded(order)) {
+      refund = { attempted: false, success: true, scheduled: false, message: 'Already refunded.' };
+    }
 
     order.status = 'cancelled';
     order.currentStep = 0;
@@ -463,22 +494,27 @@ exports.cancelOrder = async (req, res) => {
       statusChanged: true,
       refundAttempted: refund.attempted,
       refundCompleted: refund.attempted && refund.success,
+      refundScheduled: refund.scheduled,
       refundMessage: refund.message,
     });
 
     await logOrderActivity({
       orderId: order.id,
       action: 'order_cancelled',
-      description: refund.attempted
-        ? `Order cancelled. Refund ${refund.success ? 'sent to EVC Plus' : 'pending — manual follow-up'}.`
-        : 'Order cancelled before shipment.',
+      description: refund.scheduled
+        ? `Order cancelled. Refund scheduled for EVC Plus.`
+        : refund.attempted
+          ? `Order cancelled. Refund ${refund.success ? 'sent to EVC Plus' : 'pending — manual follow-up'}.`
+          : 'Order cancelled before shipment.',
       actorId: req.user?.id || '',
       actorRole: req.user?.role || 'customer',
       metadata: { previousStatus: status, refund },
     });
 
     let responseMessage = 'Your order has been cancelled successfully.';
-    if (refund.attempted && refund.success) {
+    if (refund.scheduled) {
+      responseMessage = `Order cancelled. Your refund will be sent to your EVC Plus wallet within ${Math.round(REFUND_PROCESSING_DELAY_MS / (60 * 60 * 1000))} hour(s).`;
+    } else if (refund.attempted && refund.success) {
       responseMessage = 'Order cancelled. Your payment has been refunded to your EVC Plus wallet.';
     } else if (refund.attempted && !refund.success) {
       responseMessage = `Order cancelled. ${refund.message}`;
@@ -497,7 +533,7 @@ exports.cancelOrder = async (req, res) => {
 };
 
 const ORDER_LIST_FIELDS =
-  'id customer amount address phone product date payment paymentType status currentStep estimate driver assignedDriverId assignmentStatus assignmentRejectReason driverArrivedAt userId items subtotal deliveryFee discount paymentMethod createdAt updatedAt';
+  'id customer amount address phone product date payment paymentType status currentStep estimate driver assignedDriverId assignmentStatus assignmentRejectReason driverArrivedAt userId items subtotal deliveryFee discount paymentMethod deliveryDate deliveryTime refundStatus refundDueAt createdAt updatedAt';
 
 function parseLimit(value, fallback = 0) {
   const n = Number(value);
@@ -527,14 +563,7 @@ exports.getOrders = async (req, res) => {
         .limit(limit || 100)
         .lean();
     } else {
-      const normalizedUserPhone = normalizePhone(phone);
-      const phoneVariants = [normalizedUserPhone, `0${normalizedUserPhone}`, `252${normalizedUserPhone}`].filter(
-        Boolean
-      );
-
-      orders = await Order.find({
-        $or: [{ userId: id }, ...(phoneVariants.length ? [{ phone: { $in: phoneVariants } }] : [])],
-      })
+      orders = await Order.find(buildUserOrdersQuery({ id, phone }))
         .select(ORDER_LIST_FIELDS)
         .sort({ createdAt: -1 })
         .limit(limit || 100)
@@ -785,9 +814,20 @@ exports.updateOrder = async (req, res) => {
     stampDeliveredAt(order, prevStep);
     await order.save();
 
+    const savedStep = typeof order.currentStep === 'number' ? order.currentStep : 1;
+    const beforeTopProducts = {
+      paymentType: prevPaymentType,
+      payment: prevPayment,
+      currentStep: prevStep,
+      status: prevStatus === 'cancelled' ? 'cancelled' : order.status,
+    };
+    if (topProductsEligibilityChanged(beforeTopProducts, order)) {
+      invalidateDashboardCache();
+    }
+
     const assignedDriverId = order.assignedDriverId;
     const nextStatus = resolveOrderStatus(order);
-    const nextStep = typeof order.currentStep === 'number' ? order.currentStep : 1;
+    const nextStep = savedStep;
     if (assignedDriverId && (nextStatus === 'delivered' || nextStatus === 'cancelled' || nextStep >= 5)) {
       await syncDriverStatus(assignedDriverId);
     }

@@ -70,10 +70,26 @@ export default function Cart() {
         setCartItems((prev) =>
           prev.map((item) => {
             const fresh = data.items.find((row) => row.id === item.id);
-            return fresh ? { ...item, price: fresh.price, quantity: fresh.quantity } : item;
+            return fresh
+              ? {
+                  ...item,
+                  price: fresh.price,
+                  quantity: fresh.quantity,
+                  categorySlug: fresh.categorySlug || item.categorySlug,
+                }
+              : item;
           })
         );
         showTopFloatNotification('Cart prices updated to latest catalog values.');
+      } else if (data.items?.some((item) => item.categorySlug)) {
+        setCartItems((prev) =>
+          prev.map((item) => {
+            const fresh = data.items.find((row) => row.id === item.id);
+            return fresh?.categorySlug
+              ? { ...item, categorySlug: fresh.categorySlug }
+              : item;
+          })
+        );
       }
     });
 

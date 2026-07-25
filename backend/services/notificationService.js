@@ -1,6 +1,7 @@
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { sendSms } = require('./smsService');
+const { findUserByPhone } = require('../utils/phoneUtils');
 
 function generateNotificationId() {
   return `NTF-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`;
@@ -8,10 +9,7 @@ function generateNotificationId() {
 
 async function findUserIdByPhone(phone) {
   if (!phone) return null;
-  const normalized = String(phone).trim();
-  const user =
-    (await User.findOne({ phone: normalized })) ||
-    (await User.findOne({ phone: normalized.replace(/\s/g, '') }));
+  const user = await findUserByPhone(User, phone);
   return user?.id || null;
 }
 
@@ -21,11 +19,7 @@ async function findUserByIdOrPhone(userId, phone) {
     if (byId) return byId;
   }
   if (phone) {
-    const normalized = String(phone).trim();
-    return (
-      (await User.findOne({ phone: normalized })) ||
-      (await User.findOne({ phone: normalized.replace(/\s/g, '') }))
-    );
+    return findUserByPhone(User, phone);
   }
   return null;
 }
@@ -255,6 +249,8 @@ async function onOrderUpdated(order, changes = {}) {
     let message = `Your order ${orderId} has been cancelled.`;
     if (changes.refundCompleted) {
       message = `Your order ${orderId} was cancelled and your payment was refunded to your EVC Plus wallet.`;
+    } else if (changes.refundScheduled) {
+      message = `Your order ${orderId} was cancelled. ${changes.refundMessage || 'Refund will be sent to your EVC Plus wallet within 1 hour.'}`;
     } else if (changes.refundAttempted && !changes.refundCompleted) {
       message = `Your order ${orderId} was cancelled. ${changes.refundMessage || 'Contact support to receive your refund.'}`;
     }
@@ -267,7 +263,17 @@ async function onOrderUpdated(order, changes = {}) {
         orderId,
         refundAttempted: Boolean(changes.refundAttempted),
         refundCompleted: Boolean(changes.refundCompleted),
+        refundScheduled: Boolean(changes.refundScheduled),
       },
+    });
+  }
+
+  if (changes.refundCompleted && !changes.statusChanged) {
+    await userPayload({
+      type: 'payment_refunded',
+      title: 'Refund Sent',
+      message: `Your refund for order ${orderId} was sent to your EVC Plus wallet.`,
+      metadata: { orderId },
     });
   }
 

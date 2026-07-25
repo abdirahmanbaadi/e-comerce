@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { apiUrl } from '../utils/data';
 import { useIntervalWhenVisible } from './useIntervalWhenVisible';
 
-const POLL_INTERVAL_MS = 60 * 1000;
+const POLL_INTERVAL_MS = 30 * 1000;
 
 export default function usePostDeliveryReviewPrompt() {
   const { user } = useAuth();

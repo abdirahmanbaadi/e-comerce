@@ -54,6 +54,7 @@ const SALES_RANGE_LABELS = {
 };
 
 const TOP_PRODUCTS_RANGE_LABELS = {
+  all: 'All Time',
   week: 'Week',
   month: 'Month',
   year: 'Year',
@@ -154,7 +155,7 @@ export function AdminSettingsTab() {
     () => readLocalPref(ADMIN_SETTINGS_KEYS.dashboardSalesRange, 'week')
   );
   const [topProductsRange, setTopProductsRange] = useState(
-    () => readLocalPref(ADMIN_SETTINGS_KEYS.dashboardTopProductsRange, 'week')
+    () => readLocalPref(ADMIN_SETTINGS_KEYS.dashboardTopProductsRange, 'month')
   );
   const [tablePageSize, setTablePageSize] = useState(
     () => readLocalPref(ADMIN_SETTINGS_KEYS.tablePageSize, '20')

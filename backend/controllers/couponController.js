@@ -1,6 +1,7 @@
 const CmsContent = require('../models/CmsContent');
 const { getDefaultCms } = require('./cmsController');
 const { FIXED_COUPON_DISCOUNT, discountLabel } = require('../utils/pricing');
+const { itemMatchesCategory } = require('../utils/categoryUtils');
 
 const BUILTIN_COUPONS = {
   MMF10: { discount: FIXED_COUPON_DISCOUNT, label: discountLabel(FIXED_COUPON_DISCOUNT) },
@@ -52,9 +53,7 @@ async function resolveCoupon(code, subtotal, items) {
     }
 
     const matchingItems = items.filter((item) => {
-      const matchCat =
-        !promo.applicableCategory ||
-        String(item.category || '').toLowerCase() === String(promo.applicableCategory).toLowerCase();
+      const matchCat = itemMatchesCategory(item, promo.applicableCategory);
       const matchProd =
         !promo.applicableProduct ||
         String(item.id || '').toLowerCase() === String(promo.applicableProduct).toLowerCase() ||

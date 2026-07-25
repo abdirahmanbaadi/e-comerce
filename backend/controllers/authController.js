@@ -9,6 +9,9 @@ const {
   findUserByLoginIdentifier,
   maskEmail,
   normalizePhone,
+  parsePhoneForStorage,
+  parseSomaliPhoneInput,
+  phoneTakenByOtherUser,
 } = require('../utils/phoneUtils');
 const { sendWelcomeEmail, sendPasswordResetCode, isEmailConfigured } = require('../services/emailService');
 const { logUserActivity } = require('../services/activityService');
@@ -116,16 +119,19 @@ async function linkGuestOrdersToUser(user) {
   const normalized = normalizePhone(user.phone);
   if (!normalized) return;
 
-  const suffix = normalized.slice(-9);
+  const { buildPhoneLookupVariants } = require('../utils/phoneUtils');
+  const phoneVariants = buildPhoneLookupVariants(user.phone);
+
   const guestOrders = await Order.find({
     $or: [{ userId: '' }, { userId: null }, { userId: { $exists: false } }],
-    phone: { $regex: `${suffix}$` },
+    phone: phoneVariants.length ? { $in: phoneVariants } : { $regex: `${normalized.slice(-9)}$` },
   }).limit(50);
 
   for (const order of guestOrders) {
     if (normalizePhone(order.phone) === normalized) {
       order.userId = user.id;
       if (!order.email && user.email) order.email = user.email;
+      if (user.phone) order.phone = user.phone;
       await order.save();
     }
   }
@@ -165,7 +171,12 @@ exports.register = async (req, res) => {
     }
 
     // Check if user exists by phone (normalized match)
-    const phoneExists = await findUserByPhone(User, phone);
+    const phoneParsed = parsePhoneForStorage(phone);
+    if (!phoneParsed.ok) {
+      return res.status(400).json({ success: false, message: phoneParsed.message });
+    }
+
+    const phoneExists = await findUserByPhone(User, phoneParsed.e164);
     if (phoneExists) {
       return res.status(400).json({ success: false, message: 'This phone number is already registered!' });
     }
@@ -184,7 +195,7 @@ exports.register = async (req, res) => {
       lastName,
       username: normalizedUsername,
       email: email.toLowerCase(),
-      phone,
+      phone: phoneParsed.e164,
       password: hashedPassword,
       role: 'user', // Default role is user
       passwordChangedAt: new Date(),
@@ -337,12 +348,16 @@ exports.updateProfile = async (req, res) => {
     }
 
     if (phone) {
-      // Check if phone already registered by another user
-      const phoneExists = await User.findOne({ phone });
-      if (phoneExists && phoneExists.id !== user.id) {
+      const phoneParsed = parsePhoneForStorage(phone);
+      if (!phoneParsed.ok) {
+        return res.status(400).json({ success: false, message: phoneParsed.message });
+      }
+
+      const taken = await phoneTakenByOtherUser(User, phoneParsed.e164, user.id);
+      if (taken) {
         return res.status(400).json({ success: false, message: 'This phone number is already registered to another account!' });
       }
-      user.phone = phone;
+      user.phone = phoneParsed.e164;
     }
 
     if (address !== undefined) {
@@ -477,7 +492,12 @@ exports.verifyPhone = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please enter your registered phone number!' });
     }
 
-    const targetUser = await findUserByPhone(User, phone);
+    const phoneParsed = parseSomaliPhoneInput(phone);
+    if (!phoneParsed.ok) {
+      return res.status(400).json({ success: false, message: phoneParsed.message });
+    }
+
+    const targetUser = await findUserByPhone(User, phoneParsed.e164);
 
     if (!targetUser) {
       return res.status(404).json({ success: false, message: 'This phone number is not registered!' });
@@ -501,6 +521,7 @@ exports.verifyPhone = async (req, res) => {
       success: true,
       maskedEmail: masked,
       channel: 'email',
+      phone: targetUser.phone,
     };
 
     if (!isEmailConfigured()) {
@@ -556,7 +577,11 @@ exports.verifyOtp = async (req, res) => {
     if (email) {
       user = await User.findOne({ email: email.toLowerCase() });
     } else if (phone) {
-      user = await findUserByPhone(User, phone);
+      const phoneParsed = parseSomaliPhoneInput(phone);
+      if (!phoneParsed.ok) {
+        return res.status(400).json({ success: false, message: phoneParsed.message });
+      }
+      user = await findUserByPhone(User, phoneParsed.e164);
     }
 
     if (!user) {
@@ -570,13 +595,13 @@ exports.verifyOtp = async (req, res) => {
       });
     }
 
+    if (!user.resetOtpExpires || user.resetOtpExpires < new Date()) {
+      return res.status(400).json({ success: false, message: 'Verification code has expired. Request a new one.' });
+    }
+
     if (!otpIsValid(user, code)) {
       await registerOtpFailure(user);
       return res.status(400).json({ success: false, message: 'Invalid verification code!' });
-    }
-
-    if (!user.resetOtpExpires || user.resetOtpExpires < new Date()) {
-      return res.status(400).json({ success: false, message: 'Verification code has expired. Request a new one.' });
     }
 
     user.resetOtpAttempts = 0;
@@ -602,7 +627,11 @@ exports.resetPassword = async (req, res) => {
     if (email) {
       user = await User.findOne({ email: email.toLowerCase() });
     } else if (phone) {
-      user = await findUserByPhone(User, phone);
+      const phoneParsed = parseSomaliPhoneInput(phone);
+      if (!phoneParsed.ok) {
+        return res.status(400).json({ success: false, message: phoneParsed.message });
+      }
+      user = await findUserByPhone(User, phoneParsed.e164);
     }
 
     if (!user) {
@@ -616,13 +645,13 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
+    if (!user.resetOtpExpires || user.resetOtpExpires < new Date()) {
+      return res.status(400).json({ success: false, message: 'Verification code has expired. Request a new one.' });
+    }
+
     if (!otpIsValid(user, code)) {
       await registerOtpFailure(user);
       return res.status(400).json({ success: false, message: 'Invalid verification code!' });
-    }
-
-    if (!user.resetOtpExpires || user.resetOtpExpires < new Date()) {
-      return res.status(400).json({ success: false, message: 'Verification code has expired. Request a new one.' });
     }
 
     const passwordCheck = validatePassword(newPassword);
@@ -805,12 +834,16 @@ exports.updateUser = async (req, res) => {
     }
 
     if (phone !== undefined) {
-      const normalizedPhone = String(phone).trim();
-      const phoneExists = await User.findOne({ phone: normalizedPhone });
-      if (phoneExists && phoneExists.id !== user.id) {
+      const phoneParsed = parsePhoneForStorage(phone);
+      if (!phoneParsed.ok) {
+        return res.status(400).json({ success: false, message: phoneParsed.message });
+      }
+
+      const taken = await phoneTakenByOtherUser(User, phoneParsed.e164, user.id);
+      if (taken) {
         return res.status(400).json({ success: false, message: 'This phone number is already registered to another account!' });
       }
-      user.phone = normalizedPhone;
+      user.phone = phoneParsed.e164;
     }
 
     if (role !== undefined) {

@@ -5,6 +5,14 @@ export function parseOrderAmount(value) {
   return Number(String(value || '').replace(/[^0-9.]/g, '')) || 0;
 }
 
+/** Tell open admin tabs to refresh orders, payments, and dashboard stats. */
+export function notifyAdminPaymentDataRefresh() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('admin-payments-invalidate'));
+  window.dispatchEvent(new CustomEvent('admin-dashboard-invalidate'));
+  window.dispatchEvent(new CustomEvent('admin-orders-invalidate'));
+}
+
 export async function submitWaafiPayment({
   orderId,
   accountNo,
@@ -29,5 +37,8 @@ export async function submitWaafiPayment({
   });
 
   const data = await response.json();
+  if (response.ok && data.success) {
+    notifyAdminPaymentDataRefresh();
+  }
   return { ok: response.ok, data };
 }

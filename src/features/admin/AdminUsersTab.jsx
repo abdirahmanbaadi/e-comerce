@@ -21,6 +21,9 @@ import {
   formatActivityIcon,
   formatAdminPrice,
   getOrderPaymentLabel,
+  ADMIN_MODAL_OVERLAY,
+  ADMIN_MODAL_PANEL,
+  ADMIN_MODAL_CLOSE_BTN,
 } from './adminShared.js';
 
 const ROLE_LABELS = { user: 'Customer', delivery: 'Driver', admin: 'Admin' };
@@ -237,16 +240,7 @@ function exportUsersToCSV(usersList) {
   showTopFloatNotification('Users exported successfully as CSV!');
 }
 
-function MetaField({ label, children }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">{label}</p>
-      <div className="mt-1 text-[0.86rem] font-semibold text-gray-900 [.admin-dark_&]:text-gray-100">{children}</div>
-    </div>
-  );
-}
-
-function ModalShell({ open, onClose, zClass = 'z-[9999]', maxWidth = 'max-w-xl', children, labelledBy, lockScroll = true }) {
+function ModalShell({ open, onClose, zClass = 'z-[9999]', maxWidth = 'max-w-2xl', children, labelledBy, lockScroll = true }) {
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => {
@@ -277,7 +271,7 @@ function ModalShell({ open, onClose, zClass = 'z-[9999]', maxWidth = 'max-w-xl',
         role="presentation"
       >
         <div
-          className={`animate-productModalIn relative flex max-h-[92vh] w-full ${maxWidth} flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]`}
+          className={ADMIN_MODAL_PANEL}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -285,7 +279,7 @@ function ModalShell({ open, onClose, zClass = 'z-[9999]', maxWidth = 'max-w-xl',
         >
           <button
             type="button"
-            className="absolute right-[15px] top-[15px] z-10 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-white text-[1.4rem] leading-none text-[#111] shadow-[0_2px_10px_rgba(0,0,0,0.15)] [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:text-gray-200"
+            className={ADMIN_MODAL_CLOSE_BTN}
             onClick={onClose}
             aria-label="Close"
           >
@@ -303,19 +297,36 @@ function ModalShell({ open, onClose, zClass = 'z-[9999]', maxWidth = 'max-w-xl',
 
 function EditUserModal({ open, form, saving, onChange, onClose, onSubmit }) {
   const name = `${form.firstName || ''} ${form.lastName || ''}`.trim() || 'Edit account';
+  const roleLabel = ROLE_LABELS[form.role] || form.role || 'Customer';
 
   return (
-    <ModalShell open={open} onClose={onClose} zClass="z-[10000]" maxWidth="max-w-md" labelledBy="editUserTitle" lockScroll={false}>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6 [scrollbar-width:thin]">
-        <div className="pr-10">
-          <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Edit account</p>
-          <h3 id="editUserTitle" className="mt-1 text-[1.05rem] font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
+    <ModalShell open={open} onClose={onClose} zClass="z-[10000]" labelledBy="editUserTitle" lockScroll={false}>
+      <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
+        <div className="min-w-0 pr-10">
+          <h3 id="editUserTitle" className="font-display text-xl font-bold text-deepGreen [.admin-dark_&]:text-[#e8f0ed]">
             {name}
           </h3>
+          <p className="mb-0 mt-1 text-[0.82rem] text-gray-500 [.admin-dark_&]:text-gray-400">{form.email || '—'}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-[0.75rem] font-extrabold text-slate-700 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-slate-200">
+              {roleLabel}
+            </span>
+            <span
+              className={`inline-flex rounded-lg px-2.5 py-1 text-[0.75rem] font-extrabold ${
+                form.isActive
+                  ? 'bg-emerald-100 text-emerald-700 [.admin-dark_&]:bg-emerald-500/15 [.admin-dark_&]:text-emerald-300'
+                  : 'bg-red-100 text-red-700 [.admin-dark_&]:bg-red-500/15 [.admin-dark_&]:text-red-300'
+              }`}
+            >
+              {form.isActive ? 'Active' : 'Inactive'}
+            </span>
+          </div>
         </div>
+      </div>
 
-        <form id="editUserForm" className="mt-5 space-y-3 border-t border-black/[0.06] pt-5 [.admin-dark_&]:border-white/10" onSubmit={onSubmit}>
-          <div className="grid grid-cols-2 gap-3">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 [scrollbar-width:thin]">
+        <form id="editUserForm" className="space-y-4" onSubmit={onSubmit}>
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className={ADM_LABEL} htmlFor="admUserFirstName">
                 First name
@@ -369,7 +380,7 @@ function EditUserModal({ open, form, saving, onChange, onClose, onSubmit }) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className={ADM_LABEL} htmlFor="admUserRole">
                 Role
@@ -405,14 +416,14 @@ function EditUserModal({ open, form, saving, onChange, onClose, onSubmit }) {
         </form>
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-black/[0.06] bg-gray-50/80 px-5 py-3.5 [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#141f1b]">
-        <button type="button" className={BTN_GHOST} onClick={onClose}>
+      <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
+        <button type="button" className={BTN_GHOST} onClick={onClose} disabled={saving}>
           Cancel
         </button>
         <button type="submit" form="editUserForm" className={BTN_PRIMARY} disabled={saving}>
           {saving ? (
             <>
-              <i className="fa-solid fa-spinner fa-spin" /> Saving…
+              <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" /> Saving…
             </>
           ) : (
             'Save changes'
@@ -644,33 +655,32 @@ function UserOrderItemsModal({ open, order, onClose }) {
       role="presentation"
     >
       <div
-        className="animate-productModalIn flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1f2a26]"
+        className={ADMIN_MODAL_PANEL}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Order products"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-5 py-3.5 [.admin-dark_&]:border-white/10">
-          <div>
-            <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Order products</p>
-            <p className="font-mono text-[0.95rem] font-bold text-deepGreen [.admin-dark_&]:text-emerald-400">{order.id}</p>
-            {!loading && items.length > 0 && (
-              <p className="mt-0.5 text-[0.7rem] text-gray-400">
-                {items.length} item{items.length === 1 ? '' : 's'}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 [.admin-dark_&]:hover:bg-white/10"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            ×
-          </button>
+        <button
+          type="button"
+          className="absolute right-[15px] top-[15px] z-10 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-white text-[1.4rem] leading-none text-[#111] shadow-[0_2px_10px_rgba(0,0,0,0.15)] [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:text-gray-200"
+          onClick={onClose}
+          aria-label="Close"
+        >
+          ×
+        </button>
+
+        <div className="border-b border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
+          <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Order products</p>
+          <p className="mb-0 font-mono text-[0.95rem] font-bold text-deepGreen [.admin-dark_&]:text-emerald-400">{order.id}</p>
+          {!loading && items.length > 0 && (
+            <p className="mb-0 mt-1 text-[0.78rem] text-gray-500 [.admin-dark_&]:text-gray-400">
+              {items.length} item{items.length === 1 ? '' : 's'}
+            </p>
+          )}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 [scrollbar-width:thin]">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 [scrollbar-width:thin]">
           {loading ? (
             <div className="animate-pulse space-y-3">
               <div className="h-14 rounded-[10px] bg-gray-100 [.admin-dark_&]:bg-white/5" />
@@ -744,9 +754,15 @@ function UserOrderItemsModal({ open, order, onClose }) {
             </span>
           </div>
 
-          <div className="mt-4 border-t border-black/[0.06] pt-4 [.admin-dark_&]:border-white/10">
+          <div className="mt-4 border-t border-gray-100 pt-4 [.admin-dark_&]:border-white/10">
             <MiniDeliveryProgress currentStep={step} paymentStatus={payment} />
           </div>
+        </div>
+
+        <div className="flex justify-end border-t border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
+          <button type="button" className={BTN_GHOST} onClick={onClose}>
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -788,36 +804,49 @@ function ViewUserModal({
     onToggleActive?.(user);
   };
 
-  return (
-    <ModalShell open={open} onClose={onClose} maxWidth="max-w-xl" labelledBy="userDetailTitle">
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6 [scrollbar-width:thin]">
-          <div className="pr-10">
-            <div className="flex items-center gap-3">
-              {user && <UserAvatar user={user} size={44} />}
-              <div className="min-w-0 flex-1">
-                <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Customer</p>
-                <h3
-                  id="userDetailTitle"
-                  className="truncate text-[1.05rem] font-bold text-gray-900 [.admin-dark_&]:text-gray-100"
-                >
-                  {loading && !user ? 'Loading…' : name || 'Customer'}
-                </h3>
-                {user?.email && (
-                  <p className="truncate text-[0.78rem] text-gray-500 [.admin-dark_&]:text-gray-400">{user.email}</p>
-                )}
-              </div>
-            </div>
+  const roleLabel = user ? ROLE_LABELS[user.role] || user.role || 'Customer' : '';
 
+  return (
+    <ModalShell open={open} onClose={onClose} labelledBy="userDetailTitle">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
+          <div className="min-w-0 pr-10">
+            <h3
+              id="userDetailTitle"
+              className="font-display text-xl font-bold text-deepGreen [.admin-dark_&]:text-[#e8f0ed]"
+            >
+              {loading && !user ? 'Loading…' : name || 'Customer'}
+            </h3>
+            <p className="mb-0 mt-1 text-[0.82rem] text-gray-500 [.admin-dark_&]:text-gray-400">{user?.email || '—'}</p>
             {user && (
-              <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-                <MetaField label="Phone">
-                  <span>{user.phone || '—'}</span>
-                </MetaField>
-                <MetaField label="Role">
-                  <span>{ROLE_LABELS[user.role] || user.role || 'Customer'}</span>
-                </MetaField>
-                <MetaField label="Account status">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-[0.75rem] font-extrabold text-slate-700 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-slate-200">
+                  {roleLabel}
+                </span>
+                <span
+                  className={`inline-flex rounded-lg px-2.5 py-1 text-[0.75rem] font-extrabold ${
+                    isActive
+                      ? 'bg-emerald-100 text-emerald-700 [.admin-dark_&]:bg-emerald-500/15 [.admin-dark_&]:text-emerald-300'
+                      : 'bg-red-100 text-red-700 [.admin-dark_&]:bg-red-500/15 [.admin-dark_&]:text-red-300'
+                  }`}
+                >
+                  {isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 [scrollbar-width:thin]">
+          <div className="space-y-4">
+            {user && (
+              <div className="grid gap-3 rounded-xl border border-gray-100 bg-[#fdfbf8] p-4 sm:grid-cols-2 [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-white/[0.03]">
+                <div>
+                  <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Phone</p>
+                  <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">{user.phone || '—'}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Account status</p>
                   <select
                     className={`${ADM_SELECT} !py-1.5 text-[0.82rem]`}
                     value={isActive ? 'true' : 'false'}
@@ -828,159 +857,164 @@ function ViewUserModal({
                     <option value="true">Active</option>
                     <option value="false">Inactive</option>
                   </select>
-                </MetaField>
-                <MetaField label="Orders">
-                  <span>{stats.totalOrders || 0}</span>
-                </MetaField>
-                <MetaField label="Total spent">
-                  <span className="font-bold text-deepGreen [.admin-dark_&]:text-emerald-300">{spentLabel}</span>
-                </MetaField>
-                <MetaField label="Joined">
-                  <span>{user.joinedDate || '—'}</span>
-                </MetaField>
-                <MetaField label="Last login">
-                  <span>{formatLastLogin(user.lastLoginAt)}</span>
-                </MetaField>
+                </div>
+                <div>
+                  <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Orders</p>
+                  <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">{stats.totalOrders || 0}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Total spent</p>
+                  <p className="mb-0 text-[0.88rem] font-semibold text-emerald-700 [.admin-dark_&]:text-emerald-400">{spentLabel}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Joined</p>
+                  <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">{user.joinedDate || '—'}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Last login</p>
+                  <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">{formatLastLogin(user.lastLoginAt)}</p>
+                </div>
                 {user.id && (
-                  <MetaField label="User ID">
-                    <span className="font-mono text-[0.8rem] text-deepGreen">{user.id}</span>
-                  </MetaField>
+                  <div className="sm:col-span-2">
+                    <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">User ID</p>
+                    <p className="mb-0 break-all font-mono text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">{user.id}</p>
+                  </div>
                 )}
               </div>
             )}
-          </div>
 
-          <div className="mt-5 border-t border-black/[0.06] pt-5 [.admin-dark_&]:border-white/10">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Recent activity</p>
-              {!loading && !error && activities.length > 0 && (
-                <span className="text-[0.68rem] font-semibold text-gray-400">{activities.length} events</span>
-              )}
-            </div>
-
-            {loading && (
-              <div className="py-6 text-center text-[0.84rem] text-gray-400">
-                <i className="fa-solid fa-spinner fa-spin me-2" />
-                Loading…
-              </div>
-            )}
-
-            {!loading && error && (
-              <p className="rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[0.78rem] font-medium text-red-700 [.admin-dark_&]:border-red-500/25 [.admin-dark_&]:bg-red-500/10 [.admin-dark_&]:text-red-300">
-                {error}
-              </p>
-            )}
-
-            {!loading && !error && activities.length === 0 && (
-              <div className="rounded-[12px] border border-dashed border-black/[0.08] px-4 py-5 text-center [.admin-dark_&]:border-white/10">
-                <div className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-deepGreen/[0.06] text-deepGreen">
-                  <i className="fa-solid fa-clock-rotate-left text-[0.8rem]" />
-                </div>
-                <p className="text-[0.84rem] font-semibold text-gray-700 [.admin-dark_&]:text-gray-200">No activity yet</p>
-                <p className="mt-0.5 text-[0.74rem] text-gray-400">Logins and account changes will show here.</p>
-              </div>
-            )}
-
-            {!loading && !error && activities.length > 0 && (
-              <div className="max-h-[168px] overflow-y-auto rounded-[12px] border border-black/[0.06] [scrollbar-width:thin] [.admin-dark_&]:border-white/10">
-                <ul className="relative ms-3 border-l border-deepGreen/15 py-1 pe-2 ps-4 [.admin-dark_&]:border-emerald-500/20">
-                  {activities.slice(0, 12).map((item, idx) => (
-                    <li key={item.id || `${item.action}-${idx}`} className="relative py-2.5">
-                      <span className="absolute -left-[21px] top-3.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-deepGreen [.admin-dark_&]:border-[#1a2421]" />
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-deepGreen/[0.08] text-[0.62rem] text-deepGreen">
-                              <i className={`fa-solid ${formatActivityIcon(item.action)}`} />
-                            </span>
-                            <span className="text-[0.82rem] font-semibold text-gray-900 [.admin-dark_&]:text-gray-100">
-                              {formatActivityLabel(item.action)}
-                            </span>
-                          </div>
-                          {item.description && (
-                            <p className="mt-0.5 truncate text-[0.74rem] text-gray-500">{item.description}</p>
-                          )}
-                        </div>
-                        <span className="shrink-0 text-[0.68rem] text-gray-400">{formatLastLogin(item.createdAt)}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-
-          {!loading && !error && (
-            <div className="mt-5 border-t border-black/[0.06] pt-5 [.admin-dark_&]:border-white/10">
+            <div>
               <div className="mb-3 flex items-center justify-between gap-2">
-                <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Recent orders</p>
-                {recentOrders.length > 0 && (
-                  <span className="text-[0.68rem] font-semibold text-gray-400">{recentOrders.length} shown</span>
+                <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Recent activity</p>
+                {!loading && !error && activities.length > 0 && (
+                  <span className="text-[0.68rem] font-semibold text-gray-400">{activities.length} events</span>
                 )}
               </div>
 
-              {recentOrders.length === 0 ? (
-                <p className="text-[0.84rem] text-gray-400">No orders placed yet.</p>
-              ) : (
-                <div className="max-h-[220px] overflow-y-auto overflow-x-hidden rounded-[12px] border border-black/[0.06] [scrollbar-width:thin] [.admin-dark_&]:border-white/10">
-                  <table className="w-full border-collapse text-left text-[0.8rem]">
-                    <thead className="sticky top-0 z-[1] bg-gray-50 [.admin-dark_&]:bg-[#141f1b]">
-                      <tr className="text-[0.62rem] font-extrabold uppercase tracking-wide text-gray-400">
-                        <th className="px-3 py-2">Order</th>
-                        <th className="px-3 py-2">Progress</th>
-                        <th className="px-3 py-2">Date</th>
-                        <th className="px-3 py-2 text-right">Price</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentOrders.map((order) => {
-                        const stage = deliveryStageLabel(order);
-                        const amount = parseAmount(order.amount);
-                        const dateLabel =
-                          order.date ||
-                          (order.createdAt
-                            ? new Date(order.createdAt).toLocaleDateString('en-US', {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                              })
-                            : '—');
-                        return (
-                          <tr
-                            key={order.id}
-                            onClick={() => setSelectedOrder(order)}
-                            className="cursor-pointer border-t border-black/[0.04] transition hover:bg-deepGreen/[0.03] [.admin-dark_&]:border-white/[0.06]"
-                          >
-                            <td className="px-3 py-2.5 font-mono text-[0.78rem] font-bold text-deepGreen">
-                              {order.id}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              <span
-                                className={`inline-block rounded-md px-2 py-0.5 text-[0.66rem] font-extrabold ${deliveryStageBadgeClass(stage)}`}
-                              >
-                                {stage}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2.5 text-gray-500">{dateLabel}</td>
-                            <td className="px-3 py-2.5 text-right font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
-                              {formatAdminPrice(amount)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              {loading && (
+                <div className="py-6 text-center text-[0.84rem] text-gray-400">
+                  <i className="fa-solid fa-spinner fa-spin me-2" />
+                  Loading…
                 </div>
               )}
-              {recentOrders.length > 4 && (
-                <p className="mt-1.5 text-[0.7rem] text-gray-400">Showing 4 rows — scroll for more. Click a row for products.</p>
+
+              {!loading && error && (
+                <p className="rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[0.78rem] font-medium text-red-700 [.admin-dark_&]:border-red-500/25 [.admin-dark_&]:bg-red-500/10 [.admin-dark_&]:text-red-300">
+                  {error}
+                </p>
+              )}
+
+              {!loading && !error && activities.length === 0 && (
+                <div className="rounded-[12px] border border-dashed border-black/[0.08] px-4 py-5 text-center [.admin-dark_&]:border-white/10">
+                  <div className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-deepGreen/[0.06] text-deepGreen">
+                    <i className="fa-solid fa-clock-rotate-left text-[0.8rem]" />
+                  </div>
+                  <p className="text-[0.84rem] font-semibold text-gray-700 [.admin-dark_&]:text-gray-200">No activity yet</p>
+                  <p className="mt-0.5 text-[0.74rem] text-gray-400">Logins and account changes will show here.</p>
+                </div>
+              )}
+
+              {!loading && !error && activities.length > 0 && (
+                <div className="max-h-[168px] overflow-y-auto rounded-[12px] border border-black/[0.06] [scrollbar-width:thin] [.admin-dark_&]:border-white/10">
+                  <ul className="relative ms-3 border-l border-deepGreen/15 py-1 pe-2 ps-4 [.admin-dark_&]:border-emerald-500/20">
+                    {activities.slice(0, 12).map((item, idx) => (
+                      <li key={item.id || `${item.action}-${idx}`} className="relative py-2.5">
+                        <span className="absolute -left-[21px] top-3.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-deepGreen [.admin-dark_&]:border-[#1a2421]" />
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-deepGreen/[0.08] text-[0.62rem] text-deepGreen">
+                                <i className={`fa-solid ${formatActivityIcon(item.action)}`} />
+                              </span>
+                              <span className="text-[0.82rem] font-semibold text-gray-900 [.admin-dark_&]:text-gray-100">
+                                {formatActivityLabel(item.action)}
+                              </span>
+                            </div>
+                            {item.description && (
+                              <p className="mt-0.5 truncate text-[0.74rem] text-gray-500">{item.description}</p>
+                            )}
+                          </div>
+                          <span className="shrink-0 text-[0.68rem] text-gray-400">{formatLastLogin(item.createdAt)}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
-          )}
+
+            {!loading && !error && (
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Recent orders</p>
+                  {recentOrders.length > 0 && (
+                    <span className="text-[0.68rem] font-semibold text-gray-400">{recentOrders.length} shown</span>
+                  )}
+                </div>
+
+                {recentOrders.length === 0 ? (
+                  <p className="text-[0.84rem] text-gray-400">No orders placed yet.</p>
+                ) : (
+                  <div className="max-h-[220px] overflow-y-auto overflow-x-hidden rounded-[12px] border border-black/[0.06] [scrollbar-width:thin] [.admin-dark_&]:border-white/10">
+                    <table className="w-full border-collapse text-left text-[0.8rem]">
+                      <thead className="sticky top-0 z-[1] bg-gray-50 [.admin-dark_&]:bg-[#141f1b]">
+                        <tr className="text-[0.62rem] font-extrabold uppercase tracking-wide text-gray-400">
+                          <th className="px-3 py-2">Order</th>
+                          <th className="px-3 py-2">Progress</th>
+                          <th className="px-3 py-2">Date</th>
+                          <th className="px-3 py-2 text-right">Price</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recentOrders.map((order) => {
+                          const stage = deliveryStageLabel(order);
+                          const amount = parseAmount(order.amount);
+                          const dateLabel =
+                            order.date ||
+                            (order.createdAt
+                              ? new Date(order.createdAt).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                })
+                              : '—');
+                          return (
+                            <tr
+                              key={order.id}
+                              onClick={() => setSelectedOrder(order)}
+                              className="cursor-pointer border-t border-black/[0.04] transition hover:bg-deepGreen/[0.03] [.admin-dark_&]:border-white/[0.06]"
+                            >
+                              <td className="px-3 py-2.5 font-mono text-[0.78rem] font-bold text-deepGreen">
+                                {order.id}
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <span
+                                  className={`inline-block rounded-md px-2 py-0.5 text-[0.66rem] font-extrabold ${deliveryStageBadgeClass(stage)}`}
+                                >
+                                  {stage}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-gray-500">{dateLabel}</td>
+                              <td className="px-3 py-2.5 text-right font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
+                                {formatAdminPrice(amount)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {recentOrders.length > 4 && (
+                  <p className="mt-1.5 text-[0.7rem] text-gray-400">Showing 4 rows — scroll for more. Click a row for products.</p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {user && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.06] bg-gray-50/80 px-5 py-3.5 [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#141f1b]">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
             <button
               type="button"
               className="inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[0.8rem] font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50 [.admin-dark_&]:hover:bg-red-500/10"

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { apiUrl } from '../../utils/data';
+import { parseSomaliPhoneInput } from '../../utils/phone';
 
 const AUTH_SUBMIT_BTN_CLASS =
   'relative h-[50px] w-full overflow-hidden rounded-xl border-0 bg-gradient-to-br from-deepGreen via-[#0A5446] to-[#315C43] text-[0.95rem] font-black tracking-wide text-white transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(7,61,53,0.28)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70';
@@ -172,6 +173,12 @@ export default function ForgotPasswordModal({ onClose, onResetSuccess }) {
       return;
     }
 
+    const phoneParsed = parseSomaliPhoneInput(phoneVal);
+    if (!phoneParsed.ok) {
+      dispatch({ type: 'SET_ERROR', value: phoneParsed.message });
+      return;
+    }
+
     dispatch({ type: 'SET_BUSY', value: true });
     dispatch({ type: 'CLEAR_ERROR' });
 
@@ -179,7 +186,7 @@ export default function ForgotPasswordModal({ onClose, onResetSuccess }) {
       const { data } = await fetchJsonWithRetry(apiUrl('/api/auth/verify-phone'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phoneVal }),
+        body: JSON.stringify({ phone: phoneParsed.e164 }),
       });
 
       if (!mountedRef.current) return;
@@ -187,7 +194,7 @@ export default function ForgotPasswordModal({ onClose, onResetSuccess }) {
       if (data.success) {
         dispatch({
           type: 'PHONE_VERIFIED',
-          phone: phoneVal,
+          phone: data.phone || phoneVal,
           maskedEmail: data.maskedEmail || '',
           codeMessage: data.message || 'A verification code was sent to your Gmail.',
           otpChannel: data.channel || 'email',

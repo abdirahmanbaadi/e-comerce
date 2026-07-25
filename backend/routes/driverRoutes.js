@@ -5,6 +5,7 @@ const { protect, authorize } = require('../middleware/authMiddleware');
 
 router.post('/apply', protect, driverController.submitApplication);
 router.get('/my-application', protect, driverController.getMyApplication);
+router.get('/my-earnings', protect, authorize('delivery'), driverController.getMyEarnings);
 router.get('/my-status', protect, authorize('delivery'), driverController.getMyStatus);
 router.put('/my-status', protect, authorize('delivery'), driverController.updateMyStatus);
 router.post('/assignments/:orderId/accept', protect, authorize('delivery'), driverController.acceptAssignment);

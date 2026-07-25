@@ -2,7 +2,7 @@ const Review = require('../models/Review');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
 const { notifyUser } = require('../services/notificationService');
-const { normalizePhone } = require('../utils/phoneUtils');
+const { normalizePhone, buildUserOrdersQuery } = require('../utils/phoneUtils');
 const {
   findDuePromptForUser,
   getOrderPromptState,
@@ -27,12 +27,8 @@ async function recalculateProductRating(productId) {
 async function findUserOrders(user) {
   if (!user?.id && !user?.phone) return [];
 
-  const query = user.id
-    ? { $or: [{ userId: user.id }, { phone: normalizePhone(user.phone) }] }
-    : { phone: normalizePhone(user.phone) };
-
   return Order.find({
-    ...query,
+    ...buildUserOrdersQuery(user),
     currentStep: { $ne: 0 },
     status: { $nin: ['cancelled'] },
   }).lean();

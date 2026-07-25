@@ -1,5 +1,6 @@
 const SupportTicket = require('../models/SupportTicket');
 const SupportMessage = require('../models/SupportMessage');
+const User = require('../models/User');
 const {
   onSupportAdminReply,
   onSupportTicketCreated,
@@ -27,6 +28,30 @@ const broadcast = (data) => {
 };
 
 const toPlainObject = (doc) => (doc?.toObject ? doc.toObject() : doc);
+
+async function attachAvatarToTicket(ticket) {
+  if (!ticket) return ticket;
+  const plain = toPlainObject(ticket);
+  if (plain.avatar) return plain;
+  if (!plain.userId) return plain;
+  const user = await User.findOne({ id: plain.userId }).select('avatar').lean();
+  plain.avatar = user?.avatar || '';
+  return plain;
+}
+
+async function attachAvatarsToTickets(tickets) {
+  if (!tickets?.length) return [];
+  const userIds = [...new Set(tickets.map((t) => t.userId).filter(Boolean))];
+  const users = userIds.length
+    ? await User.find({ id: { $in: userIds } }).select('id avatar').lean()
+    : [];
+  const avatarByUserId = new Map(users.map((u) => [u.id, u.avatar || '']));
+  return tickets.map((ticket) => {
+    const plain = toPlainObject(ticket);
+    plain.avatar = plain.avatar || avatarByUserId.get(plain.userId) || '';
+    return plain;
+  });
+}
 
 const previewText = (messageText, imageUrl) => {
   const text = (messageText || '').trim();
@@ -168,8 +193,9 @@ exports.getConversationMessages = async (req, res) => {
     }
 
     const messages = await SupportMessage.find({ ticketId }).sort({ createdAt: 1 });
+    const ticketWithAvatar = await attachAvatarToTicket(ticket);
 
-    return res.status(200).json({ success: true, count: messages.length, messages, ticket });
+    return res.status(200).json({ success: true, count: messages.length, messages, ticket: ticketWithAvatar });
   } catch (error) {
     console.error('Error in getConversationMessages:', error);
     return res.status(500).json({ success: false, message: 'Waxaa dhacay khalad dhanka server-ka ah.' });
@@ -261,7 +287,9 @@ exports.getAdminConversations = async (req, res) => {
       .limit(80)
       .lean();
 
-    return res.status(200).json({ success: true, count: tickets.length, tickets });
+    const enriched = await attachAvatarsToTickets(tickets);
+
+    return res.status(200).json({ success: true, count: enriched.length, tickets: enriched });
   } catch (error) {
     console.error('Error in getAdminConversations:', error);
     return res.status(500).json({ success: false, message: 'Waxaa dhacay khalad dhanka server-ka ah.' });

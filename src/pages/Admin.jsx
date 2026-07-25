@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { clearAdminThemeFromDom, useAdminTheme } from '../hooks/useAdminTheme';
 import { getSidebarCompactDefault, getCompactTablesEnabled } from '../features/admin/adminShared.js';
@@ -21,6 +22,7 @@ import {
   DriverApplicationsTab,
 } from '../features/admin/AdminManageTabs';
 import AdminReviewsTab from '../features/admin/AdminReviewsTab';
+import { showTopFloatNotification } from '../utils/notifications';
 
 const ADMIN_PAGE_BG =
   'min-h-screen overflow-x-hidden bg-[#FDFBF8] font-sans text-gray-900 dark:bg-[#0b1412] dark:text-[#e8eeec] [.admin-dark_&]:bg-[#0b1412] [.admin-dark_&]:text-[#e8eeec]';
@@ -42,6 +44,7 @@ const REACT_MANAGED_TABS = new Set([
 
 export default function Admin() {
   const { user, logout, syncFromStorage } = useAuth();
+  const location = useLocation();
   useAdminPage();
   const { isDark } = useAdminTheme();
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -73,6 +76,13 @@ export default function Admin() {
     },
     [activeTab]
   );
+
+  useEffect(() => {
+    if (location.state?.storePreviewBlocked) {
+      showTopFloatNotification('Cart, wishlist, and checkout are disabled in admin preview mode.');
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state?.storePreviewBlocked]);
 
   useEffect(() => {
     syncFromStorage();
@@ -171,12 +181,14 @@ export default function Admin() {
         <main
           className={[
             'min-h-screen flex-1 transition-[margin-left] duration-300 max-md:ml-0',
-            activeTab === 'dashboard' ? 'p-4 pt-3 max-md:p-3' : activeTab === 'orders' ? 'p-4 pt-3 max-md:p-3' : 'p-[22px_28px] max-md:p-4',
+            activeTab === 'dashboard' ? 'p-4 pt-3 max-md:p-3' : activeTab === 'orders' || activeTab === 'payments' ? 'p-4 pt-3 max-md:p-3' : 'p-[22px_28px] max-md:p-4',
             sidebarCollapsed ? 'ml-[72px]' : 'ml-[220px]',
             compactTables ? 'admin-compact-tables' : '',
             activeTab === 'support'
               ? 'flex h-screen max-h-screen flex-col overflow-hidden p-2 max-md:p-2'
-              : '',
+              : activeTab === 'payments'
+                ? 'flex h-screen max-h-screen flex-col overflow-hidden'
+                : '',
           ].join(' ')}
         >
           <div
@@ -205,13 +217,21 @@ export default function Admin() {
               notifications={adminNotifications}
               onMarkNotificationRead={markRead}
               onRefreshNotifications={refreshNotifications}
-              compact={activeTab === 'dashboard' || activeTab === 'orders'}
+              compact={activeTab === 'dashboard' || activeTab === 'orders' || activeTab === 'payments'}
             />
           )}
 
+          <div className={activeTab === 'products' ? '' : 'hidden'} aria-hidden={activeTab !== 'products'}>
+            <AdminProductsTab headerSearch={headerSearch} />
+          </div>
+
           <div
             key={activeTab}
-            className={activeTab === 'support' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'animate-profileTabIn'}
+            className={
+              activeTab === 'support' || activeTab === 'payments'
+                ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
+                : 'animate-profileTabIn'
+            }
           >
           {activeTab === 'dashboard' && (
             <DashboardAdminTab
@@ -219,7 +239,6 @@ export default function Admin() {
               onTabChange={handleTabChange}
             />
           )}
-          {activeTab === 'products' && <AdminProductsTab headerSearch={headerSearch} />}
           {activeTab === 'orders' && <AdminOrdersTab headerSearch={headerSearch} />}
           {activeTab === 'users' && <AdminUsersTab headerSearch={headerSearch} />}
           {activeTab === 'stock' && <AdminStockTab headerSearch={headerSearch} />}

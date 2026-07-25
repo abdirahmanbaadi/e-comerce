@@ -1,20 +1,20 @@
 const Order = require('../models/Order');
 const PaymentTransaction = require('../models/PaymentTransaction');
 const { processWaafiPurchase, WAAFI_MIN_USD } = require('../services/waafiService');
-const { logPaymentTransaction, isWaafiConfigured } = require('../services/paymentService');
+const {
+  logPaymentTransaction,
+  isWaafiConfigured,
+  syncMissingSuccessTransactions,
+  mapTransactionRow,
+} = require('../services/paymentService');
 const { invalidateDashboardCache } = require('../utils/revenueUtils');
 const { onOrderUpdated } = require('../services/notificationService');
-const { normalizePhone } = require('../utils/phoneUtils');
+const { normalizePhone, isValidSomaliMobile } = require('../utils/phoneUtils');
 const { decrementStockForItems, restoreStockForItems } = require('../utils/stockUtils');
 
 function parseOrderAmount(amount) {
   if (typeof amount === 'number') return amount;
   return Number(String(amount || '').replace(/[^0-9.]/g, '')) || 0;
-}
-
-function isValidSomaliMobile(phone) {
-  const digits = normalizePhone(phone);
-  return digits.length >= 9 && digits.length <= 12;
 }
 
 function resolveOrderStatus(order) {
@@ -42,7 +42,9 @@ exports.getPaymentConfig = async (_req, res) => {
 
 exports.getTransactions = async (_req, res) => {
   try {
-    const transactions = await PaymentTransaction.find().sort({ createdAt: -1 }).limit(100).lean();
+    await syncMissingSuccessTransactions();
+
+    const transactions = await PaymentTransaction.find().sort({ createdAt: -1 }).limit(250).lean();
 
     const orderIds = [...new Set(transactions.map((txn) => txn.orderId).filter(Boolean))];
     const orders = orderIds.length
@@ -62,25 +64,14 @@ exports.getTransactions = async (_req, res) => {
         stats.pendingCount += 1;
       }
     });
+    stats.totalRevenue = Math.round(stats.totalRevenue * 100) / 100;
+    stats.evcRevenue = Math.round(stats.evcRevenue * 100) / 100;
 
     return res.status(200).json({
       success: true,
       count: transactions.length,
       stats,
-      transactions: transactions.map((txn) => ({
-        id: txn.id,
-        orderId: txn.orderId,
-        customer: customerByOrderId.get(txn.orderId) || '',
-        method: txn.method,
-        amount: txn.amount,
-        status: txn.status,
-        phone: txn.phone,
-        referenceId: txn.referenceId,
-        transactionId: txn.transactionId || txn.referenceId || txn.id,
-        message: txn.message,
-        source: txn.source,
-        createdAt: txn.createdAt,
-      })),
+      transactions: transactions.map((txn) => mapTransactionRow(txn, customerByOrderId)),
     });
   } catch (error) {
     console.error(error);

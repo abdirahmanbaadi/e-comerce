@@ -38,7 +38,16 @@ export const ADM_DARK_BTN =
 export const ADM_DARK_LINK =
   'dark:text-blue-400 dark:hover:text-blue-300 [.admin-dark_&]:text-blue-400 [.admin-dark_&]:hover:text-blue-300';
 
-export const ADMIN_FETCH_TIMEOUT = 8000;
+/** Shared admin modal shell — keep detail modals the same size */
+export const ADMIN_MODAL_OVERLAY =
+  'fixed inset-0 z-[9999] flex items-center justify-center bg-deepGreen/45 p-4 backdrop-blur-[4px]';
+export const ADMIN_MODAL_PANEL =
+  'animate-productModalIn relative flex h-[min(680px,92vh)] w-full max-w-2xl flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]';
+export const ADMIN_MODAL_CLOSE_BTN =
+  'absolute right-[15px] top-[15px] z-10 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-white text-[1.4rem] leading-none text-[#111] shadow-[0_2px_10px_rgba(0,0,0,0.15)] [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:text-gray-200';
+
+export const ADMIN_FETCH_TIMEOUT = 20000;
+export const ADMIN_PAYMENTS_FETCH_TIMEOUT = 25000;
 export const MAX_DRIVER_ACTIVE = 3;
 
 export function token() {
@@ -325,7 +334,7 @@ export const DEFAULT_ADMIN_NOTIF_PREFS = {
 
 export const ADMIN_DASHBOARD_REFRESH_OPTIONS = [0, 30000, 60000, 120000];
 export const ADMIN_SALES_RANGE_OPTIONS = ['all', 'today', 'week', 'month', 'year'];
-export const ADMIN_TOP_PRODUCTS_RANGE_OPTIONS = ['week', 'month', 'year'];
+export const ADMIN_TOP_PRODUCTS_RANGE_OPTIONS = ['all', 'week', 'month', 'year'];
 export const ADMIN_TABLE_PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 export function getLowStockThreshold() {
@@ -359,9 +368,9 @@ export function getDashboardSalesRange() {
 }
 
 export function getDashboardTopProductsRange() {
-  if (typeof localStorage === 'undefined') return 'week';
+  if (typeof localStorage === 'undefined') return 'month';
   const value = localStorage.getItem(ADMIN_SETTINGS_KEYS.dashboardTopProductsRange);
-  return ADMIN_TOP_PRODUCTS_RANGE_OPTIONS.includes(value) ? value : 'week';
+  return ADMIN_TOP_PRODUCTS_RANGE_OPTIONS.includes(value) ? value : 'month';
 }
 
 export function getAdminTablePageSize() {

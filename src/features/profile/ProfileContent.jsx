@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useProducts } from '../../context/ProductsContext';
 import { apiUrl } from '../../utils/data';
 import { formatMoney, productImage } from '../../utils/format';
+import { parsePhoneForStorage } from '../../utils/phone';
 import { downloadInvoice } from '../../utils/invoiceActions';
 import { getDeliveryBadge, getPaymentBadge, resolveOrderStatus } from '../../utils/orderStatus';
 import { canCustomerCancelOrder } from '../../utils/orderCancel';
@@ -12,6 +14,14 @@ import RetryPaymentModal from '../checkout/RetryPaymentModal';
 import WriteReviewModal from '../products/WriteReviewModal';
 import { AppSearchField } from '../nav/StoreNavbar';
 import ProfileSupportChat from './ProfileSupportChat';
+import { OrderItemsList } from '../admin/AdminOrdersTab.jsx';
+import {
+  ADMIN_MODAL_CLOSE_BTN,
+  ADMIN_MODAL_OVERLAY,
+  ADMIN_MODAL_PANEL,
+  BTN_GHOST,
+  BTN_PRIMARY,
+} from '../admin/adminShared.js';
 
 /* ═══ SECTION: INFO TAB ═══ */
 function ProfileField({ label, htmlFor, icon, children }) {
@@ -119,9 +129,15 @@ export function ProfileInfoTab() {
     e.preventDefault();
     setSaving(true);
     try {
+      const phoneParsed = parsePhoneForStorage(form.phone.trim());
+      if (!phoneParsed.ok) {
+        showTopFloatNotification(`❌ ${phoneParsed.message}`, 'danger');
+        return;
+      }
+
       const data = await updateProfile({
         fullName: form.fullName.trim(),
-        phone: form.phone.trim(),
+        phone: phoneParsed.e164,
         address: form.address.trim(),
       });
       if (data.success) {
@@ -275,12 +291,232 @@ export function ProfileInfoTab() {
 
 /* ═══ SECTION: ORDERS TAB ═══ */
 
-function findProductImage(products, title) {
+function findProductImagePath(products, title) {
   if (!title) return '';
   const match = products.find(
     (p) => p.title?.toLowerCase() === title.toLowerCase() || title.toLowerCase().includes(p.title?.toLowerCase())
   );
-  return match?.images?.[0] ? productImage(match.images[0]) : '';
+  return match?.images?.[0] || '';
+}
+
+function findProductImage(products, title) {
+  const path = findProductImagePath(products, title);
+  return path ? productImage(path) : '';
+}
+
+function enrichOrderForItemsList(order, products) {
+  const amountNum = parseFloat(String(order.amount).replace(/[^0-9.]/g, '')) || 0;
+  const resolveItemImage = (item) => {
+    if (item?.image) return item.image;
+    if (item?.id) {
+      const match = products.find((product) => Number(product.id) === Number(item.id));
+      if (match?.images?.[0]) return match.images[0];
+    }
+    return findProductImagePath(products, item?.title || order.product);
+  };
+
+  const items =
+    Array.isArray(order.items) && order.items.length > 0
+      ? order.items.map((item) => ({
+          ...item,
+          image: resolveItemImage(item),
+        }))
+      : [
+          {
+            title: order.product,
+            quantity: 1,
+            price: amountNum,
+            image: resolveItemImage({ title: order.product }),
+          },
+        ];
+
+  return { ...order, items };
+}
+
+function OrderDetailModal({
+  open,
+  order,
+  products,
+  onClose,
+  onTrack,
+  onCancel,
+  onRetry,
+  onReview,
+  cancellingId,
+}) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, onClose]);
+
+  if (!open || !order || typeof document === 'undefined') return null;
+
+  const payment = getPaymentBadge(order.paymentType, order.payment);
+  const delivery = getDeliveryBadge(order.status);
+  const amountNum = parseFloat(String(order.amount).replace(/[^0-9.]/g, '')) || 0;
+  const itemCount = countOrderItems(order);
+  const orderForList = enrichOrderForItemsList(order, products);
+  const orderProduct = resolveOrderProduct(order, products);
+  const showReview = canShowOrderReview(order) && orderProduct;
+  const canCancel = canCustomerCancelOrder(order);
+  const canRetry =
+    payment.className === 'failed' && String(order.paymentMethod || '').toLowerCase().includes('evc');
+
+  const handleDownloadPdf = () => {
+    downloadInvoice({
+      trackingCode: order.id,
+      customer: order.customer,
+      phone: order.phone,
+      address: order.address,
+      payment: order.payment,
+      paymentMethod: order.paymentMethod,
+      items: orderForList.items,
+      total: amountNum,
+      deliveryDate: order.deliveryDate,
+      deliveryTime: order.deliveryTime,
+    });
+  };
+
+  return createPortal(
+    <div className={ADMIN_MODAL_OVERLAY} onClick={onClose} role="presentation">
+      <div
+        className={ADMIN_MODAL_PANEL}
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="orderDetailTitle"
+      >
+        <button type="button" className={ADMIN_MODAL_CLOSE_BTN} onClick={onClose} aria-label="Close">
+          ×
+        </button>
+
+        <div className="border-b border-gray-100 px-5 py-4">
+          <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Order products</p>
+          <p id="orderDetailTitle" className="mb-0 font-mono text-[0.95rem] font-bold text-deepGreen">
+            #{order.id}
+          </p>
+          <p className="mb-0 mt-1 text-[0.78rem] text-gray-500">
+            {order.date}
+            {itemCount > 0 ? ` · ${itemCount} item${itemCount === 1 ? '' : 's'}` : ''}
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <span
+              className={`inline-flex rounded-full px-2.5 py-1 text-[0.72rem] font-bold ${STATUS_BADGE[payment.className] || STATUS_BADGE.pending}`}
+            >
+              {payment.label}
+            </span>
+            <span
+              className={`inline-flex rounded-full px-2.5 py-1 text-[0.72rem] font-bold ${STATUS_BADGE[delivery.className] || STATUS_BADGE.pending}`}
+            >
+              {delivery.label}
+            </span>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 [scrollbar-width:thin]">
+          <OrderItemsList order={orderForList} />
+
+          <div className="mt-4 flex items-center justify-between border-t border-black/[0.06] pt-3.5">
+            <span className="text-[0.78rem] font-bold uppercase tracking-wide text-gray-400">Total</span>
+            <span className="text-[1.05rem] font-bold text-deepGreen">
+              {order.amount?.startsWith('$') ? order.amount : formatMoney(amountNum)}
+            </span>
+          </div>
+
+          {(order.deliveryDate || order.deliveryTime || order.address) && (
+            <div className="mt-3 rounded-[10px] border border-black/[0.06] bg-[#FCFAF7] px-3.5 py-3">
+              <p className="mb-1 text-[0.72rem] font-extrabold uppercase tracking-[0.08em] text-[#7A6F62]">
+                Delivery
+              </p>
+              <p className="m-0 text-[0.84rem] font-semibold text-[#333333]">
+                {order.deliveryDate || order.deliveryTime
+                  ? [order.deliveryDate, order.deliveryTime].filter(Boolean).join(' · ')
+                  : 'Not scheduled'}
+              </p>
+              {order.address && (
+                <p className="m-0 mt-1 text-[0.76rem] text-[#888888]">{order.address}</p>
+              )}
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-black/[0.06] pt-4">
+            <button
+              type="button"
+              className={`${BTN_PRIMARY} !px-4 !py-2 text-[0.84rem]`}
+              onClick={() => {
+                onClose();
+                onTrack?.(order.id);
+              }}
+            >
+              <i className="fa-solid fa-location-dot" aria-hidden="true" />
+              Track
+            </button>
+            <button
+              type="button"
+              className={`${BTN_GHOST} !px-4 !py-2 text-[0.84rem]`}
+              onClick={handleDownloadPdf}
+            >
+              <i className="fa-regular fa-file-pdf" aria-hidden="true" />
+              PDF
+            </button>
+            {showReview && (
+              <button
+                type="button"
+                className={`${BTN_GHOST} !px-4 !py-2 text-[0.84rem] !text-gold`}
+                onClick={() => {
+                  onClose();
+                  onReview?.({
+                    productId: orderProduct.id,
+                    productTitle: orderProduct.title,
+                  });
+                }}
+              >
+                <i className="fa-regular fa-star" aria-hidden="true" />
+                Review
+              </button>
+            )}
+            {canRetry && (
+              <button
+                type="button"
+                className={`${BTN_GHOST} !px-4 !py-2 text-[0.84rem] !text-[#c0392b]`}
+                onClick={() => {
+                  onClose();
+                  onRetry?.(order);
+                }}
+              >
+                Retry payment
+              </button>
+            )}
+            {canCancel && (
+              <button
+                type="button"
+                className={`${BTN_GHOST} !px-4 !py-2 text-[0.84rem] !text-red-600`}
+                disabled={cancellingId === order.id}
+                onClick={() => onCancel?.(order)}
+              >
+                {cancellingId === order.id ? 'Cancelling…' : 'Cancel order'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-gray-100 px-5 py-4">
+          <button type="button" className={BTN_GHOST} onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
 }
 
 function countOrderItems(order) {
@@ -314,9 +550,11 @@ const STATUS_BADGE = {
   paid: 'bg-[#E8F5EE] text-[#087443] ring-1 ring-[#087443]/12',
   pending: 'bg-[#FFF6E5] text-[#A07000] ring-1 ring-[#D8A128]/15',
   failed: 'bg-[#FCE8E6] text-[#c0392b] ring-1 ring-[#c0392b]/12',
+  refunded: 'bg-[#FFF0E5] text-[#B45309] ring-1 ring-[#D8A128]/20',
   delivered: 'bg-[#E8F5EE] text-[#087443] ring-1 ring-[#087443]/12',
   processing: 'bg-[#FFF6E5] text-[#A07000] ring-1 ring-[#D8A128]/15',
   'out-for-delivery': 'bg-[#EEEAF8] text-[#2B59DB] ring-1 ring-[#2B59DB]/12',
+  cancelled: 'bg-[#FCE8E6] text-[#c0392b] ring-1 ring-[#c0392b]/12',
 };
 
 const FILTER_OPTIONS = [
@@ -324,29 +562,36 @@ const FILTER_OPTIONS = [
   { value: 'paid', label: 'Paid' },
   { value: 'pending', label: 'Pending' },
   { value: 'failed', label: 'Failed' },
+  { value: 'refunded', label: 'Refunded' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'out-for-delivery', label: 'Out for Delivery' },
   { value: 'processing', label: 'Processing' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
 
-const actionBtnClass =
-  'inline-flex items-center gap-1 rounded-md border-0 bg-transparent px-0 py-0.5 text-[0.8rem] font-bold text-blue-600 transition hover:text-blue-700 hover:underline';
-
-function OrdersEmptyState() {
+function OrdersEmptyState({ hasOrders = false, loadError = '' }) {
   return (
     <div className="flex flex-col items-center justify-center py-14 text-center">
       <i className="fa-solid fa-bag-shopping mb-3 text-[2rem] text-gold/80" />
-      <h3 className="mb-1 font-display text-[1.25rem] font-bold text-deepGreen">No orders found</h3>
+      <h3 className="mb-1 font-display text-[1.25rem] font-bold text-deepGreen">
+        {hasOrders ? 'No matching orders' : 'No orders found'}
+      </h3>
       <p className="mb-4 max-w-[300px] text-[0.88rem] leading-relaxed text-[#888888]">
-        You haven&apos;t placed any orders yet, or nothing matches your search.
+        {hasOrders
+          ? 'Try a different search or status filter.'
+          : loadError
+            ? 'Your orders could not be loaded right now.'
+            : "You haven't placed any orders yet, or nothing matches your search."}
       </p>
-      <Link
-        to="/products"
-        className="inline-flex items-center gap-2 text-[0.88rem] font-bold text-deepGreen no-underline transition hover:underline"
-      >
-        Start Shopping
-        <i className="fa-solid fa-arrow-right text-[0.75rem]" />
-      </Link>
+      {!hasOrders && !loadError && (
+        <Link
+          to="/products"
+          className="inline-flex items-center gap-2 text-[0.88rem] font-bold text-deepGreen no-underline transition hover:underline"
+        >
+          Start Shopping
+          <i className="fa-solid fa-arrow-right text-[0.75rem]" />
+        </Link>
+      )}
     </div>
   );
 }
@@ -377,42 +622,55 @@ export function ProfileOrdersTab({ onTrackOrder }) {
   const [cancellingId, setCancellingId] = useState('');
   const [retryOrder, setRetryOrder] = useState(null);
   const [reviewTarget, setReviewTarget] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadOrders() {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const response = await fetch(apiUrl('/api/orders'), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await response.json();
-        if (!cancelled && data.success) {
-          setOrders(
-            (data.orders || []).map((order) => ({
-              ...order,
-              status: resolveOrderStatus(order),
-            }))
-          );
-        }
-      } catch (error) {
-        console.error('Failed to load orders:', error);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  const loadOrders = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setLoading(false);
+      setLoadError('Please log in again to view your orders.');
+      return;
     }
 
-    loadOrders();
-    return () => {
-      cancelled = true;
-    };
+    setLoading(true);
+    setLoadError('');
+
+    try {
+      const response = await fetch(apiUrl('/api/orders'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setOrders(
+          (data.orders || []).map((order) => ({
+            ...order,
+            status: resolveOrderStatus(order),
+          }))
+        );
+      } else {
+        setOrders([]);
+        setLoadError(data.message || 'Could not load your orders.');
+      }
+    } catch (error) {
+      console.error('Failed to load orders:', error);
+      setLoadError('Could not connect to the server. Check that the backend is running.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadOrders();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [loadOrders]);
 
   const filteredOrders = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -429,6 +687,8 @@ export function ProfileOrdersTab({ onTrackOrder }) {
         (statusFilter === 'paid' && paymentKey === 'paid') ||
         (statusFilter === 'pending' && paymentKey === 'pending') ||
         (statusFilter === 'failed' && paymentKey === 'failed') ||
+        (statusFilter === 'refunded' && paymentKey === 'refunded') ||
+        (statusFilter === 'cancelled' && (deliveryKey === 'cancelled' || order.status === 'cancelled')) ||
         deliveryKey === statusFilter;
 
       return matchesSearch && matchesStatus;
@@ -473,6 +733,7 @@ export function ProfileOrdersTab({ onTrackOrder }) {
             item.id === order.id ? { ...item, ...data.order, status: resolveOrderStatus(data.order) } : item
           )
         );
+        loadOrders();
         showTopFloatNotification(data.message || 'Order cancelled successfully.');
       } else {
         showTopFloatNotification(data.message || 'Could not cancel this order.', 'danger');
@@ -532,16 +793,29 @@ export function ProfileOrdersTab({ onTrackOrder }) {
         )}
       </div>
 
+      {loadError && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[0.84rem] text-red-700">
+          <span>{loadError}</span>
+          <button
+            type="button"
+            className="rounded-lg bg-white px-3 py-1.5 text-[0.8rem] font-bold text-red-700 shadow-sm"
+            onClick={loadOrders}
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <OrdersLoadingState />
       ) : filteredOrders.length === 0 ? (
-        <OrdersEmptyState />
+        <OrdersEmptyState hasOrders={orders.length > 0} loadError={loadError} />
       ) : (
         <div className="overflow-x-auto border-t border-black/[0.06]">
-          <table className="w-full min-w-[880px] border-collapse">
+          <table className="w-full min-w-[760px] border-collapse">
               <thead>
                 <tr className="border-b border-black/[0.06]">
-                  {['Order ID', 'Date', 'Order', 'Total', 'Payment', 'Delivery', 'Actions'].map((label) => (
+                  {['Order ID', 'Date', 'Order', 'Total', 'Payment', 'Delivery'].map((label) => (
                     <th
                       key={label}
                       className="border-b border-black/[0.06] px-4 py-3.5 text-left text-[0.72rem] font-extrabold uppercase tracking-[0.08em] text-[#7A6F62]"
@@ -558,18 +832,13 @@ export function ProfileOrdersTab({ onTrackOrder }) {
                   const delivery = getDeliveryBadge(order.status);
                   const amountNum = parseFloat(String(order.amount).replace(/[^0-9.]/g, '')) || 0;
                   const itemCount = countOrderItems(order);
-                  const canCancel = canCustomerCancelOrder(order);
-                  const canRetry =
-                    payment.className === 'failed' &&
-                    String(order.paymentMethod || '').toLowerCase().includes('evc');
-                  const orderProduct = resolveOrderProduct(order, products);
-                  const showReview = canShowOrderReview(order) && orderProduct;
 
                   return (
                     <tr
                       key={order.id}
-                      className="border-b border-black/[0.04] transition-colors duration-200 hover:bg-white/60"
+                      className="cursor-pointer border-b border-black/[0.04] transition-colors duration-200 hover:bg-white/80"
                       style={{ animationDelay: `${index * 40}ms` }}
+                      onClick={() => setSelectedOrder(order)}
                     >
                       <td className="px-4 py-4">
                         <span className="font-mono text-[0.86rem] font-extrabold text-deepGreen">#{order.id}</span>
@@ -619,69 +888,6 @@ export function ProfileOrdersTab({ onTrackOrder }) {
                           </p>
                         )}
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap gap-x-3 gap-y-1">
-                          <button type="button" className={actionBtnClass} onClick={() => handleTrack(order.id)}>
-                            <i className="fa-solid fa-location-dot text-[0.72rem]" />
-                            Track
-                          </button>
-                          <button
-                            type="button"
-                            className={actionBtnClass}
-                            onClick={() =>
-                              downloadInvoice({
-                                trackingCode: order.id,
-                                customer: order.customer,
-                                phone: order.phone,
-                                address: order.address,
-                                payment: order.payment,
-                                paymentMethod: order.paymentMethod,
-                                items: order.items || [{ title: order.product, quantity: 1, price: amountNum }],
-                                total: amountNum,
-                                deliveryDate: order.deliveryDate,
-                                deliveryTime: order.deliveryTime,
-                              })
-                            }
-                          >
-                            <i className="fa-regular fa-file-pdf text-[0.72rem]" />
-                            PDF
-                          </button>
-                          {showReview && (
-                            <button
-                              type="button"
-                              className={`${actionBtnClass} text-gold hover:text-[#b8860b]`}
-                              onClick={() =>
-                                setReviewTarget({
-                                  productId: orderProduct.id,
-                                  productTitle: orderProduct.title,
-                                })
-                              }
-                            >
-                              <i className="fa-regular fa-star text-[0.72rem]" />
-                              Review
-                            </button>
-                          )}
-                          {canRetry && (
-                            <button
-                              type="button"
-                              className={`${actionBtnClass} text-[#c0392b] hover:text-[#a93226]`}
-                              onClick={() => setRetryOrder(order)}
-                            >
-                              Retry
-                            </button>
-                          )}
-                          {canCancel && (
-                            <button
-                              type="button"
-                              className={`${actionBtnClass} text-red-600 hover:text-red-700`}
-                              disabled={cancellingId === order.id}
-                              onClick={() => handleCancel(order)}
-                            >
-                              {cancellingId === order.id ? '…' : 'Cancel'}
-                            </button>
-                          )}
-                        </div>
-                      </td>
                     </tr>
                   );
                 })}
@@ -689,6 +895,18 @@ export function ProfileOrdersTab({ onTrackOrder }) {
             </table>
         </div>
       )}
+
+      <OrderDetailModal
+        open={Boolean(selectedOrder)}
+        order={selectedOrder}
+        products={products}
+        onClose={() => setSelectedOrder(null)}
+        onTrack={handleTrack}
+        onCancel={handleCancel}
+        cancellingId={cancellingId}
+        onRetry={setRetryOrder}
+        onReview={setReviewTarget}
+      />
 
       {retryOrder && (
         <RetryPaymentModal

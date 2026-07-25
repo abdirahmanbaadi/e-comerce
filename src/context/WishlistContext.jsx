@@ -1,5 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useAuth } from './AuthContext';
 import { apiUrl } from '../utils/data';
+import { canUseCustomerShopping } from '../utils/roleAccess';
+import { showTopFloatNotification } from '../utils/notifications';
 
 const WishlistContext = createContext(null);
 
@@ -11,6 +14,7 @@ function titlesToMap(titles = []) {
 }
 
 export function WishlistProvider({ children }) {
+  const { user } = useAuth();
   const [wishlist, setWishlist] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('wishlistStateStorage')) || {};
@@ -21,7 +25,7 @@ export function WishlistProvider({ children }) {
 
   const syncFromServer = useCallback(async () => {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token || !canUseCustomerShopping(user)) return;
 
     try {
       const response = await fetch(apiUrl('/api/wishlist'), {
@@ -36,11 +40,11 @@ export function WishlistProvider({ children }) {
     } catch {
       /* keep local wishlist */
     }
-  }, []);
+  }, [user]);
 
   const mergeWithServer = useCallback(async () => {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token || !canUseCustomerShopping(user)) return;
 
     let localTitles = [];
     try {
@@ -75,7 +79,7 @@ export function WishlistProvider({ children }) {
     } catch {
       /* keep local */
     }
-  }, [wishlist]);
+  }, [wishlist, user]);
 
   useEffect(() => {
     localStorage.setItem('wishlistStateStorage', JSON.stringify(wishlist));
@@ -94,6 +98,10 @@ export function WishlistProvider({ children }) {
   const wishlistCount = useMemo(() => Object.keys(wishlist).length, [wishlist]);
 
   const toggleWishlist = useCallback(async (title) => {
+    if (!canUseCustomerShopping(user)) {
+      showTopFloatNotification('Wishlist is disabled for admin preview and driver accounts.', 'danger');
+      return;
+    }
     setWishlist((prev) => {
       const next = { ...prev };
       if (next[title]) delete next[title];
@@ -116,7 +124,7 @@ export function WishlistProvider({ children }) {
         /* local state already updated */
       }
     }
-  }, []);
+  }, [user]);
 
   const removeFromWishlist = useCallback(async (title) => {
     setWishlist((prev) => {

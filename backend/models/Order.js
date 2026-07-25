@@ -156,6 +156,15 @@ const orderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    refundDueAt: {
+      type: Date,
+      default: null,
+    },
+    refundStatus: {
+      type: String,
+      enum: ['none', 'scheduled', 'completed', 'failed'],
+      default: 'none',
+    },
     driverArrivedAt: {
       type: Date,
       default: null,

@@ -5,7 +5,14 @@ import OrderConfirmModal, { PaymentFailedCompactModal } from '../features/checko
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { validateCartItems } from '../utils/cartApi';
-import { apiUrl, DELIVERY_DISTRICTS, fetchDeliveryDistricts, findDistrictByDeliveryFee, getDistrictFee, normalizePhoneNumber } from '../utils/data';
+import { apiUrl, DELIVERY_DISTRICTS, fetchDeliveryDistricts, findDistrictByDeliveryFee, getDistrictFee } from '../utils/data';
+import {
+  buildCheckoutPhone,
+  CHECKOUT_PHONE_PREFIX,
+  CHECKOUT_PHONE_SUFFIX_KEY,
+  isValidSomaliMobile,
+  readCheckoutPhoneSuffix,
+} from '../utils/phone';
 import { formatMoney, productImage } from '../utils/format';
 import { showTopFloatNotification } from '../utils/notifications';
 import { submitWaafiPayment } from '../utils/waafiPayment';
@@ -14,6 +21,16 @@ const DEFAULT_DISTRICTS = DELIVERY_DISTRICTS.map((d) => ({
   ...d,
   label: `${d.value} - ${formatMoney(d.fee)}`,
 }));
+
+const CHECKOUT_DISTRICT_KEY = 'cartDistrict';
+
+function getMinDeliveryDate() {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 function generatePaymentReference() {
   const randomNumber = Math.floor(100000 + Math.random() * 900000);
@@ -50,6 +67,7 @@ export default function Checkout() {
   const [cancellingOrder, setCancellingOrder] = useState(false);
   const [districts, setDistricts] = useState(DEFAULT_DISTRICTS);
   const [waafiConfigured, setWaafiConfigured] = useState(true);
+  const minDeliveryDate = useMemo(() => getMinDeliveryDate(), []);
 
   const discount = useMemo(
     () => (cartItems.length > 0 ? Number(localStorage.getItem('cartDiscount')) || 0 : 0),
@@ -125,7 +143,7 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => {
-    const savedDistrict = localStorage.getItem('cartDistrict');
+    const savedDistrict = localStorage.getItem(CHECKOUT_DISTRICT_KEY);
     const savedFee = Number(localStorage.getItem('cartDeliveryFee')) || 0;
     const legacyFee = savedFee >= 1;
     const district =
@@ -133,17 +151,19 @@ export default function Checkout() {
         ? savedDistrict
         : findDistrictByDeliveryFee(savedFee);
     const fee = legacyFee && district ? getDistrictFee(district, districts) : savedFee;
+    const savedPhoneSuffix = readCheckoutPhoneSuffix();
 
     setForm((prev) => ({
       ...prev,
       name: prev.name || (user.isLoggedIn ? user.fullName : '') || '',
-      phone: prev.phone || (user.isLoggedIn ? user.phone : '') || '',
+      phone: prev.phone || savedPhoneSuffix,
       email: prev.email || (user.isLoggedIn ? user.email : '') || '',
       address: prev.address || (user.isLoggedIn ? user.address : '') || '',
-      district: prev.district || district,
+      district: prev.district || district || '',
     }));
-    setDeliveryFee(fee > 0 ? fee : 0);
-    if (legacyFee && district) {
+    setDeliveryFee(fee > 0 ? fee : savedFee);
+    if (district) {
+      localStorage.setItem(CHECKOUT_DISTRICT_KEY, district);
       localStorage.setItem('cartDeliveryFee', String(getDistrictFee(district, districts)));
     }
   }, [user, districts]);
@@ -158,11 +178,20 @@ export default function Checkout() {
     setErrors((prev) => ({ ...prev, [field]: false }));
   };
 
+  const handlePhoneChange = (e) => {
+    const value = e.target.value.replace(/\D/g, '').slice(0, 7);
+    setForm((prev) => ({ ...prev, phone: value }));
+    localStorage.setItem(CHECKOUT_PHONE_SUFFIX_KEY, value);
+    setErrors((prev) => ({ ...prev, phone: false }));
+  };
+
   const handleDistrictChange = (e) => {
     const value = e.target.value;
     const district = districts.find((d) => d.value === value);
     setForm((prev) => ({ ...prev, district: value }));
     setDeliveryFee(district?.fee || 0);
+    localStorage.setItem(CHECKOUT_DISTRICT_KEY, value);
+    localStorage.setItem('cartDeliveryFee', String(district?.fee || 0));
     setErrors((prev) => ({ ...prev, district: false }));
   };
 
@@ -188,9 +217,9 @@ export default function Checkout() {
       return false;
     }
 
-    const phoneDigits = normalizePhoneNumber(form.phone);
-    if (!phoneDigits || phoneDigits.length < 9) {
-      showTopFloatNotification('Enter a valid Somali mobile number for EVC Plus (e.g. 61XXXXXXX).', 'danger');
+    const fullPhone = buildCheckoutPhone(form.phone);
+    if (!isValidSomaliMobile(fullPhone)) {
+      showTopFloatNotification('Enter a valid Somali mobile number after +25261 (e.g. 2345678).', 'danger');
       setErrors((prev) => ({ ...prev, phone: true }));
       return false;
     }
@@ -222,6 +251,9 @@ export default function Checkout() {
 
   const handlePlaceOrder = async () => {
     if (!validate()) return;
+
+    const fullPhone = buildCheckoutPhone(form.phone);
+    localStorage.setItem(CHECKOUT_PHONE_SUFFIX_KEY, form.phone.replace(/\D/g, ''));
 
     setSubmitting(true);
     setEvcAwaitingPin(true);
@@ -257,7 +289,7 @@ export default function Checkout() {
       const freshTotal = Math.max(freshSubtotal + resolvedDeliveryFee - discount, 0);
 
       const orderPayload = {
-        phone: form.phone.trim(),
+        phone: fullPhone,
         customer: form.name.trim(),
         email: form.email.trim(),
         amount: formatMoney(freshTotal),
@@ -306,7 +338,7 @@ export default function Checkout() {
       let paymentFailureMessage = '';
 
       showTopFloatNotification(
-        `Check phone ${form.phone.trim()} — approve EVC Plus and enter your PIN.`
+        `Check phone ${fullPhone} — approve EVC Plus and enter your PIN.`
       );
 
       const payResponse = await fetch(apiUrl('/api/payments/waafi'), {
@@ -314,7 +346,7 @@ export default function Checkout() {
         headers,
         body: JSON.stringify({
           orderId: trackingCode,
-          accountNo: form.phone.trim(),
+          accountNo: fullPhone,
           amount: freshTotal,
           paymentReference,
           description: `Mogadishu Modern Furniture ${trackingCode}`,
@@ -331,7 +363,7 @@ export default function Checkout() {
       const snapshot = buildOrderSnapshot({
         trackingCode,
         customer: form.name.trim(),
-        phone: form.phone.trim(),
+        phone: fullPhone,
         email: form.email.trim(),
         address: `${form.address.trim()}, ${form.district} District, Mogadishu`,
         payment: paymentLabelFinal,
@@ -396,7 +428,7 @@ export default function Checkout() {
         JSON.stringify({
           orderId: trackingCode,
           customerName: form.name.trim(),
-          customerPhone: form.phone.trim(),
+          customerPhone: fullPhone,
           customerEmail: form.email.trim(),
           district: form.district,
           deliveryAddress: `${form.address.trim()}, ${form.district} District, Mogadishu`,
@@ -576,22 +608,29 @@ export default function Checkout() {
                       <label className="form-label" htmlFor="customerPhone">
                         Phone Number *
                       </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="customerPhone"
-                        placeholder="Example: 0612345678"
-                        value={form.phone}
-                        onChange={update('phone')}
-                      />
+                      <div className="checkout-phone-group">
+                        <span className="checkout-phone-prefix" aria-hidden="true">
+                          {CHECKOUT_PHONE_PREFIX}
+                        </span>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          className="form-control checkout-phone-input"
+                          id="customerPhone"
+                          placeholder="2345678"
+                          value={form.phone}
+                          onChange={handlePhoneChange}
+                          autoComplete="tel-national"
+                        />
+                      </div>
                       {showError('phone') && (
                         <div className="error-text error-text--visible">
                           Phone number is required.
                         </div>
                       )}
                       <div style={{ fontSize: '0.78rem', color: '#666', marginTop: 6 }}>
-                          Waafi will deduct the order total from this EVC Plus number when you place the order.
-                        </div>
+                        Geli lambarkaaga ka dambeeya +25261. Waafi wuxuu lacagta ka jarayaa lambarkan markaad dalbato.
+                      </div>
                     </div>
 
                     <div className="col-md-6">
@@ -657,8 +696,9 @@ export default function Checkout() {
                       </label>
                       <input
                         type="date"
-                        className="form-control"
+                        className="form-control checkout-date-input"
                         id="deliveryDate"
+                        min={minDeliveryDate}
                         value={form.deliveryDate}
                         onChange={update('deliveryDate')}
                       />
@@ -709,7 +749,7 @@ export default function Checkout() {
                     </p>
                     {form.phone.trim() ? (
                       <p className="mb-1">
-                        Target: <strong>{form.phone.trim()}</strong> · Ref:{' '}
+                        Target: <strong>{buildCheckoutPhone(form.phone)}</strong> · Ref:{' '}
                         <strong>{paymentReference}</strong>
                       </p>
                     ) : (
@@ -801,7 +841,7 @@ export default function Checkout() {
             <i className="fa-solid fa-mobile-screen-button fa-2x mb-3" />
             <h3>Approve payment on your phone</h3>
             <p>
-              EVC Plus is contacting <strong>{form.phone.trim()}</strong>. When the prompt appears on that
+              EVC Plus is contacting <strong>{buildCheckoutPhone(form.phone)}</strong>. When the prompt appears on that
               SIM, tap <strong>Approve</strong> and enter your <strong>PIN</strong>.
             </p>
             <p className="small text-muted mb-0">

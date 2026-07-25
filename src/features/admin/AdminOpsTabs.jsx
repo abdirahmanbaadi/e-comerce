@@ -24,6 +24,7 @@ import {
   BTN_SUCCESS,
   STAT_CARD,
   ADMIN_FETCH_TIMEOUT,
+  ADMIN_PAYMENTS_FETCH_TIMEOUT,
   authHeaders,
   formatAdminPrice,
   formatUSD,
@@ -39,7 +40,6 @@ import {
   isDriverAssignmentLocked,
   getAssignedDriverDisplayName,
   getDriverTableName,
-  getAvatarBgColor,
   getLowStockThreshold,
   getOrderPaymentLabel,
   paymentBadgeClass,
@@ -47,13 +47,32 @@ import {
   ADM_DARK_SURFACE_SM,
   ADM_DARK_BTN,
   ADM_DARK_TEXT_MUTED,
+  ADMIN_MODAL_OVERLAY,
+  ADMIN_MODAL_PANEL,
+  ADMIN_MODAL_CLOSE_BTN,
 } from './adminShared.js';
 import { OrderItemsList } from './AdminOrdersTab.jsx';
 
 const STOCK_TABLE_MAX_HEIGHT = 'min(520px, 55vh)';
-const PAYMENT_TABLE_MAX_HEIGHT = 'min(520px, 55vh)';
+
+const PAYMENT_FILTER_PILLS = [
+  { id: 'all', label: 'All', countKey: 'all' },
+  { id: 'success', label: 'Paid', countKey: 'paid' },
+  { id: 'pending', label: 'Pending', countKey: 'pending' },
+  { id: 'failed', label: 'Failed', countKey: 'failed' },
+];
+
+function normalizePaymentTxnStatus(status) {
+  const value = String(status || '').toLowerCase();
+  if (value === 'paid' || value === 'success') return 'success';
+  if (value === 'failed' || value === 'fail') return 'failed';
+  if (value === 'pending') return 'pending';
+  if (value === 'refunded') return 'refunded';
+  return value || 'pending';
+}
 const DELIVERY_TABLE_MAX_HEIGHT = 'min(520px, 55vh)';
 const DELIVERY_AUTO_REFRESH_MS = 60000;
+const PAYMENTS_AUTO_REFRESH_MS = 45000;
 
 const BTN_OUTLINE_DANGER =
   'inline-flex items-center justify-center gap-1 rounded-lg border border-red-500 px-3 py-1.5 text-[0.78rem] font-bold text-red-600 transition hover:bg-red-50 [.admin-dark_&]:border-red-500/40 [.admin-dark_&]:text-red-400 [.admin-dark_&]:hover:bg-red-500/10';
@@ -720,30 +739,11 @@ function PaymentsStatCard({ label, value, icon, iconWrapClass, active, onClick, 
   );
 }
 
-function paymentInitials(name) {
-  return String(name || '?')
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || '?';
-}
-
-function PaymentMetaField({ label, children }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">{label}</p>
-      <div className="mt-1 text-[0.86rem] font-semibold text-gray-900 [.admin-dark_&]:text-gray-100">{children}</div>
-    </div>
-  );
-}
-
 function PaymentDetailModal({ open, transaction, verifying, onClose, onVerify, onOrderClick }) {
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose?.();
+      if (e.key === 'Escape' && !verifying) onClose?.();
     };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -752,16 +752,16 @@ function PaymentDetailModal({ open, transaction, verifying, onClose, onVerify, o
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, onClose]);
+  }, [open, onClose, verifying]);
 
   if (!open || !transaction || typeof document === 'undefined' || !document.body) return null;
 
   const txn = transaction;
-  const canVerify = txn.status === 'pending' && txn.orderId;
+  const status = normalizePaymentTxnStatus(txn.status);
+  const canVerify = status === 'pending' && txn.orderId;
   const evcId = txn.referenceId || txn.transactionId || txn.id || '—';
   const customerName = txn.customer || 'Customer';
-  const initials = paymentInitials(txn.customer);
-  const avatarBg = getAvatarBgColor(customerName);
+  const methodLabel = txn.method || 'EVC Plus';
 
   const isAdminDark =
     typeof document !== 'undefined' && Boolean(document.querySelector('[data-theme="dark"]'));
@@ -769,12 +769,12 @@ function PaymentDetailModal({ open, transaction, verifying, onClose, onVerify, o
   return createPortal(
     <div className={isAdminDark ? 'admin-dark' : ''} data-theme={isAdminDark ? 'dark' : 'light'}>
       <div
-        className="fixed inset-0 z-[10001] flex items-center justify-center bg-deepGreen/45 p-4 backdrop-blur-[4px]"
+        className={ADMIN_MODAL_OVERLAY}
         onClick={onClose}
         role="presentation"
       >
         <div
-          className="animate-productModalIn relative w-full max-w-xl overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]"
+          className={ADMIN_MODAL_PANEL}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -784,78 +784,102 @@ function PaymentDetailModal({ open, transaction, verifying, onClose, onVerify, o
             type="button"
             className="absolute right-[15px] top-[15px] z-10 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-white text-[1.4rem] leading-none text-[#111] shadow-[0_2px_10px_rgba(0,0,0,0.15)] [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:text-gray-200"
             onClick={onClose}
+            disabled={verifying}
             aria-label="Close"
           >
             ×
           </button>
 
-          <div className="p-5 sm:p-6">
-            <div className="pr-10">
-              <div className="flex items-start gap-3">
-                <div
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[0.82rem] font-bold text-white"
-                  style={{ backgroundColor: avatarBg }}
-                >
-                  {initials}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Customer</p>
-                  <h3
-                    id="paymentDetailTitle"
-                    className="truncate text-[1.05rem] font-bold text-gray-900 [.admin-dark_&]:text-gray-100"
-                  >
-                    {customerName}
-                  </h3>
-                </div>
-                <div className="shrink-0 pt-1">{paymentStatusBadge(txn.status)}</div>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                <PaymentMetaField label="Name">{customerName}</PaymentMetaField>
-                <PaymentMetaField label="Phone">{txn.phone || '—'}</PaymentMetaField>
-                <PaymentMetaField label="Order ID">
-                  {txn.orderId ? (
-                    <button
-                      type="button"
-                      className="font-mono text-[0.8rem] font-bold text-deepGreen underline decoration-deepGreen/30 underline-offset-2 hover:decoration-deepGreen [.admin-dark_&]:text-emerald-400"
-                      onClick={() => onOrderClick?.(txn.orderId)}
-                    >
-                      {txn.orderId}
-                    </button>
-                  ) : (
-                    '—'
-                  )}
-                </PaymentMetaField>
-                <PaymentMetaField label="EVC ID">
-                  <span className="break-all font-mono text-[0.78rem] font-medium text-gray-700 [.admin-dark_&]:text-gray-300">
-                    {evcId}
-                  </span>
-                </PaymentMetaField>
-                <PaymentMetaField label="Amount">
-                  <span className="font-bold text-emerald-600 [.admin-dark_&]:text-emerald-400">{formatUSD(txn.amount)}</span>
-                </PaymentMetaField>
-                <PaymentMetaField label="Date">{formatOrderDate(txn.createdAt)}</PaymentMetaField>
+          <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
+            <div className="min-w-0 pr-10">
+              <h3
+                id="paymentDetailTitle"
+                className="font-display text-xl font-bold text-deepGreen [.admin-dark_&]:text-[#e8f0ed]"
+              >
+                {customerName}
+              </h3>
+              <p className="mb-0 mt-1 font-mono text-[0.82rem] text-gray-500 [.admin-dark_&]:text-gray-400">
+                {txn.orderId || '—'}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {paymentStatusBadge(status)}
+                <span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-[0.75rem] font-extrabold text-slate-700 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-slate-200">
+                  {methodLabel}
+                </span>
               </div>
             </div>
+          </div>
 
-            {canVerify ? (
-              <div className="mt-5 flex justify-end border-t border-black/[0.06] pt-4 [.admin-dark_&]:border-white/10">
-                <button
-                  type="button"
-                  className={`${BTN_PRIMARY} !min-h-0 !px-4 !py-2 !text-[0.82rem]`}
-                  disabled={verifying}
-                  onClick={() => onVerify?.(txn.orderId)}
-                >
-                  {verifying ? (
-                    <>
-                      <i className="fa-solid fa-spinner fa-spin me-1.5" aria-hidden="true" />
-                      Verifying…
-                    </>
-                  ) : (
-                    'Verify payment'
-                  )}
-                </button>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 [scrollbar-width:thin]">
+            <div className="grid gap-3 rounded-xl border border-gray-100 bg-[#fdfbf8] p-4 sm:grid-cols-2 [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-white/[0.03]">
+              <div>
+                <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Phone</p>
+                <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">
+                  {txn.phone || '—'}
+                </p>
               </div>
+              <div>
+                <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Amount</p>
+                <p className="mb-0 text-[0.88rem] font-semibold text-emerald-700 [.admin-dark_&]:text-emerald-400">
+                  {formatUSD(txn.amount)}
+                </p>
+              </div>
+              <div>
+                <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Order ID</p>
+                {txn.orderId ? (
+                  <button
+                    type="button"
+                    className="mb-0 font-mono text-[0.88rem] font-bold text-deepGreen underline decoration-deepGreen/30 underline-offset-2 hover:decoration-deepGreen [.admin-dark_&]:text-emerald-400"
+                    onClick={() => onOrderClick?.(txn.orderId)}
+                  >
+                    {txn.orderId}
+                  </button>
+                ) : (
+                  <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">—</p>
+                )}
+              </div>
+              <div>
+                <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Date</p>
+                <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">
+                  {formatOrderDate(txn.createdAt)}
+                </p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">EVC / Transaction ID</p>
+                <p className="mb-0 break-all font-mono text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">
+                  {evcId}
+                </p>
+              </div>
+              {txn.message ? (
+                <div className="sm:col-span-2">
+                  <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Message</p>
+                  <p className="mb-0 text-[0.88rem] font-semibold leading-relaxed text-gray-800 [.admin-dark_&]:text-gray-100">
+                    {txn.message}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
+            <button type="button" className={BTN_GHOST} onClick={onClose} disabled={verifying}>
+              Close
+            </button>
+            {canVerify ? (
+              <button
+                type="button"
+                className={BTN_PRIMARY}
+                disabled={verifying}
+                onClick={() => onVerify?.(txn.orderId)}
+              >
+                {verifying ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" /> Verifying…
+                  </>
+                ) : (
+                  'Verify payment'
+                )}
+              </button>
             ) : null}
           </div>
         </div>
@@ -962,7 +986,7 @@ function StockDetailsModal({ open, product, saving, historyRefreshKey, onClose, 
   return createPortal(
     <div className={isAdminDark ? 'admin-dark' : ''} data-theme={isAdminDark ? 'dark' : 'light'}>
       <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-deepGreen/45 p-4 backdrop-blur-[4px]"
+        className={ADMIN_MODAL_OVERLAY}
         onClick={onClose}
         role="presentation"
       >
@@ -1432,17 +1456,26 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
       const res = await fetchWithTimeout(
         apiUrl('/api/payments/transactions'),
         { headers: authHeaders(false) },
-        ADMIN_FETCH_TIMEOUT
+        ADMIN_PAYMENTS_FETCH_TIMEOUT
       );
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         setTransactions(data.transactions || []);
       } else {
-        setTransactions([]);
-        showTopFloatNotification(data.message || 'Failed to load payments.', 'danger');
+        if (!quiet) {
+          showTopFloatNotification(
+            data.message || `Failed to load payments (${res.status || 'network'}).`,
+            'danger'
+          );
+        }
       }
     } catch {
-      showTopFloatNotification('Failed to load payment transactions.', 'danger');
+      if (!quiet) {
+        showTopFloatNotification(
+          'Payments request timed out. Check backend on port 5000 and refresh.',
+          'danger'
+        );
+      }
     } finally {
       if (!quiet) setLoading(false);
     }
@@ -1452,6 +1485,8 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
     loadPayments();
   }, [loadPayments]);
 
+  useIntervalWhenVisible(() => loadPayments({ quiet: true }), PAYMENTS_AUTO_REFRESH_MS, true);
+
   useEffect(() => {
     const onInvalidate = () => loadPayments({ quiet: true });
     window.addEventListener('admin-payments-invalidate', onInvalidate);
@@ -1459,14 +1494,16 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
   }, [loadPayments]);
 
   const paymentStats = useMemo(() => {
-    const paid = transactions.filter((txn) => txn.status === 'success').length;
-    const failed = transactions.filter((txn) => txn.status === 'failed').length;
+    const paid = transactions.filter((txn) => normalizePaymentTxnStatus(txn.status) === 'success').length;
+    const failed = transactions.filter((txn) => normalizePaymentTxnStatus(txn.status) === 'failed').length;
+    const pending = transactions.filter((txn) => normalizePaymentTxnStatus(txn.status) === 'pending').length;
     const totalRevenue = transactions
-      .filter((txn) => txn.status === 'success')
+      .filter((txn) => normalizePaymentTxnStatus(txn.status) === 'success')
       .reduce((sum, txn) => sum + (Number(txn.amount) || 0), 0);
     return {
       all: transactions.length,
       paid,
+      pending,
       failed,
       totalRevenue,
     };
@@ -1475,9 +1512,10 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
   const filtered = useMemo(() => {
     const q = headerSearch.trim().toLowerCase();
     return transactions.filter((txn) => {
-      if (filterStatus !== 'all' && txn.status !== filterStatus) return false;
+      const status = normalizePaymentTxnStatus(txn.status);
+      if (filterStatus !== 'all' && status !== filterStatus) return false;
       if (!q) return true;
-      const hay = [txn.transactionId, txn.id, txn.orderId, txn.customer, txn.phone, txn.referenceId]
+      const hay = [txn.transactionId, txn.id, txn.orderId, txn.customer, txn.phone, txn.referenceId, status]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -1488,6 +1526,7 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
   const statFilterMap = {
     all: 'all',
     paid: 'success',
+    pending: 'pending',
     failed: 'failed',
   };
 
@@ -1496,9 +1535,11 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
       ? 'all'
       : filterStatus === 'success'
         ? 'paid'
-        : filterStatus === 'failed'
-          ? 'failed'
-          : null;
+        : filterStatus === 'pending'
+          ? 'pending'
+          : filterStatus === 'failed'
+            ? 'failed'
+            : null;
 
   const verifyPayment = async (orderId) => {
     if (!orderId) return;
@@ -1533,8 +1574,8 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
   };
 
   return (
-    <div className="animate-cardRise space-y-2.5">
-      <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5 pb-1">
+      <div className="grid shrink-0 grid-cols-2 gap-2.5 xl:grid-cols-4">
         <PaymentsStatCard
           label="All Payments"
           value={loading ? '…' : (paymentStats.all ?? 0).toLocaleString()}
@@ -1568,12 +1609,52 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
         />
       </div>
 
-      <div className={`${ADM_TABLE_CARD} !p-0 overflow-hidden`}>
-        <div
-          className="overflow-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-deepGreen/15 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar]:w-1.5"
-          style={{ maxHeight: PAYMENT_TABLE_MAX_HEIGHT }}
-        >
-          <table className={`${ADM_TABLE} [&_tbody_tr]:cursor-pointer [&_tbody_tr]:transition-colors`}>
+      <div
+        className={`flex shrink-0 flex-wrap items-center gap-1.5 rounded-xl border border-deepGreen/[0.06] bg-white px-3 py-2 shadow-[0_2px_10px_rgba(0,0,0,0.03)] ${ADM_DARK_SURFACE_SM}`}
+      >
+        <span className={`mr-1 text-[0.65rem] font-bold uppercase tracking-wide text-gray-400 ${ADM_DARK_TEXT_MUTED}`}>
+          Filter
+        </span>
+        {PAYMENT_FILTER_PILLS.map((pill) => {
+          const active = filterStatus === pill.id;
+          return (
+            <button
+              key={pill.id}
+              type="button"
+              onClick={() => setFilterStatus(pill.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.68rem] font-bold transition ${
+                active
+                  ? 'bg-deepGreen text-white shadow-[0_2px_8px_rgba(7,61,53,0.18)] [.admin-dark_&]:bg-emerald-600'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-slate-200 [.admin-dark_&]:hover:bg-white/15'
+              }`}
+            >
+              {pill.label}
+              <span
+                className={`min-w-[1.1rem] rounded-full px-1 text-center text-[0.62rem] ${
+                  active ? 'bg-white/20 text-white' : 'bg-white/70 dark:bg-black/20 [.admin-dark_&]:bg-black/20'
+                }`}
+              >
+                {loading ? '…' : (paymentStats[pill.countKey] ?? 0)}
+              </span>
+            </button>
+          );
+        })}
+        {filterStatus !== 'all' && (
+          <button
+            type="button"
+            onClick={() => setFilterStatus('all')}
+            className="ml-1 text-[0.68rem] font-bold text-blue-500 hover:text-blue-600 [.admin-dark_&]:text-blue-400"
+          >
+            Clear filter
+          </button>
+        )}
+      </div>
+
+      <div className={`${ADM_TABLE_CARD} flex min-h-0 flex-1 flex-col !p-0 overflow-hidden`}>
+        <div className="min-h-0 flex-1 overflow-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-deepGreen/15 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar]:w-1.5">
+          <table
+            className={`${ADM_TABLE} [&_tbody_tr]:cursor-pointer [&_tbody_tr]:transition-colors [&_td]:py-2 [&_th]:py-2.5`}
+          >
             <thead className="sticky top-0 z-[2] bg-white shadow-[0_1px_0_rgba(0,0,0,0.06)] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:shadow-[0_1px_0_rgba(255,255,255,0.06)]">
               <tr>
                 <th>Customer</th>
@@ -1611,7 +1692,7 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
               {!loading &&
                 filtered.map((txn) => (
                   <tr
-                    key={txn.transactionId || txn.id || txn.orderId}
+                    key={`${txn.id || txn.transactionId || txn.orderId}-${txn.status}-${txn.createdAt}`}
                     role="button"
                     tabIndex={0}
                     onClick={() => openDetail(txn)}
@@ -1631,7 +1712,7 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
                     <td className="font-bold text-emerald-600 [.admin-dark_&]:text-emerald-400">
                       {formatUSD(txn.amount)}
                     </td>
-                    <td>{paymentStatusBadge(txn.status)}</td>
+                    <td>{paymentStatusBadge(normalizePaymentTxnStatus(txn.status))}</td>
                     <td className="whitespace-nowrap text-gray-500">{formatOrderDate(txn.createdAt)}</td>
                   </tr>
                 ))}
@@ -1739,12 +1820,12 @@ function DeliveryDispatchModal({ open, order, drivers, saving, form, onChange, o
   return createPortal(
     <div className={isAdminDark ? 'admin-dark' : ''} data-theme={isAdminDark ? 'dark' : 'light'}>
       <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-deepGreen/45 p-4 backdrop-blur-[4px]"
+        className={ADMIN_MODAL_OVERLAY}
         onClick={onClose}
         role="presentation"
       >
         <div
-          className="animate-productModalIn relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]"
+          className={ADMIN_MODAL_PANEL}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"

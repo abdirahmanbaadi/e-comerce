@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ForgotPasswordModal from '../features/auth/ForgotPasswordModal';
+import { parsePhoneForStorage } from '../utils/phone';
 
 /* Shared Tailwind class strings (used across login / register / password field) */
 const AUTH_SUBMIT_BTN_CLASS =
@@ -204,19 +205,24 @@ export function LoginPage() {
           localStorage.removeItem(REMEMBER_KEY);
         }
 
+        if (data.user?.role === 'admin') {
+          navigate('/admin', { replace: true });
+          return;
+        }
+        if (data.user?.role === 'delivery') {
+          navigate('/delivery', { replace: true });
+          return;
+        }
+
         setAlert({ message: 'Login successful. Redirecting...', type: 'success' });
         const redirectTo = location.state?.from;
         setTimeout(() => {
-          if (data.user?.role === 'admin') {
-            navigate('/admin');
-          } else if (data.user?.role === 'delivery') {
-            navigate('/delivery');
-          } else if (redirectTo) {
+          if (redirectTo) {
             navigate(redirectTo, { replace: true });
           } else {
             navigate('/');
           }
-        }, 1200);
+        }, 600);
       } else {
         setAlert({ message: data.message || 'Login failed', type: 'danger' });
         setInvalid(true);
@@ -386,12 +392,19 @@ export function RegisterPage() {
 
     setSubmitting(true);
     try {
+      const phoneParsed = parsePhoneForStorage(form.phone.trim(), form.countryCode);
+      if (!phoneParsed.ok) {
+        setAlert({ message: phoneParsed.message, type: 'danger' });
+        setSubmitting(false);
+        return;
+      }
+
       const data = await register({
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         username: normalizedUsername,
         email: form.email.trim().toLowerCase(),
-        phone: form.countryCode + form.phone.trim(),
+        phone: phoneParsed.e164,
         password: form.password,
       });
 

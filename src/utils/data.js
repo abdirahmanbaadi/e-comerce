@@ -403,11 +403,24 @@ export function initializeLocalStorage() {
 
 export function normalizePhoneNumber(phone) {
   if (!phone) return '';
-  let cleaned = phone.replace(/\D/g, '');
-  if (cleaned.startsWith('252')) cleaned = cleaned.substring(3);
-  if (cleaned.startsWith('0')) cleaned = cleaned.substring(1);
+  let cleaned = String(phone).replace(/\D/g, '');
+  if (cleaned.startsWith('252')) cleaned = cleaned.slice(3);
+  if (cleaned.startsWith('0')) cleaned = cleaned.slice(1);
   return cleaned;
 }
+
+// Re-export shared phone helpers (canonical +252, 061, 61…)
+export {
+  buildCheckoutPhone,
+  CHECKOUT_PHONE_PREFIX,
+  CHECKOUT_PHONE_SUFFIX_KEY,
+  formatPhoneE164,
+  isValidSomaliMobile,
+  parsePhoneForStorage,
+  parseSomaliPhoneInput,
+  phonesMatch,
+  readCheckoutPhoneSuffix,
+} from './phone.js';
 
 export function normalizeOrderId(raw) {
   const trimmed = String(raw || '').trim();

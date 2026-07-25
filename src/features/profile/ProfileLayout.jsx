@@ -110,7 +110,7 @@ export default function ProfileSidebar({ activeTab, unreadCount, onTabChange }) 
   const { logout, user } = useAuth();
 
   return (
-    <aside className="animate-sidebarLogoIn sticky top-0 z-20 flex h-screen flex-col gap-6 overflow-hidden border-r border-black/[0.04] bg-[#FAF9F6] px-6 py-8 max-lg:relative max-lg:h-auto max-lg:gap-4 max-lg:overflow-visible max-lg:border-b max-lg:border-r-0 max-lg:p-4">
+    <aside className="animate-sidebarLogoIn sticky top-0 z-20 flex h-screen flex-col gap-4 overflow-hidden border-r border-black/[0.04] bg-[#FAF9F6] px-6 py-8 max-lg:relative max-lg:h-auto max-lg:gap-4 max-lg:overflow-visible max-lg:border-b max-lg:border-r-0 max-lg:p-4">
       <Link
         to="/"
         className="group mb-6 flex items-center gap-3 no-underline transition-transform duration-300 hover:scale-[1.02] max-lg:mb-2"
@@ -148,7 +148,7 @@ export default function ProfileSidebar({ activeTab, unreadCount, onTabChange }) 
         ))}
       </div>
 
-      <nav className="hidden flex-col gap-1.5 lg:flex" aria-label="Profile navigation">
+      <nav className="hidden min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto lg:flex" aria-label="Profile navigation">
         {TABS.map((tab, index) => (
           <SidebarItem
             key={tab.id}
@@ -212,21 +212,26 @@ export default function ProfileSidebar({ activeTab, unreadCount, onTabChange }) 
           <i className="fa-solid fa-arrow-right-from-bracket w-5 text-center text-[1.15rem] text-red-600 transition-transform duration-300 group-hover:translate-x-0.5 [-webkit-text-stroke:1.5px_#b42318]" />
           Logout
         </button>
+      </nav>
 
+      <div className="mt-auto hidden border-t border-black/[0.06] pt-4 lg:block">
         <SidebarLink
           to="/"
-          className="animate-sidebarItemIn mt-2"
+          className="animate-sidebarItemIn w-full justify-center rounded-xl border border-deepGreen/12 bg-white py-3 font-semibold text-deepGreen shadow-[0_4px_14px_rgba(7,61,53,0.06)] transition hover:border-deepGreen/20 hover:bg-deepGreen/[0.03] hover:shadow-[0_6px_18px_rgba(7,61,53,0.1)]"
           style={staggerStyle(TABS.length + 3)}
         >
           <ItemIcon icon="fa-solid fa-house" />
           <span className="relative z-[1]">Back to Home</span>
         </SidebarLink>
-      </nav>
+      </div>
 
       <div className="flex animate-sidebarItemIn items-center justify-between gap-3 border-t border-black/[0.06] pt-3 lg:hidden" style={staggerStyle(TABS.length + 4, 50)}>
-        <SidebarLink to="/" className="!w-auto !px-3 !py-2 text-[0.85rem]">
+        <SidebarLink
+          to="/"
+          className="!w-auto flex-1 justify-center rounded-xl border border-deepGreen/12 bg-white !px-4 !py-2.5 text-[0.85rem] font-semibold text-deepGreen shadow-sm"
+        >
           <ItemIcon icon="fa-solid fa-house" />
-          Home
+          Back to Home
         </SidebarLink>
         <button
           type="button"

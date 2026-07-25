@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/orderController');
 const { protect, optionalProtect, authorize } = require('../middleware/authMiddleware');
+const { rejectStaffShopping } = require('../middleware/staffShoppingMiddleware');
 
 // Public Order Endpoints
-router.post('/', protect, orderController.placeOrder);
+router.post('/', protect, rejectStaffShopping, orderController.placeOrder);
 router.get('/track/:orderId', orderController.trackOrder);
 router.patch('/cancel/:orderId', optionalProtect, orderController.cancelOrder);
 
