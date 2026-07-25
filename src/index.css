@@ -134,6 +134,74 @@
     box-shadow: 0 4px 14px rgba(216, 161, 40, 0.12);
   }
 
+  .admin-compact-tables table th,
+  .admin-compact-tables table td {
+    padding-top: 0.45rem !important;
+    padding-bottom: 0.45rem !important;
+  }
+
+  /* Admin dark mode — existing palette (#0b1412 page, #1a2421 surfaces) */
+  [data-admin-theme='dark'] .admin-page,
+  .admin-dark.admin-page {
+    color-scheme: dark;
+  }
+
+  [data-admin-theme='dark'] .admin-page .rounded-xl.bg-white,
+  [data-admin-theme='dark'] .admin-page .rounded-2xl.bg-white,
+  [data-admin-theme='dark'] .admin-page button.rounded-xl.bg-white,
+  .admin-dark.admin-page .rounded-xl.bg-white,
+  .admin-dark.admin-page .rounded-2xl.bg-white,
+  .admin-dark.admin-page button.rounded-xl.bg-white {
+    background-color: #1a2421 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  [data-admin-theme='dark'] .admin-page main .text-deepGreen,
+  .admin-dark.admin-page main .text-deepGreen {
+    color: #e8f0ed !important;
+  }
+
+  [data-admin-theme='dark'] .admin-page main .text-gray-900,
+  .admin-dark.admin-page main .text-gray-900 {
+    color: #f3f4f6 !important;
+  }
+
+  [data-admin-theme='dark'] .admin-page main .text-gray-600,
+  .admin-dark.admin-page main .text-gray-600 {
+    color: #d1d5db !important;
+  }
+
+  [data-admin-theme='dark'] .admin-page main .text-gray-400,
+  [data-admin-theme='dark'] .admin-page main .text-gray-500,
+  .admin-dark.admin-page main .text-gray-400,
+  .admin-dark.admin-page main .text-gray-500 {
+    color: #9ca3af !important;
+  }
+
+  [data-admin-theme='dark'] .admin-page main .border-gray-100,
+  [data-admin-theme='dark'] .admin-page main .border-gray-50,
+  .admin-dark.admin-page main .border-gray-100,
+  .admin-dark.admin-page main .border-gray-50 {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+
+  [data-admin-theme='dark'] .admin-page main .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+  .admin-dark.admin-page main .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  [data-admin-theme='dark'] .admin-page main .bg-gray-100,
+  .admin-dark.admin-page main .bg-gray-100 {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  [data-admin-theme='dark'] .admin-page main select.bg-white,
+  .admin-dark.admin-page main select.bg-white {
+    background-color: #101814 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #d1d5db !important;
+  }
+
   /* Global top toast — used by showTopFloatNotification */
   .sitopia-toast,
   .toast-box {

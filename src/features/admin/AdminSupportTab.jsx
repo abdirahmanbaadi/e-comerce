@@ -1,22 +1,11 @@
 /**
- * ADMIN SUPPORT TAB — inbox list + live chat (Tailwind)
+ * ADMIN SUPPORT TAB — WhatsApp-style inbox + live chat
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiUrl } from '../../utils/data';
 import { showTopFloatNotification } from '../../utils/notifications';
-import { AppSearchField } from '../nav/StoreNavbar';
+import { productImage } from '../../utils/format';
 import { getAvatarBgColor, formatRelativeTime, authHeaders, token } from './adminShared.js';
-
-const LAYOUT =
-  'flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-deepGreen/8 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-[#141f1b] min-h-[480px] h-full';
-const SIDEBAR =
-  'flex w-[35%] min-w-[260px] flex-col border-r border-gray-100 bg-white [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-[#141f1b]';
-const SIDEBAR_HEADER =
-  'border-b border-gray-100 bg-[#faf8f2] p-4 [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-[#101814]';
-const TICKET_LIST = 'flex-1 overflow-y-auto [scrollbar-width:thin]';
-const CHAT_WINDOW = 'flex min-w-0 flex-1 flex-col bg-white [.admin-dark_&]:bg-[#141f1b]';
-const CHAT_MESSAGES =
-  'flex flex-1 flex-col gap-3 overflow-y-auto bg-[#faf8f2] p-5 [scrollbar-width:thin] [.admin-dark_&]:bg-[#101814]';
 
 function sortTickets(rows) {
   return [...rows].sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
@@ -56,14 +45,10 @@ function getStatusMeta(status) {
 function formatMessageTime(iso) {
   if (!iso) return '';
   const dateObj = new Date(iso);
-  return (
-    dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-    ' ' +
-    dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' })
-  );
+  return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function TicketAvatar({ name, avatar, size = 44 }) {
+function TicketAvatar({ name, avatar, size = 48 }) {
   const style = { width: size, height: size };
   if (avatar) {
     return (
@@ -76,7 +61,7 @@ function TicketAvatar({ name, avatar, size = 44 }) {
   }
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-full text-sm font-extrabold text-white"
+      className="flex shrink-0 items-center justify-center rounded-full text-[0.95rem] font-extrabold text-white"
       style={{ ...style, backgroundColor: getAvatarBgColor(name || '?') }}
       aria-hidden="true"
     >
@@ -93,25 +78,25 @@ function SupportTicketItem({ ticket, active, onSelect }) {
     <button
       type="button"
       onClick={() => onSelect(ticket.id)}
-      className={`flex w-full cursor-pointer items-center gap-3 border-b border-gray-50 px-4 py-4 text-left transition hover:bg-[#faf8f2] [.admin-dark_&]:border-white/[0.04] [.admin-dark_&]:hover:bg-white/[0.03] ${
+      className={`flex w-full cursor-pointer items-center gap-3 border-b border-black/[0.04] px-4 py-3 text-left transition hover:bg-[#f5f6f6] [.admin-dark_&]:border-white/[0.04] [.admin-dark_&]:hover:bg-white/[0.03] ${
         active
-          ? 'border-l-4 border-l-teal bg-[#eef7f5] [.admin-dark_&]:bg-teal-500/10'
+          ? 'border-l-4 border-l-deepGreen bg-[#f0f2f1] [.admin-dark_&]:bg-teal-500/10'
           : 'border-l-4 border-l-transparent'
       }`}
     >
-      <TicketAvatar name={ticket.name} avatar={ticket.avatar} />
+      <TicketAvatar name={ticket.name} avatar={ticket.avatar} size={48} />
       <div className="min-w-0 flex-1">
-        <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="mb-0.5 flex items-center justify-between gap-2">
           <span className="truncate text-[0.9rem] font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
             {ticket.name}
           </span>
-          <span className="shrink-0 text-[0.75rem] text-gray-400">
+          <span className="shrink-0 text-[0.72rem] text-gray-400">
             {formatRelativeTime(ticket.lastMessageAt)}
           </span>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-[0.8rem] text-gray-500 [.admin-dark_&]:text-gray-400">{snippet}</span>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[0.68rem] font-extrabold ${status.cls}`}>
+          <span className="truncate text-[0.78rem] text-gray-500 [.admin-dark_&]:text-gray-400">{snippet}</span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[0.65rem] font-extrabold ${status.cls}`}>
             {status.label}
           </span>
         </div>
@@ -122,11 +107,9 @@ function SupportTicketItem({ ticket, active, onSelect }) {
 
 function ChatEmptyState() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 text-center text-gray-500 [.admin-dark_&]:text-gray-400">
-      <i className="fa-solid fa-comments mb-4 text-5xl text-deepGreen/25 [.admin-dark_&]:text-white/15" />
-      <h5 className="mb-2 text-lg font-bold text-gray-800 [.admin-dark_&]:text-gray-200">No Conversation Selected</h5>
-      <p className="max-w-xs text-[0.85rem]">
-        Select a ticket from the left inbox list to view details and send replies.
+    <div className="flex flex-1 flex-col items-center justify-center bg-[#f0f2f1] px-6 text-center [.admin-dark_&]:bg-[#101814]">
+      <p className="mb-0 max-w-sm text-[0.9rem] font-medium text-gray-500 [.admin-dark_&]:text-gray-400">
+        Dooro macmiil liiska bidix ka mid ah si aad u aragto fariimaha oo aad uga jawaabto.
       </p>
     </div>
   );
@@ -134,26 +117,31 @@ function ChatEmptyState() {
 
 function ChatBubble({ message, ticket, isFirstUserMessage }) {
   const isUser = message.senderRole === 'user';
-  const wrapCls = isUser ? 'self-start' : 'self-end flex-row-reverse';
+  const imageSrc = message.imageUrl ? productImage(message.imageUrl) : '';
 
   return (
-    <div className={`flex max-w-[75%] items-start ${wrapCls}`}>
+    <div className={`flex w-full ${isUser ? 'justify-start' : 'justify-end'}`}>
       <div
-        className={`relative rounded-2xl px-4 py-3 text-[0.88rem] leading-snug ${
+        className={`max-w-[min(78%,420px)] rounded-2xl px-3 py-2 shadow-[0_1px_1px_rgba(0,0,0,0.06)] ${
           isUser
-            ? 'rounded-tl-none bg-white text-gray-800 shadow-[0_2px_6px_rgba(0,0,0,0.03)] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:text-gray-200'
-            : 'rounded-tr-none bg-[#e6f3f0] text-deepGreen shadow-[0_2px_6px_rgba(7,61,53,0.05)] [.admin-dark_&]:bg-teal-500/15 [.admin-dark_&]:text-emerald-200'
+            ? 'rounded-bl-sm bg-white text-gray-900 [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:text-gray-100'
+            : 'rounded-br-sm bg-[#d9fdd3] text-gray-900 [.admin-dark_&]:bg-teal-500/20 [.admin-dark_&]:text-emerald-100'
         }`}
       >
         {isUser && isFirstUserMessage && (
-          <div className="mb-1 text-[0.75rem] font-bold text-deepGreen [.admin-dark_&]:text-emerald-300">
-            Subject: {ticket?.subject}
+          <div className="mb-1 text-[0.72rem] font-bold text-deepGreen [.admin-dark_&]:text-emerald-300">
+            {ticket?.subject}
           </div>
         )}
-        <div className="whitespace-pre-wrap break-words">{message.messageText}</div>
-        <span
-          className={`mt-1 block text-[0.7rem] opacity-70 ${isUser ? 'text-left' : 'text-right'}`}
-        >
+        {imageSrc && (
+          <a href={imageSrc} target="_blank" rel="noopener noreferrer" className="mb-1 block">
+            <img src={imageSrc} alt="Attachment" className="max-h-52 w-full rounded-xl object-cover" />
+          </a>
+        )}
+        {message.messageText ? (
+          <div className="whitespace-pre-wrap break-words text-[0.86rem] leading-relaxed">{message.messageText}</div>
+        ) : null}
+        <span className={`mt-1 block text-[0.65rem] text-gray-500 ${isUser ? 'text-left' : 'text-right'}`}>
           {formatMessageTime(message.createdAt)}
         </span>
       </div>
@@ -161,7 +149,76 @@ function ChatBubble({ message, ticket, isFirstUserMessage }) {
   );
 }
 
-export default function AdminSupportTab({ headerSearch = '' }) {
+function ChatComposer({ value, onChange, onSend, onImagePick, sending, uploading, disabled }) {
+  const fileRef = useRef(null);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSend?.();
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showTopFloatNotification('Only image files are allowed.', 'danger');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showTopFloatNotification('Image must be under 5MB.', 'danger');
+      return;
+    }
+    onImagePick?.(file);
+  };
+
+  return (
+    <div className="shrink-0 border-t border-black/[0.06] bg-[#f0f2f1] px-3 py-3 [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-[#101814]">
+      <div className="flex items-end gap-2 rounded-full border border-black/[0.06] bg-white px-2 py-1.5 shadow-sm [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#1a2421]">
+        <button
+          type="button"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-deepGreen disabled:opacity-50 [.admin-dark_&]:hover:bg-white/10"
+          onClick={() => fileRef.current?.click()}
+          disabled={disabled || sending || uploading}
+          title="Attach image"
+          aria-label="Attach image"
+        >
+          <i className={`fa-regular fa-image text-[1.1rem] ${uploading ? 'fa-spinner fa-spin' : ''}`} />
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        <textarea
+          rows={1}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type a reply…"
+          disabled={disabled || sending || uploading}
+          className="max-h-28 min-h-[40px] flex-1 resize-none border-0 bg-transparent px-1 py-2 text-[0.88rem] outline-none placeholder:text-gray-400 [.admin-dark_&]:text-gray-100"
+        />
+        <button
+          type="button"
+          onClick={onSend}
+          disabled={disabled || sending || uploading || !value.trim()}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-deepGreen text-white transition hover:bg-[#0b5e52] disabled:opacity-40"
+          title="Send"
+          aria-label="Send"
+        >
+          <i className={`fa-solid fa-paper-plane text-[0.9rem] ${sending ? 'fa-spinner fa-spin' : ''}`} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function AdminSupportTab({ headerSearch = '', onToggleSidebar }) {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [localSearch, setLocalSearch] = useState('');
@@ -171,9 +228,9 @@ export default function AdminSupportTab({ headerSearch = '' }) {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
-  const [closing, setClosing] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-  const messagesEndRef = useRef(null);
+  const messagesRef = useRef(null);
   const sseRetryRef = useRef(null);
   const activeTicketIdRef = useRef(activeTicketId);
 
@@ -190,8 +247,7 @@ export default function AdminSupportTab({ headerSearch = '' }) {
       const res = await fetch(apiUrl('/api/support/admin/chats'), { headers: authHeaders() });
       const data = await res.json();
       if (data.success) {
-        const sorted = sortTickets(data.tickets || []);
-        setTickets(sorted);
+        setTickets(sortTickets(data.tickets || []));
       }
     } catch (err) {
       console.error('Error loading admin support data:', err);
@@ -224,7 +280,7 @@ export default function AdminSupportTab({ headerSearch = '' }) {
   const selectTicket = useCallback(
     (ticketId) => {
       setActiveTicketId(ticketId);
-      setMessages([]);
+      setReplyText('');
       loadMessages(ticketId);
     },
     [loadMessages]
@@ -243,21 +299,6 @@ export default function AdminSupportTab({ headerSearch = '' }) {
       })
     );
   }, [tickets, searchQuery]);
-
-  const resolvedActiveId = useMemo(() => {
-    if (filteredTickets.length === 0) return null;
-    if (activeTicketId && filteredTickets.some((t) => t.id === activeTicketId)) {
-      return activeTicketId;
-    }
-    return filteredTickets[0].id;
-  }, [filteredTickets, activeTicketId]);
-
-  useEffect(() => {
-    if (resolvedActiveId && resolvedActiveId !== activeTicketId) {
-      setActiveTicketId(resolvedActiveId);
-      loadMessages(resolvedActiveId);
-    }
-  }, [resolvedActiveId, activeTicketId, loadMessages]);
 
   useEffect(() => {
     loadTickets();
@@ -299,6 +340,9 @@ export default function AdminSupportTab({ headerSearch = '' }) {
               const next = idx >= 0 ? prev.map((t, i) => (i === idx ? data.ticket : t)) : [...prev, data.ticket];
               return sortTickets(next);
             });
+            if (data.ticket.id === activeTicketIdRef.current) {
+              setActiveTicket(data.ticket);
+            }
             window.dispatchEvent(new CustomEvent('admin-dashboard-invalidate'));
           } else {
             loadTickets({ quiet: true });
@@ -336,218 +380,226 @@ export default function AdminSupportTab({ headerSearch = '' }) {
   }, [loadTickets, loadMessages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, messagesLoading]);
+    messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, messagesLoading, activeTicketId]);
 
-  const handleSendReply = async (e) => {
-    e?.preventDefault?.();
-    if (!activeTicketId) return;
-
-    const reply = replyText.trim();
-    if (!reply) {
-      showTopFloatNotification('Please write your reply first.', 'warning');
-      return;
+  const uploadSupportImage = async (file) => {
+    if (!token() || !file) return null;
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      const res = await fetch(apiUrl('/api/support/upload'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token()}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success && data.imageUrl) return data.imageUrl;
+      showTopFloatNotification(data.message || 'Upload failed.', 'danger');
+      return null;
+    } catch (err) {
+      console.error(err);
+      showTopFloatNotification('Could not upload image.', 'danger');
+      return null;
     }
-    if (!token()) return;
+  };
+
+  const postReply = async (messageText, imageUrl = '') => {
+    if (!activeTicketId || !token()) return false;
+    const text = (messageText || '').trim();
+    const image = (imageUrl || '').trim();
+    if (!text && !image) return false;
 
     setSending(true);
     try {
       const res = await fetch(apiUrl(`/api/support/chats/${activeTicketId}/messages`), {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ messageText: reply }),
+        body: JSON.stringify({ messageText: text, imageUrl: image }),
       });
       const data = await res.json();
       if (data.success) {
         setReplyText('');
-        showTopFloatNotification('Reply sent successfully.');
         await loadMessages(activeTicketId, { quiet: true });
         await loadTickets({ quiet: true });
         window.dispatchEvent(new CustomEvent('admin-support-invalidate'));
-      } else {
-        showTopFloatNotification(data.message || 'Request failed.', 'danger');
+        return true;
       }
+      showTopFloatNotification(data.message || 'Request failed.', 'danger');
+      return false;
     } catch (err) {
       console.error(err);
       showTopFloatNotification('Could not connect to the server. Try again.', 'danger');
+      return false;
     } finally {
       setSending(false);
     }
   };
 
-  const handleReplyKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendReply();
-    }
+  const handleSendReply = async () => {
+    const ok = await postReply(replyText);
+    if (ok) showTopFloatNotification('Reply sent.');
   };
 
-  const handleCloseTicket = async () => {
-    if (!activeTicketId || !token()) return;
-    if (activeTicket?.status === 'Closed') return;
-
-    setClosing(true);
+  const handleSendImage = async (file) => {
+    setUploading(true);
     try {
-      const res = await fetch(apiUrl(`/api/support/admin/chats/${activeTicketId}/close`), {
-        method: 'PATCH',
-        headers: authHeaders(),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showTopFloatNotification('Ticket closed.');
-        if (data.ticket) {
-          setActiveTicket(data.ticket);
-          setTickets((prev) =>
-            sortTickets(prev.map((t) => (t.id === data.ticket.id ? { ...t, ...data.ticket } : t)))
-          );
-        } else {
-          await loadTickets({ quiet: true });
-          await loadMessages(activeTicketId, { quiet: true });
-        }
-        window.dispatchEvent(new CustomEvent('admin-support-invalidate'));
-      } else {
-        showTopFloatNotification(data.message || 'Could not close ticket.', 'danger');
-      }
-    } catch (err) {
-      console.error(err);
-      showTopFloatNotification('Could not connect to the server. Try again.', 'danger');
+      const imageUrl = await uploadSupportImage(file);
+      if (!imageUrl) return;
+      const ok = await postReply('', imageUrl);
+      if (ok) showTopFloatNotification('Image sent.');
     } finally {
-      setClosing(false);
+      setUploading(false);
     }
   };
 
-  const displayTicket =
-    filteredTickets.length === 0
-      ? null
-      : activeTicket || tickets.find((t) => t.id === resolvedActiveId) || null;
+  const displayTicket = activeTicketId
+    ? activeTicket || tickets.find((t) => t.id === activeTicketId) || null
+    : null;
   const firstUserMessageId = messages.find((m) => m.senderRole === 'user')?.id;
+  const showMobileChat = Boolean(activeTicketId);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col animate-cardRise">
-      <div className={LAYOUT}>
-      {/* Left sidebar — inbox list */}
-      <aside className={SIDEBAR}>
-        <div className={SIDEBAR_HEADER}>
-          <AppSearchField
-            id="supportSearchInput"
-            variant="full"
-            className="w-full"
-            placeholder="Search messages..."
-            value={localSearch || headerSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-          />
-        </div>
-
-        <div className={TICKET_LIST}>
-          {loading && (
-            <div className="px-4 py-8 text-center text-[0.85rem] text-gray-400">
-              <i className="fa-solid fa-spinner fa-spin me-2" />
-              Loading tickets…
-            </div>
-          )}
-
-          {!loading && filteredTickets.length === 0 && (
-            <div className="px-4 py-8 text-center text-[0.85rem] text-gray-400">No messages found.</div>
-          )}
-
-          {!loading &&
-            filteredTickets.map((tkt) => (
-              <SupportTicketItem
-                key={tkt.id}
-                ticket={tkt}
-                active={tkt.id === resolvedActiveId}
-                onSelect={selectTicket}
-              />
-            ))}
-        </div>
-      </aside>
-
-      {/* Right chat window */}
-      <section className={CHAT_WINDOW}>
-        {!displayTicket ? (
-          <ChatEmptyState />
-        ) : (
-          <>
-            <header className="flex items-center gap-3 border-b border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/[0.06]">
-              <TicketAvatar name={displayTicket.name} avatar={displayTicket.avatar} size={40} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-base font-extrabold text-gray-900 [.admin-dark_&]:text-gray-100">
-                  {displayTicket.name}
-                </div>
-                <div className="truncate text-[0.8rem] text-gray-500 [.admin-dark_&]:text-gray-400">
-                  {displayTicket.email} • Ticket ID: {displayTicket.id}
-                </div>
-              </div>
-              {displayTicket.status !== 'Closed' ? (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-[calc(100dvh-16px)] min-h-0 overflow-hidden rounded-xl border border-deepGreen/8 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.04)] [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-[#141f1b] max-md:h-[calc(100dvh-16px)]">
+        {/* Sidebar */}
+        <aside
+          className={`flex w-full shrink-0 flex-col border-r border-black/[0.06] bg-white md:w-[min(360px,34%)] md:min-w-[300px] [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-[#141f1b] ${
+            showMobileChat ? 'hidden md:flex' : 'flex'
+          }`}
+        >
+          <div className="shrink-0 border-b border-black/[0.06] bg-[#f0f2f1] px-3 py-3 md:px-4 [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-[#101814]">
+            <div className="mb-2.5 flex items-center gap-2">
+              {onToggleSidebar && (
                 <button
                   type="button"
-                  onClick={handleCloseTicket}
-                  disabled={closing}
-                  className="shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[0.78rem] font-bold text-red-700 transition hover:bg-red-100 disabled:opacity-60 [.admin-dark_&]:border-red-500/30 [.admin-dark_&]:bg-red-500/10 [.admin-dark_&]:text-red-300"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-600 hover:bg-black/5 md:hidden"
+                  onClick={onToggleSidebar}
+                  aria-label="Open menu"
                 >
-                  {closing ? 'Closing…' : 'Close ticket'}
+                  <i className="fa-solid fa-bars" />
                 </button>
-              ) : (
-                <span className="shrink-0 rounded-xl bg-gray-100 px-3 py-2 text-[0.78rem] font-bold text-gray-600 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-gray-300">
-                  Closed
-                </span>
               )}
-            </header>
+              <h3 className="mb-0 flex-1 text-[1rem] font-extrabold text-deepGreen [.admin-dark_&]:text-[#e8f0ed]">
+                Support / Help
+              </h3>
+              <span className="rounded-full bg-white px-2.5 py-0.5 text-[0.72rem] font-bold text-gray-500 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-gray-300">
+                {filteredTickets.length}
+              </span>
+            </div>
+            <label htmlFor="adminSupportCustomerSearch" className="sr-only">
+              Search customers
+            </label>
+            <div className="relative">
+              <input
+                id="adminSupportCustomerSearch"
+                type="search"
+                value={localSearch || headerSearch}
+                onChange={(e) => setLocalSearch(e.target.value)}
+                placeholder="Search customers…"
+                className="w-full rounded-lg border border-black/[0.06] bg-white py-2.5 pl-3 pr-3 text-[0.84rem] outline-none focus:border-deepGreen [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:text-gray-100"
+              />
+            </div>
+          </div>
 
-            <div className={CHAT_MESSAGES}>
-              {messagesLoading && messages.length === 0 && (
-                <div className="py-8 text-center text-gray-400">
-                  <i className="fa-solid fa-circle-notch fa-spin me-2" />
-                  Loading messages…
-                </div>
-              )}
+          <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
+            {loading && (
+              <div className="px-4 py-10 text-center text-[0.85rem] text-gray-400">
+                <i className="fa-solid fa-spinner fa-spin me-2" />
+                Loading…
+              </div>
+            )}
 
-              {!messagesLoading && messages.length === 0 && (
-                <div className="py-8 text-center text-gray-400">No messages in this thread.</div>
-              )}
+            {!loading && filteredTickets.length === 0 && (
+              <div className="px-4 py-10 text-center text-[0.85rem] text-gray-400">No messages found.</div>
+            )}
 
-              {messages.map((msg) => (
-                <ChatBubble
-                  key={msg.id}
-                  message={msg}
-                  ticket={displayTicket}
-                  isFirstUserMessage={msg.id === firstUserMessageId}
+            {!loading &&
+              filteredTickets.map((tkt) => (
+                <SupportTicketItem
+                  key={tkt.id}
+                  ticket={tkt}
+                  active={tkt.id === activeTicketId}
+                  onSelect={selectTicket}
                 />
               ))}
-              <div ref={messagesEndRef} />
-            </div>
+          </div>
+        </aside>
 
-            <div className="border-t border-gray-100 bg-white p-4 [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-[#141f1b]">
-              {displayTicket.status === 'Closed' ? (
-                <p className="m-0 text-center text-[0.85rem] text-gray-500 [.admin-dark_&]:text-gray-400">
-                  This ticket is closed. Reopen by having the customer send a new message.
-                </p>
-              ) : (
-              <form className="flex items-end gap-3" onSubmit={handleSendReply}>
-                <textarea
-                  id="supportReplyMessage"
-                  className="min-h-[44px] max-h-32 flex-1 resize-y rounded-xl border border-gray-200 bg-white px-4 py-3 text-[0.88rem] font-medium text-gray-900 outline-none transition focus:border-deepGreen focus:shadow-[0_0_0_3px_rgba(7,61,53,0.08)] [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#101814] [.admin-dark_&]:text-gray-100"
-                  placeholder="Type your reply..."
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  onKeyDown={handleReplyKeyDown}
-                  disabled={sending}
-                  rows={2}
-                />
+        {/* Chat */}
+        <section className={`min-w-0 flex-1 flex-col ${showMobileChat ? 'flex' : 'hidden md:flex'}`}>
+          {!displayTicket ? (
+            <ChatEmptyState />
+          ) : (
+            <>
+              <header className="flex shrink-0 items-center gap-3 border-b border-black/[0.06] bg-[#f0f2f1] px-3 py-3 md:px-4 [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-[#101814]">
                 <button
-                  type="submit"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-deepGreen to-teal text-white transition hover:-translate-y-0.5 disabled:opacity-60"
-                  title="Send Message"
-                  disabled={sending || !replyText.trim()}
+                  type="button"
+                  className="mr-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-600 hover:bg-black/5 md:hidden"
+                  onClick={() => {
+                    setActiveTicketId(null);
+                    setActiveTicket(null);
+                    setMessages([]);
+                  }}
+                  aria-label="Back to list"
                 >
-                  <i className="fa-regular fa-paper-plane" />
+                  <i className="fa-solid fa-arrow-left" />
                 </button>
-              </form>
+                <TicketAvatar name={displayTicket.name} avatar={displayTicket.avatar} size={42} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[0.95rem] font-extrabold text-gray-900 [.admin-dark_&]:text-gray-100">
+                    {displayTicket.name}
+                  </div>
+                </div>
+              </header>
+
+              <div
+                ref={messagesRef}
+                className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto bg-[#efeae2] p-3 md:p-4 [scrollbar-width:thin] [.admin-dark_&]:bg-[#0f1613]"
+                style={{
+                  backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(0,0,0,0.04) 1px, transparent 0)',
+                  backgroundSize: '18px 18px',
+                }}
+              >
+                {messagesLoading && messages.length === 0 && (
+                  <div className="py-10 text-center text-gray-400">
+                    <i className="fa-solid fa-circle-notch fa-spin me-2" />
+                    Loading messages…
+                  </div>
+                )}
+
+                {!messagesLoading && messages.length === 0 && (
+                  <div className="py-10 text-center text-[0.85rem] text-gray-500">No messages in this thread.</div>
+                )}
+
+                {messages.map((msg) => (
+                  <ChatBubble
+                    key={msg.id}
+                    message={msg}
+                    ticket={displayTicket}
+                    isFirstUserMessage={msg.id === firstUserMessageId}
+                  />
+                ))}
+              </div>
+
+              {displayTicket.status === 'Closed' ? (
+                <div className="shrink-0 border-t border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-[0.8rem] text-amber-800 [.admin-dark_&]:border-amber-500/20 [.admin-dark_&]:bg-amber-500/10 [.admin-dark_&]:text-amber-200">
+                  Ticket closed. Customer can reopen by sending a new message.
+                </div>
+              ) : (
+                <ChatComposer
+                  value={replyText}
+                  onChange={setReplyText}
+                  onSend={handleSendReply}
+                  onImagePick={handleSendImage}
+                  sending={sending}
+                  uploading={uploading}
+                  disabled={false}
+                />
               )}
-            </div>
-          </>
-        )}
-      </section>
+            </>
+          )}
+        </section>
       </div>
     </div>
   );

@@ -2,8 +2,10 @@ const Order = require('../models/Order');
 const PaymentTransaction = require('../models/PaymentTransaction');
 const { processWaafiPurchase, WAAFI_MIN_USD } = require('../services/waafiService');
 const { logPaymentTransaction, isWaafiConfigured } = require('../services/paymentService');
+const { invalidateDashboardCache } = require('../utils/revenueUtils');
 const { onOrderUpdated } = require('../services/notificationService');
 const { normalizePhone } = require('../utils/phoneUtils');
+const { decrementStockForItems, restoreStockForItems } = require('../utils/stockUtils');
 
 function parseOrderAmount(amount) {
   if (typeof amount === 'number') return amount;
@@ -34,11 +36,6 @@ exports.getPaymentConfig = async (_req, res) => {
         label: 'EVC Plus Mobile Money (Waafi)',
         enabled: isWaafiConfigured(),
       },
-      {
-        id: 'Cash on Delivery',
-        label: 'Cash on Delivery',
-        enabled: true,
-      },
     ],
   });
 };
@@ -47,15 +44,22 @@ exports.getTransactions = async (_req, res) => {
   try {
     const transactions = await PaymentTransaction.find().sort({ createdAt: -1 }).limit(100).lean();
 
-    const stats = { totalRevenue: 0, evcRevenue: 0, codRevenue: 0 };
+    const orderIds = [...new Set(transactions.map((txn) => txn.orderId).filter(Boolean))];
+    const orders = orderIds.length
+      ? await Order.find({ id: { $in: orderIds } }).select('id customer').lean()
+      : [];
+    const customerByOrderId = new Map(orders.map((order) => [order.id, order.customer || '']));
+
+    const stats = { totalRevenue: 0, evcRevenue: 0, failedCount: 0, pendingCount: 0 };
     transactions.forEach((txn) => {
-      if (txn.status !== 'success') return;
-      stats.totalRevenue += Number(txn.amount) || 0;
-      const method = String(txn.method || '').toLowerCase();
-      if (method.includes('evc') || method.includes('waafi')) {
-        stats.evcRevenue += Number(txn.amount) || 0;
-      } else {
-        stats.codRevenue += Number(txn.amount) || 0;
+      const amount = Number(txn.amount) || 0;
+      if (txn.status === 'success') {
+        stats.totalRevenue += amount;
+        stats.evcRevenue += amount;
+      } else if (txn.status === 'failed') {
+        stats.failedCount += 1;
+      } else if (txn.status === 'pending') {
+        stats.pendingCount += 1;
       }
     });
 
@@ -66,6 +70,7 @@ exports.getTransactions = async (_req, res) => {
       transactions: transactions.map((txn) => ({
         id: txn.id,
         orderId: txn.orderId,
+        customer: customerByOrderId.get(txn.orderId) || '',
         method: txn.method,
         amount: txn.amount,
         status: txn.status,
@@ -133,11 +138,27 @@ exports.verifyPayment = async (req, res) => {
     if (!order.transactionId) {
       order.transactionId = `ADMIN-${Date.now()}`;
     }
+    if ((typeof order.currentStep === 'number' ? order.currentStep : 1) < 2) {
+      order.currentStep = 2;
+    }
+
+    if (previousPayment === 'failed' || order.stockHeld === false) {
+      if (order.items?.length) {
+        await decrementStockForItems(order.items, {
+          orderId: order.id,
+          customer: order.customer,
+          phone: order.phone,
+          userId: order.userId,
+        });
+      }
+      order.stockHeld = true;
+    }
+
     await order.save();
 
     await logPaymentTransaction({
       orderId: order.id,
-      method: order.paymentMethod || 'Cash on Delivery',
+      method: order.paymentMethod || 'EVC Plus',
       amount,
       status: 'success',
       phone: order.phone,
@@ -145,6 +166,7 @@ exports.verifyPayment = async (req, res) => {
       message: 'Payment verified manually by admin.',
       source: 'admin',
     });
+    invalidateDashboardCache();
 
     if (previousPayment !== 'paid') {
       await onOrderUpdated(order, { paymentType: 'paid', payment: 'Paid' });
@@ -201,13 +223,6 @@ exports.waafiPurchase = async (req, res) => {
       });
     }
 
-    if (normalizePhone(accountNo) !== normalizePhone(order.phone)) {
-      return res.status(403).json({
-        success: false,
-        message: 'EVC Plus payment must use the same phone number entered at checkout.',
-      });
-    }
-
     const expectedAmount = parseOrderAmount(order.amount);
     const payAmount = Number(amount);
     if (!payAmount || payAmount <= 0) {
@@ -242,12 +257,27 @@ exports.waafiPurchase = async (req, res) => {
 
     if (paymentResult.success) {
       const previousPayment = order.paymentType;
+      const prevStep = typeof order.currentStep === 'number' ? order.currentStep : 1;
       order.paymentType = 'paid';
       order.payment = 'Paid';
       order.paymentMethod = order.paymentMethod || 'EVC Plus';
       order.paymentReference = paymentReference || order.paymentReference || referenceId;
       order.transactionId = paymentResult.transactionId || referenceId;
       order.paidAt = new Date();
+      if (prevStep < 2) order.currentStep = 2;
+
+      if (previousPayment === 'failed' || order.stockHeld === false) {
+        if (order.items?.length) {
+          await decrementStockForItems(order.items, {
+          orderId: order.id,
+          customer: order.customer,
+          phone: order.phone,
+          userId: order.userId,
+        });
+        }
+        order.stockHeld = true;
+      }
+
       await order.save();
 
       await logPaymentTransaction({
@@ -261,6 +291,7 @@ exports.waafiPurchase = async (req, res) => {
         message: paymentResult.message,
         source: 'waafi',
       });
+      invalidateDashboardCache();
 
       if (previousPayment !== 'paid') {
         await onOrderUpdated(order, { paymentType: 'paid', payment: 'Paid' });
@@ -280,8 +311,19 @@ exports.waafiPurchase = async (req, res) => {
     }
 
     const previousPayment = order.paymentType;
+    const isRepeatFail = previousPayment === 'failed';
+
+    order.paymentFailCount = (order.paymentFailCount || 0) + 1;
     order.paymentType = 'failed';
     order.payment = 'Failed';
+
+    if (!isRepeatFail) {
+      if (order.stockHeld !== false && order.items?.length) {
+        await restoreStockForItems(order.items, { orderId: order.id });
+        order.stockHeld = false;
+      }
+    }
+
     await order.save();
 
     await logPaymentTransaction({
@@ -295,7 +337,7 @@ exports.waafiPurchase = async (req, res) => {
       source: 'waafi',
     });
 
-    if (previousPayment !== 'failed') {
+    if (isRepeatFail) {
       await onOrderUpdated(order, { paymentType: 'failed', payment: 'Failed' });
     }
 

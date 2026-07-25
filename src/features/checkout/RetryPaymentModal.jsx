@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { formatMoney } from '../../utils/format';
 import { showTopFloatNotification } from '../../utils/notifications';
 import { parseOrderAmount, submitWaafiPayment } from '../../utils/waafiPayment';
@@ -12,10 +13,11 @@ export default function RetryPaymentModal({ order, userPhone, onClose, onSuccess
       if (e.key === 'Escape') onClose?.();
     };
     document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      document.body.style.overflow = prevOverflow;
     };
   }, [onClose]);
 
@@ -54,73 +56,74 @@ export default function RetryPaymentModal({ order, userPhone, onClose, onSuccess
     }
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-[1060] flex items-center justify-center bg-deepGreen/50 p-4 backdrop-blur-[6px]"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        className="animate-cardRise w-full max-w-[480px] rounded-2xl bg-white px-7 pb-6 pt-7 shadow-[0_24px_48px_rgba(7,61,53,0.18)]"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="retryPaymentTitle"
-      >
-        <h2 id="retryPaymentTitle" className="mb-2 font-display text-[1.75rem] font-bold text-deepGreen">
-          Retry Payment
-        </h2>
-        <p className="mb-5 text-[0.875rem] leading-relaxed text-gray-500">
-          Your EVC Plus payment did not complete. Confirm your number — Waafi will send a prompt to approve and enter
-          your PIN.
-        </p>
+  if (typeof document === 'undefined' || !document.body) return null;
 
-        <div className="mb-5 grid grid-cols-2 gap-3 rounded-xl border border-gray-200 bg-[#faf8f2] p-4 text-sm">
-          <div>
-            <span className="block text-[0.72rem] font-bold uppercase tracking-wide text-gray-400">Order</span>
-            <strong className="text-deepGreen">{orderId}</strong>
+  return createPortal(
+    <div className="fixed inset-0 z-[1060] overflow-y-auto bg-deepGreen/50 backdrop-blur-[6px]" role="presentation">
+      <div className="flex min-h-full items-center justify-center p-4 sm:p-5" onClick={onClose}>
+        <div
+          className="animate-cardRise my-auto w-full max-h-[min(90dvh,560px)] max-w-[480px] overflow-y-auto overscroll-contain rounded-2xl bg-white px-6 pb-5 pt-6 shadow-[0_24px_48px_rgba(7,61,53,0.18)] sm:px-7 sm:pb-6 sm:pt-7 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-deepGreen/20"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="retryPaymentTitle"
+        >
+          <h2 id="retryPaymentTitle" className="mb-2 font-display text-[1.75rem] font-bold leading-tight text-deepGreen sm:text-[1.85rem]">
+            Retry Payment
+          </h2>
+          <p className="mb-4 text-[0.84rem] leading-relaxed text-gray-500">
+            Your EVC Plus payment did not complete. Confirm your number — Waafi will send a prompt to approve and enter
+            your PIN.
+          </p>
+
+          <div className="mb-4 grid grid-cols-2 gap-3 rounded-xl border border-gray-200 bg-[#faf8f2] p-3.5 text-sm">
+            <div>
+              <span className="block text-[0.68rem] font-bold uppercase tracking-wide text-gray-400">Order</span>
+              <strong className="block truncate text-[0.88rem] text-deepGreen">{orderId}</strong>
+            </div>
+            <div>
+              <span className="block text-[0.68rem] font-bold uppercase tracking-wide text-gray-400">Amount</span>
+              <strong className="text-[0.88rem] text-deepGreen">
+                {order.amount?.startsWith?.('$') ? order.amount : formatMoney(amountNum)}
+              </strong>
+            </div>
           </div>
-          <div>
-            <span className="block text-[0.72rem] font-bold uppercase tracking-wide text-gray-400">Amount</span>
-            <strong className="text-deepGreen">
-              {order.amount?.startsWith?.('$') ? order.amount : formatMoney(amountNum)}
-            </strong>
+
+          <label htmlFor="retryEvcPhone" className="mb-1.5 block text-[0.78rem] font-bold text-gray-700">
+            EVC Plus Phone Number
+          </label>
+          <div className="mb-4 flex items-center rounded-lg border border-gray-200 bg-white px-3">
+            <i className="fa-solid fa-phone pr-2.5 text-deepGreen" />
+            <input
+              id="retryEvcPhone"
+              type="tel"
+              className="flex-1 border-0 bg-transparent py-2 text-[0.88rem] outline-none"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
           </div>
-        </div>
 
-        <label htmlFor="retryEvcPhone" className="mb-1.5 block text-[0.82rem] font-bold text-gray-700">
-          EVC Plus Phone Number
-        </label>
-        <div className="mb-5 flex items-center rounded-lg border border-gray-200 bg-white px-3">
-          <i className="fa-solid fa-phone pr-3 text-deepGreen" />
-          <input
-            id="retryEvcPhone"
-            type="tel"
-            className="flex-1 border-0 bg-transparent py-2.5 text-[0.9rem] outline-none"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        </div>
-
-        <div className="flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            className="cursor-pointer rounded-[10px] border border-gray-300 bg-white px-5 py-2.5 text-[0.875rem] font-bold text-deepGreen transition hover:bg-gray-50"
-            onClick={onClose}
-            disabled={paying}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="cursor-pointer rounded-[10px] border-0 bg-deepGreen px-5 py-2.5 text-[0.875rem] font-bold text-white transition hover:bg-[#052b25] disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={handlePay}
-            disabled={paying}
-          >
-            {paying ? 'Processing…' : 'Pay Now'}
-          </button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className="cursor-pointer rounded-[10px] border border-gray-300 bg-white px-4 py-2.5 text-[0.84rem] font-bold text-deepGreen transition hover:bg-gray-50"
+              onClick={onClose}
+              disabled={paying}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="cursor-pointer rounded-[10px] border-0 bg-deepGreen px-4 py-2.5 text-[0.84rem] font-bold text-white transition hover:bg-[#052b25] disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handlePay}
+              disabled={paying}
+            >
+              {paying ? 'Processing…' : 'Pay Now'}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

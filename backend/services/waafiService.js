@@ -1,4 +1,61 @@
+const https = require('https');
 const WAAFI_URL = process.env.WAAFI_API_URL || 'https://api.waafipay.net/asm';
+
+async function makePostRequest(url, payload) {
+  if (typeof fetch === 'function') {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    return { ok: response.ok, data };
+  }
+
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const postData = JSON.stringify(payload);
+    
+    const options = {
+      hostname: urlObj.hostname,
+      port: 443,
+      path: urlObj.pathname + urlObj.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', (chunk) => {
+        body += chunk;
+      });
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          resolve({
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            data,
+          });
+        } catch (e) {
+          resolve({
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            data: {},
+          });
+        }
+      });
+    });
+
+    req.on('error', (e) => {
+      reject(e);
+    });
+
+    req.write(postData);
+    req.end();
+  });
+}
 
 function waafiConfig() {
   return {
@@ -67,7 +124,7 @@ function buildWaafiPayload({ accountNo, amount, referenceId, invoiceId, descript
       merchantUid,
       apiUserId,
       apiKey,
-      paymentMethod: 'mwallet_account',
+      paymentMethod: 'MWALLET_ACCOUNT',
       payerInfo: {
         accountNo: normalizeAccountNo(accountNo),
       },
@@ -105,15 +162,9 @@ async function processWaafiPurchase({ accountNo, amount, referenceId, invoiceId,
   const payload = buildWaafiPayload({ accountNo, amount, referenceId, invoiceId, description });
 
   try {
-    const response = await fetch(WAAFI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const { ok, data } = await makePostRequest(WAAFI_URL, payload);
 
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
+    if (!ok) {
       return {
         success: false,
         message: data.responseMsg || data.message || 'Waafi payment request failed.',
@@ -158,8 +209,90 @@ async function processWaafiPurchase({ accountNo, amount, referenceId, invoiceId,
   }
 }
 
+function buildWaafiReversalPayload({ transactionId, description }) {
+  const { merchantUid, apiUserId, apiKey } = waafiConfig();
+  const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+  return {
+    schemaVersion: '1.0',
+    requestId: String(Date.now()),
+    timestamp,
+    channelName: 'WEB',
+    serviceName: 'API_REVERSAL',
+    serviceParams: {
+      merchantUid,
+      apiUserId,
+      apiKey,
+      transactionId: String(transactionId),
+      description: description || 'Order cancelled — refund',
+    },
+  };
+}
+
+async function processWaafiReversal({ transactionId, description }) {
+  const { merchantUid, apiUserId, apiKey } = waafiConfig();
+
+  if (!merchantUid || !apiUserId || !apiKey) {
+    return {
+      success: false,
+      message: 'Waafi payment is not configured. Refund must be processed manually.',
+    };
+  }
+
+  if (!transactionId) {
+    return {
+      success: false,
+      message: 'No payment transaction ID found for this order.',
+    };
+  }
+
+  const payload = buildWaafiReversalPayload({ transactionId, description });
+
+  try {
+    const { ok, data } = await makePostRequest(WAAFI_URL, payload);
+
+    if (!ok) {
+      return {
+        success: false,
+        message: data.responseMsg || data.message || 'Waafi refund request failed.',
+        raw: data,
+      };
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[Waafi reversal] response:', JSON.stringify(data).slice(0, 500));
+    }
+
+    const state = String(data.params?.state || '').toLowerCase();
+    if (isWaafiSuccess(data) && state !== 'declined' && state !== 'failed') {
+      return {
+        success: true,
+        message: 'Payment reversed. Funds return to your EVC Plus wallet.',
+        transactionId: data.params?.transactionId || transactionId,
+        raw: data,
+      };
+    }
+
+    return {
+      success: false,
+      message:
+        data.responseMsg ||
+        data.params?.description ||
+        'Refund could not be completed automatically. Contact support.',
+      raw: data,
+    };
+  } catch (error) {
+    console.error('Waafi reversal error:', error);
+    return {
+      success: false,
+      message: 'Could not reach Waafi to process refund. Contact support.',
+    };
+  }
+}
+
 module.exports = {
   processWaafiPurchase,
+  processWaafiReversal,
   normalizeAccountNo,
   WAAFI_MIN_USD,
   formatWaafiAmount,

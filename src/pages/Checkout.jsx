@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import StoreNavbar from '../features/nav/StoreNavbar';
-import OrderConfirmModal from '../features/checkout/CheckoutModals';
+import OrderConfirmModal, { PaymentFailedCompactModal } from '../features/checkout/CheckoutModals';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { validateCartItems } from '../utils/cartApi';
@@ -43,7 +43,11 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [evcAwaitingPin, setEvcAwaitingPin] = useState(false);
   const [confirmOrder, setConfirmOrder] = useState(null);
+  const [failedOrder, setFailedOrder] = useState(null);
+  const suppressFailModalRef = useRef(false);
+  const pendingRetryOrderRef = useRef(null);
   const [retryingPayment, setRetryingPayment] = useState(false);
+  const [cancellingOrder, setCancellingOrder] = useState(false);
   const [districts, setDistricts] = useState(DEFAULT_DISTRICTS);
   const [waafiConfigured, setWaafiConfigured] = useState(true);
 
@@ -73,6 +77,12 @@ export default function Checkout() {
   }, [syncFromStorage, syncAuth]);
 
   useEffect(() => {
+    if (!user.isLoggedIn && cartItems.length > 0) {
+      navigate('/cart', { replace: true, state: { showCheckoutAuth: true } });
+    }
+  }, [user.isLoggedIn, cartItems.length, navigate]);
+
+  useEffect(() => {
     if (cartItems.length === 0) {
       navigate('/cart', { replace: true });
     }
@@ -84,9 +94,7 @@ export default function Checkout() {
       .then((data) => {
         if (data.success) {
           setWaafiConfigured(data.waafiConfigured);
-          if (!data.waafiConfigured) {
-            setPaymentMethod('Cash on Delivery');
-          }
+          setPaymentMethod('EVC Plus');
         }
       })
       .catch(() => {});
@@ -172,33 +180,58 @@ export default function Checkout() {
       return false;
     }
 
-    if (paymentMethod === 'EVC Plus') {
-      const phoneDigits = normalizePhoneNumber(form.phone);
-      if (!phoneDigits || phoneDigits.length < 9) {
-        showTopFloatNotification('Enter a valid Somali mobile number for EVC Plus (e.g. 61XXXXXXX).', 'danger');
-        setErrors((prev) => ({ ...prev, phone: true }));
-        return false;
-      }
+    if (!waafiConfigured) {
+      showTopFloatNotification(
+        'EVC Plus is temporarily unavailable. Please try again later.',
+        'danger'
+      );
+      return false;
+    }
+
+    const phoneDigits = normalizePhoneNumber(form.phone);
+    if (!phoneDigits || phoneDigits.length < 9) {
+      showTopFloatNotification('Enter a valid Somali mobile number for EVC Plus (e.g. 61XXXXXXX).', 'danger');
+      setErrors((prev) => ({ ...prev, phone: true }));
+      return false;
     }
 
     return !Object.values(nextErrors).some(Boolean);
   };
 
+  const buildOrderSnapshot = (fields) => ({
+    trackingCode: fields.trackingCode,
+    customer: fields.customer,
+    phone: fields.phone,
+    email: fields.email,
+    address: fields.address,
+    payment: fields.payment,
+    paymentMethod: fields.paymentMethod,
+    paymentStatus: fields.paymentStatus,
+    paymentFailureMessage: fields.paymentFailureMessage || '',
+    paymentReference: fields.paymentReference,
+    transactionId: fields.transactionId || '',
+    date: fields.date,
+    items: fields.items,
+    subtotal: fields.subtotal,
+    discount: fields.discount,
+    deliveryFee: fields.deliveryFee,
+    total: fields.total,
+    deliveryDate: fields.deliveryDate,
+    deliveryTime: fields.deliveryTime,
+  });
+
   const handlePlaceOrder = async () => {
     if (!validate()) return;
 
     setSubmitting(true);
-    const paymentLabel =
-      paymentMethod === 'EVC Plus' ? 'EVC Plus - Pending Confirmation' : 'Cash on Delivery';
+    setEvcAwaitingPin(true);
+    suppressFailModalRef.current = false;
+    const paymentLabel = 'EVC Plus - Pending Confirmation';
 
     try {
-      const latestDistricts = await fetchDeliveryDistricts(true);
       const resolvedDeliveryFee = form.district
-        ? getDistrictFee(form.district, latestDistricts)
+        ? getDistrictFee(form.district, districts)
         : deliveryFee;
-      if (resolvedDeliveryFee !== deliveryFee) {
-        setDeliveryFee(resolvedDeliveryFee);
-      }
 
       const validation = await validateCartItems(cartItems);
       if (!validation.success || !validation.valid) {
@@ -245,9 +278,9 @@ export default function Checkout() {
         })),
         deliveryDate: form.deliveryDate,
         deliveryTime: form.deliveryTime,
-        paymentMethod,
+        paymentMethod: 'EVC Plus',
         paymentType: 'pending',
-        paymentReference: paymentMethod === 'EVC Plus' ? paymentReference : '',
+        paymentReference,
       };
 
       const token = localStorage.getItem('token');
@@ -267,52 +300,96 @@ export default function Checkout() {
       }
 
       const trackingCode = data.order.id;
-      let paymentStatus = paymentMethod === 'EVC Plus' ? 'Pending' : 'Pending';
+      let paymentStatus = 'Pending';
       let paymentLabelFinal = paymentLabel;
-
       let paymentTransactionId = '';
       let paymentFailureMessage = '';
 
-      if (paymentMethod === 'EVC Plus') {
-        setEvcAwaitingPin(true);
-        showTopFloatNotification(
-          `Check phone ${form.phone.trim()} — EVC Plus will ask you to approve and enter your PIN.`
-        );
+      showTopFloatNotification(
+        `Check phone ${form.phone.trim()} — approve EVC Plus and enter your PIN.`
+      );
 
-        const payResponse = await fetch(apiUrl('/api/payments/waafi'), {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            orderId: trackingCode,
-            accountNo: form.phone.trim(),
-            amount: freshTotal,
-            paymentReference,
-            description: `Mogadishu Modern Furniture ${trackingCode}`,
-          }),
-        });
-        const payData = await payResponse.json();
-        setEvcAwaitingPin(false);
+      const payResponse = await fetch(apiUrl('/api/payments/waafi'), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          orderId: trackingCode,
+          accountNo: form.phone.trim(),
+          amount: freshTotal,
+          paymentReference,
+          description: `Mogadishu Modern Furniture ${trackingCode}`,
+        }),
+      });
+      const payData = await payResponse.json();
 
-        if (payData.success) {
-          paymentStatus = 'Paid';
-          paymentLabelFinal = 'EVC Plus - Paid via Waafi';
-          paymentTransactionId = payData.transactionId || '';
-          showTopFloatNotification('Payment approved on your phone. Order confirmed!');
+      const orderDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+
+      const snapshot = buildOrderSnapshot({
+        trackingCode,
+        customer: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        address: `${form.address.trim()}, ${form.district} District, Mogadishu`,
+        payment: paymentLabelFinal,
+        paymentMethod: 'EVC Plus',
+        paymentStatus,
+        paymentFailureMessage,
+        paymentReference,
+        transactionId: paymentTransactionId,
+        date: orderDate,
+        items: freshItems.map((item) => ({ ...item })),
+        subtotal: freshSubtotal,
+        discount,
+        deliveryFee: resolvedDeliveryFee,
+        total: formatMoney(freshTotal),
+        deliveryDate: form.deliveryDate,
+        deliveryTime: form.deliveryTime,
+      });
+
+      if (payData.success) {
+        paymentStatus = 'Paid';
+        paymentLabelFinal = 'EVC Plus - Paid via Waafi';
+        paymentTransactionId = payData.transactionId || '';
+        snapshot.paymentStatus = 'Paid';
+        snapshot.payment = paymentLabelFinal;
+        snapshot.transactionId = paymentTransactionId;
+        showTopFloatNotification('Payment approved on your phone. Order confirmed!');
+
+        clearCart();
+        localStorage.removeItem('cartDiscount');
+        localStorage.removeItem('cartCouponCode');
+        localStorage.setItem('cartDeliveryFee', '0');
+
+        setFailedOrder(null);
+        setConfirmOrder(snapshot);
+      } else {
+        paymentStatus = 'Failed';
+        paymentLabelFinal = 'EVC Plus - Payment Failed';
+        paymentFailureMessage = payData.message || '';
+        snapshot.paymentStatus = 'Failed';
+        snapshot.payment = paymentLabelFinal;
+        snapshot.paymentFailureMessage = paymentFailureMessage;
+        setConfirmOrder(null);
+
+        if (!suppressFailModalRef.current) {
+          setFailedOrder(snapshot);
         } else {
-          paymentStatus = 'Failed';
-          paymentLabelFinal = 'EVC Plus - Payment Failed';
-          paymentFailureMessage = payData.message || '';
           showTopFloatNotification(
-            payData.message ||
-              'Payment not completed. Approve the EVC prompt on your phone and enter your PIN, then try again.',
+            paymentFailureMessage ||
+              'Payment not completed. Approve the EVC prompt on your phone and enter your PIN.',
             'danger'
           );
         }
+        pendingRetryOrderRef.current = snapshot;
       }
 
       localStorage.setItem('lastTrackingCode', trackingCode);
       localStorage.setItem('lastOrderTotal', String(freshTotal));
-      localStorage.setItem('lastPaymentMethod', paymentMethod);
+      localStorage.setItem('lastPaymentMethod', 'EVC Plus');
       localStorage.setItem('lastPaymentReference', paymentReference);
       localStorage.setItem(
         'lastOrderDetails',
@@ -323,9 +400,9 @@ export default function Checkout() {
           customerEmail: form.email.trim(),
           district: form.district,
           deliveryAddress: `${form.address.trim()}, ${form.district} District, Mogadishu`,
-          paymentMethod,
+          paymentMethod: 'EVC Plus',
           paymentStatus,
-          orderStatus: 'Confirmed',
+          orderStatus: paymentStatus === 'Paid' ? 'Confirmed' : 'Payment Pending',
           total: freshTotal,
           subtotal: freshSubtotal,
           discount,
@@ -337,35 +414,6 @@ export default function Checkout() {
       const ordersList = JSON.parse(localStorage.getItem('orders') || '[]');
       ordersList.unshift(data.order);
       localStorage.setItem('orders', JSON.stringify(ordersList));
-
-      clearCart();
-      localStorage.removeItem('cartDiscount');
-      localStorage.removeItem('cartCouponCode');
-      localStorage.setItem('cartDeliveryFee', '0');
-
-      setConfirmOrder({
-        trackingCode,
-        customer: form.name.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim(),
-        address: `${form.address.trim()}, ${form.district} District, Mogadishu`,
-        payment: paymentLabelFinal,
-        paymentMethod,
-        paymentStatus,
-        paymentFailureMessage,
-        paymentReference: paymentMethod === 'EVC Plus' ? paymentReference : '',
-        transactionId: paymentTransactionId,
-        date: new Date().toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        }),
-        items: freshItems.map((item) => ({ ...item })),
-        subtotal: freshSubtotal,
-        discount,
-        deliveryFee: resolvedDeliveryFee,
-        total: formatMoney(freshTotal),
-      });
     } catch {
       showTopFloatNotification(
         'Could not connect to the backend server! Please ensure it is running.',
@@ -378,34 +426,44 @@ export default function Checkout() {
   };
 
   const handleRetryPayment = async () => {
-    if (!confirmOrder || confirmOrder.paymentStatus !== 'Failed') return;
+    const order = failedOrder || pendingRetryOrderRef.current;
+    if (!order || order.paymentStatus === 'Paid') return;
 
+    suppressFailModalRef.current = true;
+    setFailedOrder(null);
     setRetryingPayment(true);
     setEvcAwaitingPin(true);
+
     try {
-      const amount = Number(String(confirmOrder.total).replace(/[^0-9.]/g, '')) || 0;
+      const amount = Number(String(order.total).replace(/[^0-9.]/g, '')) || 0;
       const { data } = await submitWaafiPayment({
-        orderId: confirmOrder.trackingCode,
-        accountNo: confirmOrder.phone,
+        orderId: order.trackingCode,
+        accountNo: order.phone,
         amount,
-        paymentReference: confirmOrder.paymentReference,
-        description: `Retry payment for ${confirmOrder.trackingCode}`,
+        paymentReference: order.paymentReference,
+        description: `Retry payment for ${order.trackingCode}`,
       });
 
       if (data.success) {
-        setConfirmOrder((prev) => ({
-          ...prev,
+        const paidOrder = {
+          ...order,
           paymentStatus: 'Paid',
           payment: 'EVC Plus - Paid via Waafi',
-          transactionId: data.transactionId || prev.transactionId,
+          transactionId: data.transactionId || order.transactionId,
           paymentFailureMessage: '',
-        }));
+        };
+        pendingRetryOrderRef.current = null;
+        setConfirmOrder(paidOrder);
+        clearCart();
+        localStorage.removeItem('cartDiscount');
+        localStorage.removeItem('cartCouponCode');
+        localStorage.setItem('cartDeliveryFee', '0');
         showTopFloatNotification('Payment approved on your phone. Order confirmed!');
       } else {
-        setConfirmOrder((prev) => ({
-          ...prev,
-          paymentFailureMessage: data.message || prev.paymentFailureMessage,
-        }));
+        pendingRetryOrderRef.current = {
+          ...order,
+          paymentFailureMessage: data.message || order.paymentFailureMessage,
+        };
         showTopFloatNotification(data.message || 'Payment failed. Please try again.', 'danger');
       }
     } catch {
@@ -416,7 +474,55 @@ export default function Checkout() {
     }
   };
 
+  const handleCancelFailedOrder = async () => {
+    const order = failedOrder || pendingRetryOrderRef.current;
+    if (!order?.trackingCode) return;
+
+    if (!window.confirm('Cancel this order? You can place a new one anytime.')) return;
+
+    setCancellingOrder(true);
+    const token = localStorage.getItem('token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    try {
+      const response = await fetch(
+        apiUrl(`/api/orders/cancel/${encodeURIComponent(order.trackingCode)}`),
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ phone: order.phone }),
+        }
+      );
+      const data = await response.json();
+
+      if (data.success) {
+        pendingRetryOrderRef.current = null;
+        setFailedOrder(null);
+        showTopFloatNotification(data.message || 'Order cancelled.');
+        navigate('/profile?tab=orders');
+      } else {
+        showTopFloatNotification(data.message || 'Could not cancel this order.', 'danger');
+      }
+    } catch {
+      showTopFloatNotification('Could not connect to the server.', 'danger');
+    } finally {
+      setCancellingOrder(false);
+    }
+  };
+
   const showError = (field) => errors[field];
+
+  if (!user.isLoggedIn || cartItems.length === 0) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-base font-sans">
+        <div className="flex items-center gap-3 rounded-2xl border border-deepGreen/10 bg-white px-5 py-4 text-[0.88rem] font-bold text-deepGreen shadow-sm">
+          <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" />
+          Redirecting…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="checkout-page min-h-screen bg-base font-sans text-[#111]">
@@ -431,8 +537,8 @@ export default function Checkout() {
             Complete Your Furniture Order
           </h1>
           <p className="mx-auto mb-0 max-w-[760px] text-base font-medium leading-[1.85] text-[#5f5f5f]">
-            Confirm your delivery details, choose EVC Plus or Cash on Delivery, and place your order.
-            {user.isLoggedIn ? ' Your profile details are pre-filled below.' : ' Guest checkout is available — create an account anytime to save order history.'}
+            Confirm your delivery details, pay with EVC Plus, and place your order.
+            {user.isLoggedIn ? ' Your profile details are pre-filled below.' : ''}
           </p>
         </div>
       </section>
@@ -444,18 +550,8 @@ export default function Checkout() {
                 <div className="checkout-card">
                   <h2 className="card-title-main">Customer & Delivery Information</h2>
                   <div className="login-note">
-                    {user.isLoggedIn ? (
-                      <>
-                        <strong>Logged-in checkout:</strong> Please confirm your delivery details before
-                        placing your order.
-                      </>
-                    ) : (
-                      <>
-                        <strong>Guest checkout:</strong> You can complete your order without an account.
-                        <Link to="/login" state={{ from: '/checkout' }}> Login</Link> or{' '}
-                        <Link to="/register"> register</Link> to save order history and notifications.
-                      </>
-                    )}
+                    <strong>Logged-in checkout:</strong> Please confirm your delivery details before
+                    placing your order.
                   </div>
 
                   <div className="row g-3">
@@ -493,11 +589,9 @@ export default function Checkout() {
                           Phone number is required.
                         </div>
                       )}
-                      {paymentMethod === 'EVC Plus' && (
-                        <div style={{ fontSize: '0.78rem', color: '#666', marginTop: 6 }}>
+                      <div style={{ fontSize: '0.78rem', color: '#666', marginTop: 6 }}>
                           Waafi will deduct the order total from this EVC Plus number when you place the order.
                         </div>
-                      )}
                     </div>
 
                     <div className="col-md-6">
@@ -593,66 +687,38 @@ export default function Checkout() {
 
                   {!waafiConfigured && (
                     <div className="login-note mb-4 border-[#f59e0b]">
-                      <strong>EVC Plus unavailable:</strong> Waafi is not configured. Use Cash on Delivery.
+                      <strong>EVC Plus unavailable:</strong> Waafi is not configured on the server.
+                      Checkout cannot continue until EVC Plus is available.
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      className={`flex min-h-[118px] flex-col items-start rounded-xl border-2 p-4 text-left transition-all ${
-                        paymentMethod === 'EVC Plus'
-                          ? 'border-deepGreen bg-deepGreen/[0.04] shadow-[0_4px_14px_rgba(7,61,53,0.1)]'
-                          : 'border-black/10 bg-white hover:border-deepGreen/35'
-                      } ${!waafiConfigured ? 'cursor-not-allowed opacity-50' : ''}`}
-                      disabled={!waafiConfigured}
-                      onClick={() => setPaymentMethod('EVC Plus')}
-                    >
-                      <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-deepGreen/10 text-deepGreen">
-                        <i className="fa-solid fa-mobile-screen-button" />
-                      </span>
-                      <span className="text-[0.95rem] font-extrabold text-[#111]">EVC Plus</span>
-                      <span className="mt-1 text-[0.78rem] font-semibold leading-snug text-[#666]">
-                        Pay with mobile money
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`flex min-h-[118px] flex-col items-start rounded-xl border-2 p-4 text-left transition-all ${
-                        paymentMethod === 'Cash on Delivery'
-                          ? 'border-deepGreen bg-deepGreen/[0.04] shadow-[0_4px_14px_rgba(7,61,53,0.1)]'
-                          : 'border-black/10 bg-white hover:border-deepGreen/35'
-                      }`}
-                      onClick={() => setPaymentMethod('Cash on Delivery')}
-                    >
-                      <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-deepGreen/10 text-deepGreen">
-                        <i className="fa-solid fa-money-bill-wave" />
-                      </span>
-                      <span className="text-[0.95rem] font-extrabold text-[#111]">Cash on Delivery</span>
-                      <span className="mt-1 text-[0.78rem] font-semibold leading-snug text-[#666]">
-                        Pay when delivered
-                      </span>
-                    </button>
+                  <div className="flex min-h-[118px] flex-col items-start rounded-xl border-2 border-deepGreen bg-deepGreen/[0.04] p-4 shadow-[0_4px_14px_rgba(7,61,53,0.1)]">
+                    <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-deepGreen/10 text-deepGreen">
+                      <i className="fa-solid fa-mobile-screen-button" />
+                    </span>
+                    <span className="text-[0.95rem] font-extrabold text-[#111]">EVC Plus</span>
+                    <span className="mt-1 text-[0.78rem] font-semibold leading-snug text-[#666]">
+                      Pay with mobile money via Waafi
+                    </span>
                   </div>
 
-                  {paymentMethod === 'EVC Plus' && (
-                    <div className="mt-4 rounded-xl border border-gold/35 bg-gold/[0.08] px-4 py-3 text-[0.82rem] leading-relaxed text-[#555]">
-                      <p className="mb-2 font-bold text-[#333]">
-                        <i className="fa-solid fa-circle-info me-1 text-gold" />
-                        EVC Plus will charge the phone number above.
+                  <div className="mt-4 rounded-xl border border-gold/35 bg-gold/[0.08] px-4 py-3 text-[0.82rem] leading-relaxed text-[#555]">
+                    <p className="mb-2 font-bold text-[#333]">
+                      <i className="fa-solid fa-circle-info me-1 text-gold" />
+                      EVC Plus will charge the phone number above.
+                    </p>
+                    {form.phone.trim() ? (
+                      <p className="mb-1">
+                        Target: <strong>{form.phone.trim()}</strong> · Ref:{' '}
+                        <strong>{paymentReference}</strong>
                       </p>
-                      {form.phone.trim() ? (
-                        <p className="mb-1">
-                          Target: <strong>{form.phone.trim()}</strong> · Ref:{' '}
-                          <strong>{paymentReference}</strong>
-                        </p>
-                      ) : (
-                        <p className="mb-1">Enter your phone number in the form above.</p>
-                      )}
-                      <p className="mb-0">Approve the prompt on your phone and enter your PIN after placing the order.</p>
-                    </div>
-                  )}
+                    ) : (
+                      <p className="mb-1">Enter your phone number in the form above.</p>
+                    )}
+                    <p className="mb-0">
+                      Approve the prompt on your phone and enter your PIN after placing the order.
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -705,7 +771,7 @@ export default function Checkout() {
                   type="button"
                   className="place-btn"
                   onClick={handlePlaceOrder}
-                  disabled={submitting || evcAwaitingPin || cartItems.length === 0}
+                  disabled={submitting || evcAwaitingPin || cartItems.length === 0 || !waafiConfigured}
                 >
                   <i className={`fa-solid ${evcAwaitingPin ? 'fa-spinner fa-spin' : 'fa-circle-check'} me-2`} />
                   {evcAwaitingPin
@@ -749,12 +815,20 @@ export default function Checkout() {
         </div>
       )}
 
+      <PaymentFailedCompactModal
+        isOpen={!!failedOrder}
+        order={failedOrder}
+        onClose={() => setFailedOrder(null)}
+        onRetryPayment={handleRetryPayment}
+        onCancelOrder={handleCancelFailedOrder}
+        retryingPayment={retryingPayment}
+        cancellingOrder={cancellingOrder}
+      />
+
       <OrderConfirmModal
         isOpen={!!confirmOrder}
         order={confirmOrder}
         onClose={() => setConfirmOrder(null)}
-        onRetryPayment={handleRetryPayment}
-        retryingPayment={retryingPayment}
       />
     </div>
   );

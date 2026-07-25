@@ -87,10 +87,17 @@ export function useSupportChat(enabled, { onAdminReply } = {}) {
   }, [activeTicketId]);
 
   const createConversation = useCallback(
-    async (subject, messageText) => {
+    async (subject, messageText, imageUrl = '') => {
       const token = localStorage.getItem('token');
       if (!token) {
         showTopFloatNotification('❌ Fadlan marka hore soo gal!', 'danger');
+        return false;
+      }
+
+      const text = (messageText || '').trim();
+      const image = (imageUrl || '').trim();
+      if (!text && !image) {
+        showTopFloatNotification('❌ Fariintu ma noqon karto madhan.', 'danger');
         return false;
       }
 
@@ -102,7 +109,7 @@ export function useSupportChat(enabled, { onAdminReply } = {}) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ subject, messageText }),
+          body: JSON.stringify({ subject, messageText: text, imageUrl: image }),
         });
         const data = await response.json();
         if (response.status === 401) {
@@ -131,7 +138,7 @@ export function useSupportChat(enabled, { onAdminReply } = {}) {
   );
 
   const sendTicketMessage = useCallback(
-    async (ticketId, messageText) => {
+    async (ticketId, messageText, imageUrl = '') => {
       const token = localStorage.getItem('token');
       if (!token) {
         showTopFloatNotification('❌ Fadlan marka hore soo gal!', 'danger');
@@ -141,7 +148,9 @@ export function useSupportChat(enabled, { onAdminReply } = {}) {
         showTopFloatNotification('❌ Fadlan dooro wadahadal marka hore.', 'danger');
         return false;
       }
-      if (!messageText.trim()) {
+      const text = (messageText || '').trim();
+      const image = (imageUrl || '').trim();
+      if (!text && !image) {
         showTopFloatNotification('❌ Fariintu ma noqon karto madhan.', 'danger');
         return false;
       }
@@ -154,7 +163,7 @@ export function useSupportChat(enabled, { onAdminReply } = {}) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ messageText: messageText.trim() }),
+          body: JSON.stringify({ messageText: text, imageUrl: image }),
         });
         const data = await response.json();
         if (response.status === 401) {
@@ -182,9 +191,39 @@ export function useSupportChat(enabled, { onAdminReply } = {}) {
   );
 
   const sendMessage = useCallback(
-    async (messageText) => sendTicketMessage(activeTicketId, messageText),
+    async (messageText, imageUrl = '') => sendTicketMessage(activeTicketId, messageText, imageUrl),
     [activeTicketId, sendTicketMessage]
   );
+
+  const uploadSupportImage = useCallback(async (file) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      showTopFloatNotification('❌ Fadlan marka hore soo gal!', 'danger');
+      return null;
+    }
+    if (!file) return null;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const response = await fetch(apiUrl('/api/support/upload'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await response.json();
+      if (data.success && data.imageUrl) {
+        return data.imageUrl;
+      }
+      showTopFloatNotification(`❌ ${data.message || 'Failed to upload image'}`, 'danger');
+      return null;
+    } catch (error) {
+      console.error(error);
+      showTopFloatNotification('❌ Failed to upload image.', 'danger');
+      return null;
+    }
+  }, []);
 
   const openRepliedTicket = useCallback(() => {
     const replied = tickets.find((t) => t.status === 'Replied');
@@ -253,6 +292,10 @@ export function useSupportChat(enabled, { onAdminReply } = {}) {
             }
 
             if (data.type === 'message' && data.message) {
+              if (data.message.ticketId === activeTicketIdRef.current) {
+                reloadMessages();
+              }
+
               const isAdminReply = data.message.senderRole === 'admin';
 
               if (isAdminReply) {
@@ -311,6 +354,7 @@ export function useSupportChat(enabled, { onAdminReply } = {}) {
     createConversation,
     sendMessage,
     sendTicketMessage,
+    uploadSupportImage,
     openRepliedTicket,
     backToForm,
   };

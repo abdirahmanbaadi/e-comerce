@@ -353,11 +353,9 @@ exports.acceptAssignment = async (req, res) => {
     }
 
     order.assignmentStatus = 'accepted';
-    if (order.currentStep < 3) {
-      order.currentStep = 3;
+    if (!order.estimate?.trim() || order.estimate === 'Awaiting driver acceptance') {
+      order.estimate = 'Driver accepted — awaiting dispatch';
     }
-    order.status = 'processing';
-    order.estimate = 'Driver accepted — preparing dispatch';
     await order.save();
 
     await syncDriverStatus(req.user.id);
@@ -412,6 +410,7 @@ exports.rejectAssignment = async (req, res) => {
     order.assignmentStatus = 'none';
     order.assignedDriverId = '';
     order.driver = 'Not assigned yet';
+    order.driverArrivedAt = null;
     order.estimate = 'Driver declined — assign another driver';
     await order.save();
 

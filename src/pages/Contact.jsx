@@ -35,9 +35,9 @@ const FALLBACK_FAQS = [
   },
   {
     id: 'faq-4',
-    question: 'What is Cash on Delivery?',
+    question: 'How do I pay with EVC Plus?',
     answer:
-      'Pay when your furniture is delivered to your address. No upfront mobile payment is required.',
+      'At checkout, enter your Somali mobile number. After you place the order, approve the EVC Plus prompt on your phone and enter your PIN. Payment is confirmed instantly via Waafi.',
   },
 ];
 

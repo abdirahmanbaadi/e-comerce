@@ -4,9 +4,13 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const UserActivity = require('../models/UserActivity');
 const { JWT_SECRET } = require('../middleware/authMiddleware');
-const { findUserByPhone, maskEmail, normalizePhone } = require('../utils/phoneUtils');
+const {
+  findUserByPhone,
+  findUserByLoginIdentifier,
+  maskEmail,
+  normalizePhone,
+} = require('../utils/phoneUtils');
 const { sendWelcomeEmail, sendPasswordResetCode, isEmailConfigured } = require('../services/emailService');
-const { sendPasswordResetSms, isSmsConfigured, maskPhone } = require('../services/smsService');
 const { logUserActivity } = require('../services/activityService');
 const {
   hashOtp,
@@ -22,12 +26,37 @@ const generateToken = (id) => {
   });
 };
 
+/** Orders store amount as "$350.00" — $toDouble alone crashes aggregations. */
+function orderAmountNumExpr() {
+  return {
+    $convert: {
+      input: {
+        $replaceAll: {
+          input: {
+            $replaceAll: {
+              input: { $toString: { $ifNull: ['$amount', '0'] } },
+              find: { $literal: '$' },
+              replacement: '',
+            },
+          },
+          find: ',',
+          replacement: '',
+        },
+      },
+      to: 'double',
+      onError: 0,
+      onNull: 0,
+    },
+  };
+}
+
 function formatPublicUser(user) {
   const prefs = user.notificationPreferences || {};
   return {
     id: user.id,
     firstName: user.firstName,
     lastName: user.lastName,
+    username: user.username || '',
     email: user.email,
     phone: user.phone,
     address: user.address,
@@ -105,10 +134,23 @@ async function linkGuestOrdersToUser(user) {
 // Register User
 exports.register = async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, password } = req.body;
+    const { firstName, lastName, username, email, phone, password } = req.body;
 
-    if (!firstName || !email || !phone || !password) {
+    if (!firstName || !username || !email || !phone || !password) {
       return res.status(400).json({ success: false, message: 'Please fill in all required fields!' });
+    }
+
+    const normalizedUsername = String(username).trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,30}$/.test(normalizedUsername)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username must be 3–30 characters (letters, numbers, dots, underscores, hyphens).',
+      });
+    }
+
+    const usernameExists = await User.findOne({ username: normalizedUsername });
+    if (usernameExists) {
+      return res.status(400).json({ success: false, message: 'This username is already taken!' });
     }
 
     const passwordCheck = validatePassword(password);
@@ -140,6 +182,7 @@ exports.register = async (req, res) => {
       id: userId,
       firstName,
       lastName,
+      username: normalizedUsername,
       email: email.toLowerCase(),
       phone,
       password: hashedPassword,
@@ -170,31 +213,33 @@ exports.register = async (req, res) => {
       return res.status(400).json({ success: false, message: error.message });
     }
     if (error.code === 11000) {
-      return res.status(400).json({ success: false, message: 'This email or phone is already registered!' });
+      const field = error.keyPattern?.username ? 'username' : 'email or phone';
+      return res.status(400).json({ success: false, message: `This ${field} is already registered!` });
     }
     return res.status(500).json({ success: false, message: 'A server error occurred during registration.' });
   }
 };
 
-// Login User (email or phone + password)
+// Login User (username, email, or phone + password)
 exports.login = async (req, res) => {
   try {
     const { email, login, password } = req.body;
     const identifier = (login || email || '').trim();
 
     if (!identifier || !password) {
-      return res.status(400).json({ success: false, message: 'Please enter email/phone and password!' });
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter username, email, or phone and password!',
+      });
     }
 
-    let user = null;
-    if (identifier.includes('@')) {
-      user = await User.findOne({ email: identifier.toLowerCase() });
-    } else {
-      user = await findUserByPhone(User, identifier);
-    }
+    const user = await findUserByLoginIdentifier(User, identifier);
 
     if (!user) {
-      return res.status(400).json({ success: false, message: 'Incorrect email/phone or password!' });
+      return res.status(400).json({
+        success: false,
+        message: 'Incorrect username, email, phone, or password!',
+      });
     }
 
     if (user.isActive === false) {
@@ -203,7 +248,10 @@ exports.login = async (req, res) => {
 
     const validPassword = await verifyUserPassword(user, password);
     if (!validPassword) {
-      return res.status(400).json({ success: false, message: 'Incorrect email/phone or password!' });
+      return res.status(400).json({
+        success: false,
+        message: 'Incorrect username, email, phone, or password!',
+      });
     }
 
     linkGuestOrdersToUser(user).catch((err) => console.error('Link guest orders failed:', err.message));
@@ -420,13 +468,13 @@ exports.sendResetOtp = async (req, res) => {
   }
 };
 
-// Forgot Password - Step 1: Phone → SMS OTP (email fallback if SMS unavailable)
+// Forgot Password - Step 1: Verify registered phone, send OTP to Gmail
 exports.verifyPhone = async (req, res) => {
   try {
     const { phone } = req.body;
 
     if (!phone) {
-      return res.status(400).json({ success: false, message: 'Please enter your phone number!' });
+      return res.status(400).json({ success: false, message: 'Please enter your registered phone number!' });
     }
 
     const targetUser = await findUserByPhone(User, phone);
@@ -435,53 +483,59 @@ exports.verifyPhone = async (req, res) => {
       return res.status(404).json({ success: false, message: 'This phone number is not registered!' });
     }
 
+    if (!targetUser.email) {
+      return res.status(400).json({
+        success: false,
+        message: 'No email is linked to this account. Please contact support.',
+      });
+    }
+
     const otp = String(Math.floor(100000 + Math.random() * 900000));
     targetUser.resetOtp = hashOtp(otp);
     targetUser.resetOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
     targetUser.resetOtpAttempts = 0;
     await targetUser.save();
 
+    const masked = maskEmail(targetUser.email);
     const payload = {
       success: true,
-      email: targetUser.email,
-      maskedEmail: maskEmail(targetUser.email),
-      maskedPhone: maskPhone(targetUser.phone),
-      phone: targetUser.phone,
+      maskedEmail: masked,
+      channel: 'email',
     };
 
-    const smsResult = await sendPasswordResetSms(targetUser.phone, otp);
-    if (smsResult.success) {
-      sendPasswordResetCode(targetUser, otp).catch(() => {});
-      return res.status(200).json({
-        ...payload,
-        channel: 'sms',
-        message: `A 6-digit code was sent via SMS to ${maskPhone(targetUser.phone)}.`,
-      });
-    }
-
-    if (isEmailConfigured()) {
-      const emailResult = await sendPasswordResetCode(targetUser, otp);
-      if (emailResult.success) {
-        return res.status(200).json({
-          ...payload,
-          channel: 'email',
-          message: `SMS unavailable. Code sent to ${maskEmail(targetUser.email)} instead.`,
-        });
-      }
-    }
-
-    if (!isSmsConfigured() && !isEmailConfigured()) {
-      console.log(`[Password Reset OTP] ${targetUser.phone}: ${otp}`);
+    if (!isEmailConfigured()) {
+      console.log(`[Password Reset OTP] ${targetUser.email}: ${otp}`);
       return res.status(200).json({
         ...payload,
         channel: 'dev',
-        message: `Test mode: use code ${otp} (configure SMS or SMTP for production).`,
+        devCode: otp,
+        message: `Email service not configured. Use this verification code for ${masked}.`,
       });
     }
 
-    return res.status(500).json({
-      success: false,
-      message: smsResult.message || 'Could not send verification code. Try again later.',
+    const emailResult = await sendPasswordResetCode(targetUser, otp);
+    if (!emailResult.success) {
+      console.log(`[Password Reset OTP] ${targetUser.email}: ${otp}`);
+      console.error('[Password Reset Email]', emailResult.message);
+
+      if (process.env.NODE_ENV !== 'production') {
+        return res.status(200).json({
+          ...payload,
+          channel: 'dev',
+          devCode: otp,
+          message: `Could not send email (check SMTP). Use this verification code for ${masked}.`,
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message: 'Could not send verification code to your email. Please try again later.',
+      });
+    }
+
+    return res.status(200).json({
+      ...payload,
+      message: `A 6-digit verification code was sent to ${masked}.`,
     });
   } catch (error) {
     console.error(error);
@@ -609,11 +663,12 @@ exports.getUsers = async (req, res) => {
 
     const orderStats = await Order.aggregate([
       { $match: { userId: { $in: userIds } } },
+      { $addFields: { amountNum: orderAmountNumExpr() } },
       {
         $group: {
           _id: '$userId',
           orderCount: { $sum: 1 },
-          totalSpent: { $sum: { $toDouble: '$amount' } },
+          totalSpent: { $sum: '$amountNum' },
         },
       },
     ]);
@@ -662,11 +717,12 @@ exports.getUserDetails = async (req, res) => {
 
     const [activities, recentOrders, totalOrders, spentAgg] = await Promise.all([
       UserActivity.find({ userId: user.id }).sort({ createdAt: -1 }).limit(25),
-      Order.find({ userId: user.id }).sort({ createdAt: -1 }).limit(5),
+      Order.find({ userId: user.id }).sort({ createdAt: -1 }).limit(50),
       Order.countDocuments({ userId: user.id }),
       Order.aggregate([
         { $match: { userId: user.id } },
-        { $group: { _id: null, total: { $sum: { $toDouble: '$amount' } } } },
+        { $addFields: { amountNum: orderAmountNumExpr() } },
+        { $group: { _id: null, total: { $sum: '$amountNum' } } },
       ]),
     ]);
 
@@ -706,7 +762,11 @@ exports.getUserDetails = async (req, res) => {
         amount: o.amount,
         status: o.status,
         payment: o.payment,
+        paymentType: o.paymentType,
+        currentStep: o.currentStep,
         date: o.date,
+        createdAt: o.createdAt,
+        items: Array.isArray(o.items) ? o.items : [],
       })),
     });
   } catch (error) {

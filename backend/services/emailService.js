@@ -19,6 +19,9 @@ function getTransporter() {
     port,
     secure: port === 465,
     auth: { user, pass },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
   });
 
   return transporter;
@@ -54,12 +57,12 @@ async function sendWelcomeEmail(user) {
   return sendEmail({
     to: user.email,
     subject: 'Welcome to Mogadishu Modern Furniture',
-    text: `Hello ${name},\n\nThank you for registering at Mogadishu Modern Furniture.\n\nYou can now browse our catalog, save wishlist items, and place orders with EVC Plus or Cash on Delivery.\n\nBest regards,\nMogadishu Modern Furniture Team`,
+    text: `Hello ${name},\n\nThank you for registering at Mogadishu Modern Furniture.\n\nYou can now browse our catalog, save wishlist items, and place orders with EVC Plus.\n\nBest regards,\nMogadishu Modern Furniture Team`,
     html: `
       <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
         <h2 style="color:#073D35;">Welcome, ${name}!</h2>
         <p>Thank you for registering at <strong>Mogadishu Modern Furniture</strong>.</p>
-        <p>You can now browse our catalog, save wishlist items, and place orders with EVC Plus or Cash on Delivery.</p>
+        <p>You can now browse our catalog, save wishlist items, and place orders with EVC Plus.</p>
         <p style="color:#666;">Best regards,<br/>Mogadishu Modern Furniture Team</p>
       </div>
     `,

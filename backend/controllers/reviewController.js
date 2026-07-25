@@ -3,6 +3,11 @@ const Product = require('../models/Product');
 const Order = require('../models/Order');
 const { notifyUser } = require('../services/notificationService');
 const { normalizePhone } = require('../utils/phoneUtils');
+const {
+  findDuePromptForUser,
+  getOrderPromptState,
+  markPromptShown,
+} = require('../services/reviewPromptService');
 
 function generateReviewId() {
   return `REV-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`;
@@ -19,29 +24,108 @@ async function recalculateProductRating(productId) {
   await Product.findOneAndUpdate({ id: productId }, { rating: Math.round(avg * 10) / 10 });
 }
 
-async function userPurchasedProduct(user, productId, productTitle) {
-  if (!user?.id && !user?.phone) return false;
+async function findUserOrders(user) {
+  if (!user?.id && !user?.phone) return [];
 
   const query = user.id
     ? { $or: [{ userId: user.id }, { phone: normalizePhone(user.phone) }] }
     : { phone: normalizePhone(user.phone) };
 
-  const orders = await Order.find({
+  return Order.find({
     ...query,
     currentStep: { $ne: 0 },
     status: { $nin: ['cancelled'] },
   }).lean();
+}
 
+function orderContainsProduct(order, productId, productTitle) {
   const pid = Number(productId);
   const title = String(productTitle || '').toLowerCase();
 
-  return orders.some((order) =>
-    (order.items || []).some(
-      (item) =>
-        (item.id && Number(item.id) === pid) ||
-        (item.title && title && item.title.toLowerCase().includes(title))
-    )
-  );
+  return (order.items || []).some(
+    (item) =>
+      (item.id && Number(item.id) === pid) ||
+      (item.title && title && item.title.toLowerCase().includes(title))
+  ) || (order.product && title && order.product.toLowerCase().includes(title));
+}
+
+function isOrderPaid(order) {
+  const payment = String(order.payment || '').toLowerCase();
+  const paymentType = String(order.paymentType || '').toLowerCase();
+  return payment === 'paid' || paymentType === 'paid';
+}
+
+function isOrderDelivered(order) {
+  const step = Number(order.currentStep) || 0;
+  const status = String(order.status || '').toLowerCase();
+  return step >= 5 || status === 'delivered';
+}
+
+async function getProductReviewEligibility(user, productId, productTitle) {
+  const existing = await Review.findOne({ productId: Number(productId), userId: user.id }).lean();
+  if (existing) {
+    const eligibility =
+      existing.status === 'pending'
+        ? 'pending_review'
+        : existing.status === 'rejected'
+          ? 'rejected_review'
+          : 'already_reviewed';
+    return {
+      canReview: false,
+      eligibility,
+      hasReviewed: true,
+      userReview: existing,
+      purchased: true,
+      delivered: true,
+    };
+  }
+
+  const orders = await findUserOrders(user);
+  const matching = orders.filter((order) => orderContainsProduct(order, productId, productTitle));
+
+  if (!matching.length) {
+    return {
+      canReview: false,
+      eligibility: 'not_purchased',
+      hasReviewed: false,
+      userReview: null,
+      purchased: false,
+      delivered: false,
+    };
+  }
+
+  const hasPaid = matching.some(isOrderPaid);
+  if (!hasPaid) {
+    return {
+      canReview: false,
+      eligibility: 'not_paid',
+      hasReviewed: false,
+      userReview: null,
+      purchased: true,
+      delivered: false,
+    };
+  }
+
+  const hasDelivered = matching.some((order) => isOrderPaid(order) && isOrderDelivered(order));
+  if (!hasDelivered) {
+    return {
+      canReview: false,
+      eligibility: 'not_delivered',
+      hasReviewed: false,
+      userReview: null,
+      purchased: true,
+      delivered: false,
+    };
+  }
+
+  return {
+    canReview: true,
+    eligibility: 'can_review',
+    hasReviewed: false,
+    userReview: null,
+    purchased: true,
+    delivered: true,
+  };
 }
 
 exports.createReview = async (req, res) => {
@@ -69,11 +153,20 @@ exports.createReview = async (req, res) => {
       });
     }
 
-    const purchased = await userPurchasedProduct(req.user, numericProductId, productTitle);
-    if (!purchased) {
+    const eligibility = await getProductReviewEligibility(req.user, numericProductId, productTitle);
+    if (!eligibility.canReview) {
+      const messages = {
+        not_purchased: 'You can only review products you have purchased.',
+        not_paid: 'Review is available after your payment is confirmed.',
+        not_delivered: 'You can review this product after it has been delivered.',
+        already_reviewed: 'You have already reviewed this product.',
+        pending_review: 'Your review is already pending approval.',
+        rejected_review: 'Your previous review was not approved.',
+      };
       return res.status(403).json({
         success: false,
-        message: 'You can only review products you have ordered.',
+        message: messages[eligibility.eligibility] || 'You cannot review this product yet.',
+        eligibility: eligibility.eligibility,
       });
     }
 
@@ -98,18 +191,72 @@ exports.createReview = async (req, res) => {
 exports.getProductReviews = async (req, res) => {
   try {
     const productId = Number(req.params.productId);
-    const reviews = await Review.find({ productId, status: 'approved' }).sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, count: reviews.length, reviews });
+    const reviews = await Review.find({ productId, status: 'approved' }).sort({ createdAt: -1 }).lean();
+    const breakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    reviews.forEach((r) => {
+      const star = Math.min(5, Math.max(1, Number(r.rating) || 0));
+      breakdown[star] += 1;
+    });
+    const avgRating = reviews.length
+      ? Math.round((reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) * 10) / 10
+      : 0;
+
+    return res.status(200).json({
+      success: true,
+      count: reviews.length,
+      reviews,
+      stats: { avgRating, count: reviews.length, breakdown },
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to load reviews.' });
   }
 };
 
+exports.getReviewStatus = async (req, res) => {
+  try {
+    const productId = Number(req.params.productId);
+    const product = await Product.findOne({ id: productId }).lean();
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found.' });
+    }
+
+    const eligibility = await getProductReviewEligibility(req.user, productId, product.title);
+
+    return res.status(200).json({
+      success: true,
+      ...eligibility,
+      canReview: eligibility.canReview,
+      hasReviewed: eligibility.hasReviewed,
+      userReview: eligibility.userReview,
+      purchased: eligibility.purchased,
+      delivered: eligibility.delivered,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to check review status.' });
+  }
+};
+
 exports.getAllReviews = async (_req, res) => {
   try {
-    const reviews = await Review.find().sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, count: reviews.length, reviews });
+    const reviews = await Review.find().sort({ createdAt: -1 }).lean();
+    const approved = reviews.filter((r) => r.status === 'approved');
+    const avgRating = approved.length
+      ? Math.round((approved.reduce((sum, r) => sum + (r.rating || 0), 0) / approved.length) * 10) / 10
+      : 0;
+
+    return res.status(200).json({
+      success: true,
+      count: reviews.length,
+      reviews,
+      stats: {
+        pending: reviews.filter((r) => r.status === 'pending').length,
+        approved: approved.length,
+        rejected: reviews.filter((r) => r.status === 'rejected').length,
+        avgRating,
+      },
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to load reviews.' });
@@ -167,5 +314,79 @@ exports.deleteReview = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to delete review.' });
+  }
+};
+
+exports.getReviewPrompt = async (req, res) => {
+  try {
+    const prompt = await findDuePromptForUser(req.user);
+    return res.status(200).json({
+      success: true,
+      prompt,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to load review prompt.' });
+  }
+};
+
+exports.markReviewPromptSeen = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await markPromptShown(orderId, req.user);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+    const state = await getOrderPromptState(req.user, order.toObject ? order.toObject() : order);
+    return res.status(200).json({ success: true, prompt: state });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to update review prompt.' });
+  }
+};
+
+exports.rateDelivery = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { rating, comment } = req.body;
+    const numericRating = Number(rating);
+
+    if (!numericRating || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({ success: false, message: 'Rating must be between 1 and 5.' });
+    }
+
+    const query = req.user.id
+      ? { $or: [{ userId: req.user.id }, { phone: normalizePhone(req.user.phone) }] }
+      : { phone: normalizePhone(req.user.phone) };
+
+    const order = await Order.findOne({ id: orderId, ...query });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+
+    const step = Number(order.currentStep) || 0;
+    if (step < 5 && String(order.status || '').toLowerCase() !== 'delivered') {
+      return res.status(400).json({ success: false, message: 'Delivery can only be rated after delivery.' });
+    }
+
+    if (order.deliveryRating) {
+      return res.status(400).json({ success: false, message: 'You already rated this delivery.' });
+    }
+
+    order.deliveryRating = numericRating;
+    order.deliveryRatingComment = (comment || '').trim();
+    order.deliveryRatedAt = new Date();
+    if (!order.deliveredAt) order.deliveredAt = new Date();
+    await order.save();
+
+    const state = await getOrderPromptState(req.user, order.toObject());
+    return res.status(200).json({
+      success: true,
+      message: 'Delivery rating saved.',
+      prompt: state,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to save delivery rating.' });
   }
 };

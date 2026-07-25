@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useAdminTheme } from '../hooks/useAdminTheme';
+import { clearAdminThemeFromDom, useAdminTheme } from '../hooks/useAdminTheme';
+import { getSidebarCompactDefault, getCompactTablesEnabled } from '../features/admin/adminShared.js';
 import { useAdminPage } from '../hooks/pages/useAdminPage';
 import { useNotifications } from '../hooks/useNotifications';
 import { AdminAccessDenied, AdminHeader, AdminSidebar } from '../features/admin/AdminLayout';
@@ -13,17 +14,16 @@ import {
   AdminStockTab,
   AdminPaymentsTab,
   AdminDeliveryTab,
-  AdminSettingsTab,
 } from '../features/admin/AdminOpsTabs';
+import AdminSettingsTab from '../features/admin/AdminSettingsTab';
 import {
   CmsAdminTab,
-  CategoriesAdminTab,
-  ReviewsAdminTab,
   DriverApplicationsTab,
 } from '../features/admin/AdminManageTabs';
+import AdminReviewsTab from '../features/admin/AdminReviewsTab';
 
 const ADMIN_PAGE_BG =
-  'min-h-screen overflow-x-hidden font-sans text-gray-900 bg-[radial-gradient(circle_at_top_right,rgba(216,161,40,0.08),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(7,61,53,0.06),transparent_32%),#FAF8F2] [.admin-dark_&]:bg-[radial-gradient(circle_at_top_right,rgba(216,161,40,0.06),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(15,111,100,0.08),transparent_32%),#0b1412] [.admin-dark_&]:text-[#e8eeec]';
+  'min-h-screen overflow-x-hidden bg-[#FDFBF8] font-sans text-gray-900 dark:bg-[#0b1412] dark:text-[#e8eeec] [.admin-dark_&]:bg-[#0b1412] [.admin-dark_&]:text-[#e8eeec]';
 
 const REACT_MANAGED_TABS = new Set([
   'dashboard',
@@ -37,7 +37,6 @@ const REACT_MANAGED_TABS = new Set([
   'settings',
   'driver-applications',
   'cms',
-  'categories',
   'reviews',
 ]);
 
@@ -46,7 +45,8 @@ export default function Admin() {
   useAdminPage();
   const { isDark } = useAdminTheme();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getSidebarCompactDefault());
+  const [compactTables, setCompactTables] = useState(() => getCompactTablesEnabled());
   const [sidebarMobile, setSidebarMobile] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
 
@@ -77,6 +77,19 @@ export default function Admin() {
   useEffect(() => {
     syncFromStorage();
   }, [syncFromStorage]);
+
+  useEffect(() => {
+    return () => clearAdminThemeFromDom();
+  }, []);
+
+  useEffect(() => {
+    const onSettingsChanged = () => {
+      setSidebarCollapsed(getSidebarCompactDefault());
+      setCompactTables(getCompactTablesEnabled());
+    };
+    window.addEventListener('admin-settings-invalidate', onSettingsChanged);
+    return () => window.removeEventListener('admin-settings-invalidate', onSettingsChanged);
+  }, []);
 
   useEffect(() => {
     const onTabChanged = (e) => {
@@ -141,8 +154,9 @@ export default function Admin() {
 
   return (
     <div
-      className={[ADMIN_PAGE_BG, isDark ? 'admin-dark' : ''].filter(Boolean).join(' ')}
+      className={[ADMIN_PAGE_BG, 'admin-page', isDark ? 'admin-dark' : ''].filter(Boolean).join(' ')}
       data-theme={isDark ? 'dark' : 'light'}
+      data-admin-theme={isDark ? 'dark' : 'light'}
     >
       <div className="flex min-h-screen" id="adminAppContent">
         <AdminSidebar
@@ -156,10 +170,12 @@ export default function Admin() {
 
         <main
           className={[
-            'min-h-screen flex-1 p-[22px_28px] max-md:ml-0 max-md:p-4 transition-[margin-left] duration-300',
+            'min-h-screen flex-1 transition-[margin-left] duration-300 max-md:ml-0',
+            activeTab === 'dashboard' ? 'p-4 pt-3 max-md:p-3' : activeTab === 'orders' ? 'p-4 pt-3 max-md:p-3' : 'p-[22px_28px] max-md:p-4',
             sidebarCollapsed ? 'ml-[72px]' : 'ml-[220px]',
+            compactTables ? 'admin-compact-tables' : '',
             activeTab === 'support'
-              ? 'flex h-screen max-h-screen flex-col overflow-hidden pb-5 max-md:h-auto max-md:max-h-none max-md:overflow-visible'
+              ? 'flex h-screen max-h-screen flex-col overflow-hidden p-2 max-md:p-2'
               : '',
           ].join(' ')}
         >
@@ -175,24 +191,30 @@ export default function Admin() {
             </div>
           </div>
 
-          <AdminHeader
-            activeTab={activeTab}
-            adminName={adminName}
-            adminEmail={adminEmail}
-            adminAvatar={adminAvatar}
-            onToggleSidebar={handleToggleSidebar}
-            onTabChange={handleTabChange}
-            onLogout={logout}
-            headerSearch={headerSearch}
-            onHeaderSearchChange={handleHeaderSearchChange}
-            notifications={adminNotifications}
-            onMarkNotificationRead={markRead}
-            onRefreshNotifications={refreshNotifications}
-          />
+          {activeTab !== 'support' && (
+            <AdminHeader
+              activeTab={activeTab}
+              adminName={adminName}
+              adminEmail={adminEmail}
+              adminAvatar={adminAvatar}
+              onToggleSidebar={handleToggleSidebar}
+              onTabChange={handleTabChange}
+              onLogout={logout}
+              headerSearch={headerSearch}
+              onHeaderSearchChange={handleHeaderSearchChange}
+              notifications={adminNotifications}
+              onMarkNotificationRead={markRead}
+              onRefreshNotifications={refreshNotifications}
+              compact={activeTab === 'dashboard' || activeTab === 'orders'}
+            />
+          )}
 
+          <div
+            key={activeTab}
+            className={activeTab === 'support' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'animate-profileTabIn'}
+          >
           {activeTab === 'dashboard' && (
             <DashboardAdminTab
-              adminName={adminName}
               headerSearch={headerSearch}
               onTabChange={handleTabChange}
             />
@@ -201,14 +223,16 @@ export default function Admin() {
           {activeTab === 'orders' && <AdminOrdersTab headerSearch={headerSearch} />}
           {activeTab === 'users' && <AdminUsersTab headerSearch={headerSearch} />}
           {activeTab === 'stock' && <AdminStockTab headerSearch={headerSearch} />}
-          {activeTab === 'payments' && <AdminPaymentsTab />}
-          {activeTab === 'delivery' && <AdminDeliveryTab />}
-          {activeTab === 'support' && <AdminSupportTab headerSearch={headerSearch} />}
+          {activeTab === 'payments' && <AdminPaymentsTab headerSearch={headerSearch} />}
+          {activeTab === 'delivery' && <AdminDeliveryTab headerSearch={headerSearch} />}
+          {activeTab === 'support' && (
+            <AdminSupportTab headerSearch={headerSearch} onToggleSidebar={handleToggleSidebar} />
+          )}
           {activeTab === 'settings' && <AdminSettingsTab />}
           {activeTab === 'driver-applications' && <DriverApplicationsTab />}
-          {activeTab === 'reviews' && <ReviewsAdminTab />}
+          {activeTab === 'reviews' && <AdminReviewsTab />}
           {activeTab === 'cms' && <CmsAdminTab />}
-          {activeTab === 'categories' && <CategoriesAdminTab />}
+          </div>
         </main>
       </div>
     </div>

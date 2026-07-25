@@ -30,5 +30,8 @@ export function getPaymentBadge(paymentType, paymentLabel) {
   if (normalized === 'failed' || labelText === 'failed') {
     return { label: 'Failed', className: 'failed' };
   }
+  if (normalized === 'refunded' || labelText === 'refunded') {
+    return { label: 'Refunded', className: 'pending' };
+  }
   return { label: 'Pending', className: 'pending' };
 }

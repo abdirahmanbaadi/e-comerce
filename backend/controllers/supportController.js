@@ -28,6 +28,13 @@ const broadcast = (data) => {
 
 const toPlainObject = (doc) => (doc?.toObject ? doc.toObject() : doc);
 
+const previewText = (messageText, imageUrl) => {
+  const text = (messageText || '').trim();
+  if (text) return text;
+  if (imageUrl) return '📷 Photo';
+  return '';
+};
+
 // SSE stream connection endpoint
 exports.supportStream = (req, res) => {
   res.writeHead(200, {
@@ -68,13 +75,15 @@ exports.supportStream = (req, res) => {
 // 1. Create a new support conversation (User)
 exports.createConversation = async (req, res) => {
   try {
-    const { subject, messageText } = req.body;
+    const { subject, messageText, imageUrl } = req.body;
     const userId = req.user.id;
     const fullName = req.user.firstName + ' ' + (req.user.lastName || '');
     const email = req.user.email;
+    const text = (messageText || '').trim();
+    const image = (imageUrl || '').trim();
 
-    if (!subject || !messageText) {
-      return res.status(400).json({ success: false, message: 'Fadlan ku dar cinwaanka iyo fariinta!' });
+    if (!subject || (!text && !image)) {
+      return res.status(400).json({ success: false, message: 'Fadlan ku dar cinwaanka iyo fariinta ama sawir!' });
     }
 
     // Generate ticket ID (Format: TKT-XXXX)
@@ -89,7 +98,7 @@ exports.createConversation = async (req, res) => {
       email,
       subject,
       status: 'Open',
-      lastMessageText: messageText,
+      lastMessageText: previewText(text, image),
       lastMessageAt: new Date(),
       date: today
     });
@@ -99,7 +108,8 @@ exports.createConversation = async (req, res) => {
       ticketId,
       senderRole: 'user',
       senderName: fullName,
-      messageText
+      messageText: text,
+      imageUrl: image,
     });
 
     const ticketData = toPlainObject(ticket);
@@ -170,12 +180,14 @@ exports.getConversationMessages = async (req, res) => {
 exports.addMessage = async (req, res) => {
   try {
     const { ticketId } = req.params;
-    const { messageText } = req.body;
+    const { messageText, imageUrl } = req.body;
     const userId = req.user.id;
     const role = req.user.role;
     const fullName = req.user.firstName + ' ' + (req.user.lastName || '');
+    const text = (messageText || '').trim();
+    const image = (imageUrl || '').trim();
 
-    if (!messageText || messageText.trim() === '') {
+    if (!text && !image) {
       return res.status(400).json({ success: false, message: 'Fariintu ma noqon karto eber!' });
     }
 
@@ -197,11 +209,12 @@ exports.addMessage = async (req, res) => {
       ticketId,
       senderRole,
       senderName,
-      messageText
+      messageText: text,
+      imageUrl: image,
     });
 
     // Update parent ticket metadata
-    ticket.lastMessageText = messageText;
+    ticket.lastMessageText = previewText(text, image);
     ticket.lastMessageAt = new Date();
     // Update status: 'Open' if user replies, 'Replied' if admin replies
     ticket.status = role === 'admin' ? 'Replied' : 'Open';
@@ -216,12 +229,13 @@ exports.addMessage = async (req, res) => {
       ticket: ticketData
     });
 
+    const notifyText = previewText(text, image);
     if (role === 'admin') {
-      onSupportAdminReply(ticket, messageText).catch((err) =>
+      onSupportAdminReply(ticket, notifyText).catch((err) =>
         console.error('Support notification failed:', err.message)
       );
     } else {
-      onSupportCustomerMessage(ticket, messageText).catch((err) =>
+      onSupportCustomerMessage(ticket, notifyText).catch((err) =>
         console.error('Support notification failed:', err.message)
       );
     }
@@ -254,7 +268,25 @@ exports.getAdminConversations = async (req, res) => {
   }
 };
 
-// 6. Close a support ticket (Admin)
+// 6. Upload support chat image (User or Admin)
+exports.uploadSupportImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image file uploaded.' });
+    }
+    const imagePath = `/uploads/${req.file.filename}`;
+    return res.status(200).json({
+      success: true,
+      message: 'Image uploaded successfully.',
+      imageUrl: imagePath,
+    });
+  } catch (error) {
+    console.error('Error in uploadSupportImage:', error);
+    return res.status(500).json({ success: false, message: 'Failed to upload image.' });
+  }
+};
+
+// 7. Close a support ticket (Admin)
 exports.closeConversation = async (req, res) => {
   try {
     const { ticketId } = req.params;

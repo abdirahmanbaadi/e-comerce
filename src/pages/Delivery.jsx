@@ -1,46 +1,88 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
+import { useIntervalWhenVisible } from '../hooks/useIntervalWhenVisible';
 import { apiUrl } from '../utils/data';
 import { showTopFloatNotification } from '../utils/notifications';
+import DriverOrderCard from '../features/driver/DriverOrderCard';
+import DriverRejectModal from '../features/driver/DriverRejectModal';
+import DeliveryCompleteModal from '../features/driver/DeliveryCompleteModal';
+import {
+  countDriverOrdersByPhase,
+  DRIVER_MAX_ACTIVE,
+  DRIVER_TABS,
+  driverStatusMeta,
+  matchesDriverTab,
+  pickNextDriverTab,
+  sortDriverOrders,
+} from '../features/driver/driverShared';
 
-function normalizePhone(phone) {
-  return (phone || '').replace(/\D/g, '');
-}
+const FILTER_STAT_CARDS = DRIVER_TABS.map((tab) => ({
+  ...tab,
+  tone: {
+    all: { icon: 'text-deepGreen bg-deepGreen/10', active: 'ring-deepGreen bg-deepGreen text-white' },
+    pending: { icon: 'text-amber-700 bg-amber-100', active: 'ring-amber-500 bg-amber-500 text-white' },
+    active: { icon: 'text-blue-700 bg-blue-100', active: 'ring-blue-500 bg-blue-600 text-white' },
+    done: { icon: 'text-emerald-700 bg-emerald-100', active: 'ring-emerald-500 bg-emerald-600 text-white' },
+  }[tab.id],
+}));
 
-function getStepLabel(step) {
-  if (step >= 5) return 'Delivered';
-  if (step >= 4) return 'Out for delivery';
-  if (step >= 3) return 'Ready to dispatch';
-  return 'Preparing';
-}
+function ConfirmModal({ open, title, message, confirmLabel, busy, onClose, onConfirm }) {
+  if (!open || typeof document === 'undefined') return null;
 
-function statusLabel(status, activeDeliveries = 0) {
-  if (status === 'offline') return 'Offline';
-  if (status === 'busy') return `Busy (${activeDeliveries}/3)`;
-  return 'Available';
+  return (
+    <div
+      className="fixed inset-0 z-[9998] flex items-center justify-center bg-deepGreen/40 p-4 backdrop-blur-[2px]"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-[18px] bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.18)]"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-2 text-[1rem] font-extrabold text-deepGreen">{title}</h3>
+        <p className="mb-4 text-[0.86rem] leading-relaxed text-gray-600">{message}</p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="min-h-[44px] flex-1 rounded-xl border border-deepGreen/15 bg-white text-[0.86rem] font-extrabold text-deepGreen"
+            onClick={onClose}
+            disabled={busy}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="min-h-[44px] flex-1 rounded-xl border-0 bg-gradient-to-br from-deepGreen to-teal text-[0.86rem] font-extrabold text-white disabled:opacity-60"
+            onClick={onConfirm}
+            disabled={busy}
+          >
+            {busy ? 'Please wait…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Delivery() {
   const { user, logout } = useAuth();
-  const { items: notifications, unreadCount } = useNotifications({
-    enabled: Boolean(user?.isLoggedIn),
-    pollMs: 15000,
-  });
-  const newAssignments = useMemo(
-    () => notifications.filter((n) => n.type === 'delivery_assigned' && n.unread).length,
-    [notifications]
-  );
+  const initialTabSet = useRef(false);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [updatingId, setUpdatingId] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
   const [driverStatus, setDriverStatus] = useState('available');
   const [activeDeliveries, setActiveDeliveries] = useState(0);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [busyOrderId, setBusyOrderId] = useState(null);
   const [rejectOrder, setRejectOrder] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
-  const [assignmentBusy, setAssignmentBusy] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [completedDelivery, setCompletedDelivery] = useState(null);
+  const [postCompleteCounts, setPostCompleteCounts] = useState(null);
 
   const loadDriverStatus = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -59,40 +101,103 @@ export default function Delivery() {
     }
   }, []);
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async ({ quiet = false } = {}) => {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token) return [];
+    if (quiet) setRefreshing(true);
     try {
       const res = await fetch(apiUrl('/api/orders'), {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (data.success) setOrders(data.orders || []);
+      if (data.success) {
+        const nextOrders = data.orders || [];
+        setOrders(nextOrders);
+        return nextOrders;
+      }
+      if (!quiet) showTopFloatNotification('Could not load deliveries.', 'danger');
+      return [];
     } catch (err) {
       console.error(err);
+      if (!quiet) showTopFloatNotification('Could not load deliveries.', 'danger');
+      return [];
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
+      setRefreshing(false);
     }
   }, []);
+
+  const refreshAll = useCallback(
+    async (quiet = true) => {
+      const [nextOrders] = await Promise.all([loadOrders({ quiet }), loadDriverStatus()]);
+      return nextOrders;
+    },
+    [loadOrders, loadDriverStatus]
+  );
+
+  const handleNewNotifications = useCallback(
+    (freshItems) => {
+      if (!freshItems.some((item) => item.type === 'delivery_assigned')) return;
+      refreshAll(true);
+      setActiveTab('pending');
+      showTopFloatNotification('New delivery request — accept or decline.');
+    },
+    [refreshAll]
+  );
+
+  const { items: notifications } = useNotifications({
+    enabled: Boolean(user?.isLoggedIn),
+    pollMs: 30000,
+    onNewItems: handleNewNotifications,
+  });
+
+  const newAssignments = useMemo(
+    () => notifications.filter((n) => n.type === 'delivery_assigned' && n.unread).length,
+    [notifications]
+  );
 
   useEffect(() => {
     loadOrders();
     loadDriverStatus();
-    const id = setInterval(() => {
-      loadOrders();
-      loadDriverStatus();
-    }, 30000);
-    return () => clearInterval(id);
-  }, [loadOrders, loadDriverStatus]);
+    const onAssign = () => {
+      refreshAll(true);
+      setActiveTab('pending');
+    };
+    window.addEventListener('driver-assignment-updated', onAssign);
+    return () => {
+      window.removeEventListener('driver-assignment-updated', onAssign);
+    };
+  }, [loadOrders, loadDriverStatus, refreshAll]);
 
-  const stats = useMemo(() => {
-    const active = orders.filter((o) => (o.currentStep || 1) < 5 && o.status !== 'cancelled').length;
-    const done = orders.filter((o) => (o.currentStep || 0) >= 5 || o.status === 'delivered').length;
-    return { active, done };
-  }, [orders]);
+  useIntervalWhenVisible(() => refreshAll(true), 30000, Boolean(user?.isLoggedIn));
+
+  const sortedOrders = useMemo(() => sortDriverOrders(orders), [orders]);
+  const tabCounts = useMemo(() => countDriverOrdersByPhase(orders), [orders]);
+  const filteredOrders = useMemo(
+    () => sortedOrders.filter((order) => matchesDriverTab(order, activeTab)),
+    [sortedOrders, activeTab]
+  );
+
+  useEffect(() => {
+    if (loading || initialTabSet.current) return;
+    initialTabSet.current = true;
+    if (tabCounts.pending > 0) setActiveTab('pending');
+    else if (tabCounts.active > 0) setActiveTab('active');
+    else setActiveTab('all');
+  }, [loading, tabCounts.pending, tabCounts.active]);
+
+  const statusMeta = driverStatusMeta(driverStatus, activeDeliveries);
+  const isOffline = driverStatus === 'offline';
+  const firstName = user?.fullName?.split(' ')[0] || 'Driver';
+  const initials = (user?.fullName || 'D')
+    .split(' ')
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   const toggleAvailability = async () => {
-    const nextStatus = driverStatus === 'offline' ? 'available' : 'offline';
+    const nextStatus = isOffline ? 'available' : 'offline';
     setStatusSaving(true);
     try {
       const token = localStorage.getItem('token');
@@ -120,7 +225,7 @@ export default function Delivery() {
   };
 
   const acceptAssignment = async (order) => {
-    setAssignmentBusy(order.id);
+    setBusyOrderId(order.id);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(apiUrl(`/api/drivers/assignments/${encodeURIComponent(order.id)}/accept`), {
@@ -129,16 +234,15 @@ export default function Delivery() {
       });
       const data = await res.json();
       if (data.success) {
-        showTopFloatNotification('Delivery accepted!');
-        await loadOrders();
-        await loadDriverStatus();
+        showTopFloatNotification('Delivery accepted! Start when you are ready.');
+        await refreshAll(true);
       } else {
         showTopFloatNotification(data.message || 'Could not accept delivery', 'danger');
       }
     } catch {
       showTopFloatNotification('Could not accept delivery', 'danger');
     } finally {
-      setAssignmentBusy(null);
+      setBusyOrderId(null);
     }
   };
 
@@ -150,7 +254,7 @@ export default function Delivery() {
       return;
     }
 
-    setAssignmentBusy(rejectOrder.id);
+    setBusyOrderId(rejectOrder.id);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(apiUrl(`/api/drivers/assignments/${encodeURIComponent(rejectOrder.id)}/reject`), {
@@ -166,20 +270,49 @@ export default function Delivery() {
         showTopFloatNotification('Delivery declined. Admin notified.');
         setRejectOrder(null);
         setRejectReason('');
-        await loadOrders();
-        await loadDriverStatus();
+        await refreshAll(true);
       } else {
         showTopFloatNotification(data.message || 'Could not decline delivery', 'danger');
       }
     } catch {
       showTopFloatNotification('Could not decline delivery', 'danger');
     } finally {
-      setAssignmentBusy(null);
+      setBusyOrderId(null);
     }
   };
 
-  const updateOrder = async (order, nextStep, estimate) => {
-    setUpdatingId(order.id);
+  const markArrived = async (order) => {
+    setBusyOrderId(order.id);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl(`/api/orders/${encodeURIComponent(order.id)}`), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          driverArrived: true,
+          estimate: 'Driver arrived — handing over order',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showTopFloatNotification('Arrival confirmed. Hand over the order, then mark delivered.');
+        await refreshAll(true);
+        setActiveTab('active');
+      } else {
+        showTopFloatNotification(data.message || 'Could not confirm arrival', 'danger');
+      }
+    } catch {
+      showTopFloatNotification('Could not confirm arrival', 'danger');
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
+  const updateOrderStep = async (order, nextStep, estimate) => {
+    setBusyOrderId(order.id);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(apiUrl(`/api/orders/${encodeURIComponent(order.id)}`), {
@@ -192,228 +325,290 @@ export default function Delivery() {
       });
       const data = await res.json();
       if (data.success) {
-        showTopFloatNotification('✅ Order updated!');
-        await loadOrders();
-        await loadDriverStatus();
+        setConfirmAction(null);
+        const freshOrders = await refreshAll(true);
+
+        if (nextStep >= 5) {
+          const counts = countDriverOrdersByPhase(freshOrders);
+          setPostCompleteCounts(counts);
+          setCompletedDelivery(order);
+          setActiveTab(pickNextDriverTab(counts));
+        } else {
+          showTopFloatNotification('You are now on the way!');
+          setActiveTab('active');
+        }
       } else {
-        showTopFloatNotification(`❌ ${data.message}`, 'danger');
+        showTopFloatNotification(data.message || 'Update failed', 'danger');
       }
     } catch {
-      showTopFloatNotification('❌ Update failed', 'danger');
+      showTopFloatNotification('Update failed', 'danger');
     } finally {
-      setUpdatingId(null);
+      setBusyOrderId(null);
     }
   };
 
-  const firstName = user?.fullName?.split(' ')[0] || 'Driver';
-  const isOffline = driverStatus === 'offline';
+  const handleCompleteModalTab = (tabId) => {
+    setActiveTab(tabId);
+    setCompletedDelivery(null);
+    setPostCompleteCounts(null);
+  };
+
+  const emptyCopy = {
+    all: {
+      icon: 'fa-truck',
+      title: 'No deliveries yet',
+      text: 'Admin will assign paid orders to you here.',
+    },
+    pending: {
+      icon: 'fa-bell',
+      title: 'No new requests',
+      text: 'You have no pending delivery requests right now.',
+    },
+    active: {
+      icon: 'fa-route',
+      title: 'No active deliveries',
+      text: 'Accept a new request or wait for admin to assign one.',
+    },
+    done: {
+      icon: 'fa-circle-check',
+      title: 'No completed deliveries',
+      text: 'Finished deliveries will appear here.',
+    },
+  };
+
+  const empty = emptyCopy[activeTab] || emptyCopy.all;
 
   return (
-    <div className="delivery-page">
-      <header className="delivery-header">
-        <Link to="/" className="delivery-brand">
-          <span>MF</span>
-          <strong>Delivery</strong>
-        </Link>
-        <button type="button" className="delivery-logout" onClick={logout}>
-          <i className="fa-solid fa-right-from-bracket" />
-        </button>
+    <div className="min-h-screen bg-gradient-to-b from-softBg via-base to-[#EDE8DF] font-sans text-[#111]">
+      <header className="sticky top-0 z-30 border-b border-deepGreen/[0.06] bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-lg items-center justify-between gap-3 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-deepGreen font-display text-lg font-bold text-gold">
+              MF
+            </span>
+            <div>
+              <p className="mb-0 text-[0.95rem] font-extrabold leading-tight text-deepGreen">Driver Hub</p>
+              <p className="mb-0 text-[0.68rem] font-semibold text-gray-500">Mogadishu Modern Furniture</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-deepGreen/10 bg-white text-deepGreen"
+              onClick={() => refreshAll(false)}
+              disabled={refreshing}
+              aria-label="Refresh deliveries"
+            >
+              <i className={`fa-solid fa-rotate-right ${refreshing ? 'fa-spin' : ''}`} aria-hidden="true" />
+              {newAssignments > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[0.58rem] font-extrabold text-white">
+                  {newAssignments}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-500"
+              onClick={logout}
+              aria-label="Log out"
+            >
+              <i className="fa-solid fa-right-from-bracket" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
       </header>
 
-      <main className="delivery-main">
-        <section className="delivery-greeting">
-          <h1>Hello, {firstName} 👋</h1>
-          <p>Orders assigned to you today</p>
+      <main className="mx-auto max-w-lg px-4 pb-10 pt-4">
+        <section className="mb-3 flex items-center gap-2.5 overflow-hidden rounded-xl bg-gradient-to-r from-gold via-[#E4B23A] to-[#F0C85A] px-3 py-2.5 shadow-[0_6px_18px_rgba(216,161,40,0.28)]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-deepGreen/90 text-[0.7rem] font-extrabold text-gold">
+            {initials}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="mb-0 text-[0.62rem] font-bold uppercase tracking-wide text-deepGreen/70">Welcome back</p>
+            <h1 className="mb-0 truncate text-[1rem] font-extrabold leading-tight text-deepGreen">{firstName}</h1>
+          </div>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-extrabold ${statusMeta.cls}`}>
+            {statusMeta.label}
+          </span>
         </section>
 
-        <section className="delivery-availability-bar">
-          <div>
-            <span className={`delivery-status-pill delivery-status-pill--${driverStatus}`}>
-              {statusLabel(driverStatus, activeDeliveries)}
-            </span>
-            <span className="delivery-status-meta">
-              {activeDeliveries} active {activeDeliveries === 1 ? 'delivery' : 'deliveries'}
-              {newAssignments > 0 ? ` · ${newAssignments} new assignment${newAssignments === 1 ? '' : 's'}` : ''}
-            </span>
+        <section className="mb-3 rounded-xl border border-deepGreen/[0.06] bg-white px-3 py-2.5 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="mb-0 text-[0.72rem] font-bold text-deepGreen">
+                {activeDeliveries}/{DRIVER_MAX_ACTIVE} slots
+                {newAssignments > 0 && (
+                  <span className="ms-1.5 text-red-600">· {newAssignments} new</span>
+                )}
+              </p>
+              <p className="mb-0 text-[0.65rem] font-semibold text-gray-400">{statusMeta.hint}</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!isOffline}
+              aria-label={isOffline ? 'Go available' : 'Go offline'}
+              className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+                isOffline ? 'bg-gray-300' : 'bg-gold'
+              } ${statusSaving || (driverStatus === 'busy' && !isOffline) ? 'opacity-60' : ''}`}
+              disabled={statusSaving || (driverStatus === 'busy' && !isOffline)}
+              onClick={toggleAvailability}
+            >
+              <span
+                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                  isOffline ? 'left-0.5' : 'left-[1.35rem]'
+                }`}
+              />
+            </button>
           </div>
+        </section>
+
+        <section className="mb-3 grid grid-cols-4 gap-1.5">
+          {FILTER_STAT_CARDS.map((card) => {
+            const active = activeTab === card.id;
+            const count = tabCounts[card.id] ?? 0;
+            return (
+              <button
+                key={card.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setActiveTab(card.id)}
+                className={`rounded-xl border px-1.5 py-2 text-center transition-all ${
+                  active
+                    ? `${card.tone.active} border-transparent shadow-md ring-2`
+                    : 'border-deepGreen/[0.06] bg-white shadow-sm hover:border-gold/40'
+                }`}
+              >
+                <span
+                  className={`mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-lg text-[0.62rem] ${
+                    active ? 'bg-white/20 text-inherit' : card.tone.icon
+                  }`}
+                >
+                  <i className={`fa-solid ${card.icon}`} aria-hidden="true" />
+                </span>
+                <p className={`mb-0 text-[0.95rem] font-extrabold leading-none ${active ? 'text-inherit' : 'text-deepGreen'}`}>
+                  {count}
+                </p>
+                <p className={`mb-0 mt-0.5 text-[0.58rem] font-bold uppercase tracking-wide ${active ? 'text-inherit opacity-90' : 'text-gray-500'}`}>
+                  {card.label}
+                </p>
+              </button>
+            );
+          })}
+        </section>
+
+        {!loading && tabCounts.pending > 0 && activeTab !== 'pending' && (
           <button
             type="button"
-            className="delivery-btn delivery-btn--outline"
-            disabled={statusSaving || (driverStatus === 'busy' && !isOffline)}
-            onClick={toggleAvailability}
+            className="mb-3 flex w-full items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-start shadow-sm"
+            onClick={() => setActiveTab('pending')}
           >
-            {statusSaving ? 'Saving…' : isOffline ? 'Go Available' : 'Go Offline'}
+            <span className="text-[0.8rem] font-extrabold text-amber-900">
+              <i className="fa-solid fa-bell me-1.5" aria-hidden="true" />
+              {tabCounts.pending} new request{tabCounts.pending === 1 ? '' : 's'} waiting
+            </span>
+            <span className="text-[0.72rem] font-bold text-amber-700">View →</span>
           </button>
-        </section>
-
-        <section className="delivery-stats">
-          <div className="delivery-stat">
-            <span className="delivery-stat-value">{stats.active}</span>
-            <span className="delivery-stat-label">Active</span>
-          </div>
-          <div className="delivery-stat">
-            <span className="delivery-stat-value">{stats.done}</span>
-            <span className="delivery-stat-label">Completed</span>
-          </div>
-        </section>
+        )}
 
         {loading ? (
-          <p className="delivery-empty">
-            <i className="fa-solid fa-spinner fa-spin me-2" />
-            Loading deliveries from server…
-          </p>
-        ) : isOffline ? (
-          <div className="delivery-empty-card">
-            <i className="fa-solid fa-moon" />
-            <h2>You are offline</h2>
-            <p>Go available to receive new delivery assignments from admin.</p>
+          <div className="rounded-[18px] bg-white px-4 py-12 text-center shadow-sm">
+            <i className="fa-solid fa-spinner fa-spin mb-3 text-2xl text-deepGreen" aria-hidden="true" />
+            <p className="mb-0 text-[0.88rem] font-semibold text-gray-500">Loading your deliveries…</p>
           </div>
-        ) : orders.length === 0 ? (
-          <div className="delivery-empty-card">
-            <i className="fa-solid fa-truck" />
-            <h2>No deliveries yet</h2>
-            <p>Admin will assign orders to you here.</p>
+        ) : isOffline ? (
+          <div className="rounded-[18px] border border-deepGreen/[0.06] bg-white px-5 py-10 text-center shadow-sm">
+            <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-2xl text-gray-400">
+              <i className="fa-solid fa-moon" aria-hidden="true" />
+            </span>
+            <h2 className="mb-1 text-[1.05rem] font-extrabold text-deepGreen">You are offline</h2>
+            <p className="mb-0 text-[0.86rem] text-gray-500">Turn availability on to receive new delivery requests.</p>
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="rounded-[18px] border border-deepGreen/[0.06] bg-white px-5 py-10 text-center shadow-sm">
+            <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-softBg text-2xl text-gray-400">
+              <i className={`fa-solid ${empty.icon}`} aria-hidden="true" />
+            </span>
+            <h2 className="mb-1 text-[1.05rem] font-extrabold text-deepGreen">{empty.title}</h2>
+            <p className="mb-0 text-[0.86rem] text-gray-500">{empty.text}</p>
           </div>
         ) : (
-          <div className="delivery-list">
-            {orders.map((order) => {
-              const step = order.currentStep || 1;
-              const isDelivered = step >= 5 || order.status === 'delivered';
-              const isPending = order.assignmentStatus === 'pending';
-              const isAccepted =
-                order.assignmentStatus === 'accepted' ||
-                ((!order.assignmentStatus || order.assignmentStatus === 'none') && step >= 3);
-              const phoneDigits = normalizePhone(order.phone);
-              const telHref = phoneDigits ? `tel:${phoneDigits.startsWith('252') ? '+' : '+252'}${phoneDigits.replace(/^252|^0/, '')}` : undefined;
-              const mapsQuery = encodeURIComponent(order.address || '');
-              const busy = updatingId === order.id || assignmentBusy === order.id;
-
-              return (
-                <article key={order.id} className={`delivery-card ${isDelivered ? 'delivery-card--done' : ''} ${isPending ? 'delivery-card--pending' : ''}`}>
-                  <div className="delivery-card-top">
-                    <span className="delivery-order-id">{order.id}</span>
-                    <span className="delivery-step-badge">
-                      {isPending ? 'Awaiting your response' : getStepLabel(step)}
-                    </span>
-                  </div>
-                  <h3>{order.customer}</h3>
-                  <p className="delivery-address">
-                    <i className="fa-solid fa-location-dot" /> {order.address}
-                  </p>
-                  <p className="delivery-product">{order.product}</p>
-                  {(order.deliveryDate || order.deliveryTime) && (
-                    <p className="delivery-slot">
-                      <i className="fa-solid fa-calendar-day" /> Preferred:{' '}
-                      {[order.deliveryDate, order.deliveryTime].filter(Boolean).join(' at ')}
-                    </p>
-                  )}
-                  <p className="delivery-amount">{order.amount}</p>
-                  {order.estimate && <p className="delivery-estimate">{order.estimate}</p>}
-
-                  <div className="delivery-actions-row">
-                    {telHref && (
-                      <a href={telHref} className="delivery-action delivery-action--call">
-                        <i className="fa-solid fa-phone" /> Call
-                      </a>
-                    )}
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="delivery-action delivery-action--map"
-                    >
-                      <i className="fa-solid fa-map-location-dot" /> Map
-                    </a>
-                  </div>
-
-                  {!isDelivered && isPending && (
-                    <div className="delivery-status-actions">
-                      <button
-                        type="button"
-                        className="delivery-btn delivery-btn--success"
-                        disabled={busy}
-                        onClick={() => acceptAssignment(order)}
-                      >
-                        Accept Delivery
-                      </button>
-                      <button
-                        type="button"
-                        className="delivery-btn delivery-btn--outline"
-                        disabled={busy}
-                        onClick={() => {
-                          setRejectOrder(order);
-                          setRejectReason('');
-                        }}
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  )}
-
-                  {!isDelivered && isAccepted && (
-                    <div className="delivery-status-actions">
-                      {step < 4 && (
-                        <button
-                          type="button"
-                          className="delivery-btn delivery-btn--primary"
-                          disabled={busy}
-                          onClick={() => updateOrder(order, 4, 'Out for delivery — on the way')}
-                        >
-                          Start Delivery
-                        </button>
-                      )}
-                      {step >= 4 && step < 5 && (
-                        <button
-                          type="button"
-                          className="delivery-btn delivery-btn--success"
-                          disabled={busy}
-                          onClick={() => updateOrder(order, 5, 'Delivered successfully')}
-                        >
-                          Mark Delivered
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </article>
-              );
-            })}
+          <div className="space-y-4">
+            {filteredOrders.map((order) => (
+              <DriverOrderCard
+                key={order.id}
+                order={order}
+                busy={busyOrderId === order.id}
+                onAccept={acceptAssignment}
+                onDecline={(o) => {
+                  setRejectOrder(o);
+                  setRejectReason('');
+                }}
+                onStartDelivery={(o) =>
+                  setConfirmAction({
+                    order: o,
+                    title: 'Start delivery?',
+                    message: 'Confirm only when you are leaving to deliver this order. Customer will see "Out for delivery".',
+                    confirmLabel: 'Yes, start delivery',
+                    onConfirm: () => updateOrderStep(o, 4, 'Out for delivery — on the way'),
+                  })
+                }
+                onMarkArrived={(o) =>
+                  setConfirmAction({
+                    order: o,
+                    title: 'Arrived at customer?',
+                    message: `Confirm you have reached ${o.customer}'s location. You cannot mark delivered until you arrive.`,
+                    confirmLabel: 'Yes, I have arrived',
+                    onConfirm: () => markArrived(o),
+                  })
+                }
+                onMarkDelivered={(o) =>
+                  setConfirmAction({
+                    order: o,
+                    title: 'Mark as delivered?',
+                    message: `Confirm that order ${o.id} was handed to ${o.customer} successfully.`,
+                    confirmLabel: 'Yes, delivered',
+                    onConfirm: () => updateOrderStep(o, 5, 'Delivered successfully'),
+                  })
+                }
+              />
+            ))}
           </div>
         )}
       </main>
 
-      {rejectOrder && (
-        <div className="delivery-reject-overlay" role="presentation" onClick={() => setRejectOrder(null)}>
-          <div
-            className="delivery-reject-modal"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3>Decline delivery {rejectOrder.id}?</h3>
-            <p>Please tell admin why you cannot take this order.</p>
-            <textarea
-              className="delivery-reject-input"
-              rows={4}
-              placeholder="Example: Too far from my area / vehicle issue / at capacity"
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-            />
-            <div className="delivery-reject-actions">
-              <button type="button" className="delivery-btn delivery-btn--outline" onClick={() => setRejectOrder(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="delivery-btn delivery-btn--primary"
-                disabled={assignmentBusy === rejectOrder.id}
-                onClick={submitReject}
-              >
-                Send decline reason
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DriverRejectModal
+        order={rejectOrder}
+        reason={rejectReason}
+        busy={Boolean(rejectOrder && busyOrderId === rejectOrder.id)}
+        onReasonChange={setRejectReason}
+        onClose={() => {
+          if (busyOrderId === rejectOrder?.id) return;
+          setRejectOrder(null);
+          setRejectReason('');
+        }}
+        onSubmit={submitReject}
+      />
+
+      <ConfirmModal
+        open={Boolean(confirmAction)}
+        title={confirmAction?.title}
+        message={confirmAction?.message}
+        confirmLabel={confirmAction?.confirmLabel}
+        busy={Boolean(confirmAction && busyOrderId === confirmAction.order?.id)}
+        onClose={() => {
+          if (busyOrderId) return;
+          setConfirmAction(null);
+        }}
+        onConfirm={() => confirmAction?.onConfirm?.()}
+      />
+
+      <DeliveryCompleteModal
+        order={completedDelivery}
+        tabCounts={postCompleteCounts || tabCounts}
+        onClose={() => handleCompleteModalTab(pickNextDriverTab(postCompleteCounts || tabCounts))}
+        onGoToTab={handleCompleteModalTab}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
@@ -6,6 +6,7 @@ import { useProducts } from '../../context/ProductsContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useNotifications } from '../../hooks/useNotifications';
+import { NotificationDetailModal } from '../profile/ProfileNotifications';
 import { formatMoney, productImage } from '../../utils/format';
 import { showTopFloatNotification } from '../../utils/notifications';
 
@@ -56,6 +57,7 @@ export function AppSearchField({
 // =============================================================================
 
 const NOTIF_TYPE_ICON = {
+  order_placed: { icon: 'fa-bag-shopping', color: '#f59e0b' },
   order_confirmed: { icon: 'fa-bag-shopping', color: '#10b981' },
   payment_success: { icon: 'fa-circle-check', color: '#10b981' },
   payment_failed: { icon: 'fa-circle-xmark', color: '#ef4444' },
@@ -78,20 +80,22 @@ function sortNewestFirst(items) {
 }
 
 function NotificationDropdown({ items, unreadCount, onItemClick, onClose }) {
-  const navigate = useNavigate();
+  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
 
   const sorted = useMemo(() => sortNewestFirst(items), [items]);
   const unread = unreadCount ?? sorted.filter((n) => n.unread).length;
+  const visibleItems = useMemo(
+    () => (showUnreadOnly ? sorted.filter((n) => n.unread) : sorted),
+    [sorted, showUnreadOnly]
+  );
 
   const handleClick = async (n) => {
     if (onItemClick) await onItemClick(n);
     onClose?.();
+  };
 
-    if (n.orderId || String(n.type || '').includes('order') || String(n.type || '').includes('payment')) {
-      navigate('/track-order');
-    } else {
-      navigate('/profile?tab=notifications');
-    }
+  const toggleFilter = () => {
+    setShowUnreadOnly((prev) => !prev);
   };
 
   return (
@@ -102,18 +106,26 @@ function NotificationDropdown({ items, unreadCount, onItemClick, onClose }) {
     >
       <div className="flex items-center justify-between border-b border-deepGreen/[0.06] bg-deepGreen/[0.02] px-4 py-3.5">
         <strong className="text-[0.95rem] text-gray-800">Notifications</strong>
-        <span className="text-[0.72rem] font-bold text-emerald-500">{unread} unread</span>
+        <button
+          type="button"
+          className="cursor-pointer rounded-md border-0 bg-transparent px-1 py-0.5 text-[0.72rem] font-bold text-emerald-500 transition-colors hover:text-emerald-600"
+          onClick={toggleFilter}
+          aria-pressed={showUnreadOnly}
+          aria-label={showUnreadOnly ? 'Show all notifications' : 'Show unread notifications only'}
+        >
+          {showUnreadOnly ? 'All' : `${unread} unread`}
+        </button>
       </div>
 
       <ul className="m-0 max-h-80 list-none overflow-y-auto p-2 [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb]:bg-deepGreen/18 [&::-webkit-scrollbar]:w-[5px]">
-        {sorted.length === 0 ? (
+        {visibleItems.length === 0 ? (
           <li>
             <span className="block px-2 py-5 text-center text-[0.84rem] text-gray-500">
-              No notifications yet.
+              {showUnreadOnly ? 'No unread notifications.' : 'No notifications yet.'}
             </span>
           </li>
         ) : (
-          sorted.slice(0, 10).map((n) => {
+          visibleItems.slice(0, 10).map((n) => {
             const meta = iconForNotification(n);
             return (
               <li key={n.id}>
@@ -412,15 +424,24 @@ export default function StoreNavbar({ cartActive = false }) {
   const { user, logout } = useAuth();
   const { cartCount } = useCart();
   const { wishlistCount } = useWishlist();
-  const { items: notifications, unreadCount, markRead, refresh } = useNotifications({
-    enabled: user.isLoggedIn,
-    pollMs: 20000,
-  });
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [wishlistOpen, setWishlistOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [activeNotification, setActiveNotification] = useState(null);
+
+  const handleNewNotifications = useCallback((newItems) => {
+    newItems.forEach((n) => {
+      showTopFloatNotification(n.title || n.desc || 'New notification');
+    });
+  }, []);
+
+  const { items: notifications, unreadCount, markRead, refresh } = useNotifications({
+    enabled: user.isLoggedIn,
+    pollMs: 30000,
+    onNewItems: handleNewNotifications,
+  });
 
   const wishlistRef = useRef(null);
   const notifRef = useRef(null);
@@ -510,6 +531,8 @@ export default function StoreNavbar({ cartActive = false }) {
             unreadCount={unreadCount}
             onItemClick={async (n) => {
               if (n.unread) await markRead(n.id);
+              setActiveNotification(n);
+              setNotifOpen(false);
             }}
             onClose={() => setNotifOpen(false)}
           />
@@ -688,6 +711,14 @@ export default function StoreNavbar({ cartActive = false }) {
 
         {navIcons('desktop')}
       </div>
+
+      {activeNotification && (
+        <NotificationDetailModal
+          item={activeNotification}
+          user={user}
+          onClose={() => setActiveNotification(null)}
+        />
+      )}
     </nav>
   );
 }

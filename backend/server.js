@@ -452,186 +452,7 @@ const seedDatabase = async () => {
       console.log('Products seeded successfully.');
     }
 
-    // 3. Seed Orders
-    const orderCount = await Order.countDocuments();
-    if (orderCount === 0) {
-      console.log('Seeding orders table...');
-      const defaultOrders = [
-        {
-          id: "#MF-250522-001",
-          phone: "0612345678",
-          customer: "Abdi Hassan",
-          amount: "$350.00",
-          payment: "Paid",
-          paymentType: "paid",
-          address: "Hodan, Mogadishu",
-          driver: "Ahmed Ali - 0619988776",
-          estimate: "Delivered successfully",
-          currentStep: 5,
-          product: "Bloom Accent Chair Set Set",
-          date: "May 22, 2026"
-        },
-        {
-          id: "#MF-250522-002",
-          phone: "0611112222",
-          customer: "Hodan Ali",
-          amount: "$350.00",
-          payment: "Pending",
-          paymentType: "pending",
-          address: "Wadajir, Mogadishu",
-          driver: "Not assigned yet",
-          estimate: "Waiting for payment verification",
-          currentStep: 1,
-          product: "Bloom Accent Chair Set Set",
-          date: "May 22, 2026"
-        },
-        {
-          id: "#MF-250522-003",
-          phone: "0613334444",
-          customer: "Omar Mohamed",
-          amount: "$180.00",
-          payment: "Paid",
-          paymentType: "paid",
-          address: "Karaan, Mogadishu",
-          driver: "Hassan Omar - 0614455667",
-          estimate: "Out for delivery via driver",
-          currentStep: 4,
-          product: "Olive Curve Lounge Chair",
-          date: "May 21, 2026"
-        },
-        {
-          id: "#MF-250522-004",
-          phone: "0614445555",
-          customer: "Ayan Abdullahi",
-          amount: "$530.00",
-          payment: "Pending",
-          paymentType: "pending",
-          address: "Hamarweyne, Mogadishu",
-          driver: "Not assigned yet",
-          estimate: "Waiting for payment verification",
-          currentStep: 1,
-          product: "Blush Velvet Arch Bed",
-          date: "May 21, 2026"
-        },
-        {
-          id: "#MF-250522-005",
-          phone: "0615556666",
-          customer: "Mohamed Yusuf",
-          amount: "$760.00",
-          payment: "Paid",
-          paymentType: "paid",
-          address: "Wadajir, Mogadishu",
-          driver: "Ahmed Ali - 0619988776",
-          estimate: "Delivered successfully",
-          currentStep: 5,
-          product: "Ivory Cloud Sofa Set",
-          date: "May 20, 2026"
-        },
-        {
-          id: "#MF-250522-006",
-          phone: "0616667777",
-          customer: "Mustafa Omar",
-          amount: "$340.00",
-          payment: "Failed",
-          paymentType: "failed",
-          address: "Hodan, Mogadishu",
-          driver: "Not assigned",
-          estimate: "Order Cancelled",
-          currentStep: 0,
-          product: "Sage Wood Platform Bed",
-          date: "May 20, 2026"
-        },
-        {
-          id: "#MF-250522-007",
-          phone: "0617778888",
-          customer: "Fadumo Hassan",
-          amount: "$230.00",
-          payment: "Paid",
-          paymentType: "paid",
-          address: "Karaan, Mogadishu",
-          driver: "Hassan Omar - 0614455667",
-          estimate: "Preparing order",
-          currentStep: 3,
-          product: "Bloom Accent Chair Set Set",
-          date: "May 19, 2026"
-        },
-        {
-          id: "#MF-250522-008",
-          phone: "0618889999",
-          customer: "Ali Warsame",
-          amount: "$150.00",
-          payment: "Paid",
-          paymentType: "paid",
-          address: "Hodan, Mogadishu",
-          driver: "Ahmed Ali - 0619988776",
-          estimate: "Delivered successfully",
-          currentStep: 5,
-          product: "Bloom Accent Chair Set Set",
-          date: "May 18, 2026"
-        },
-        {
-          id: "#MF-250522-009",
-          phone: "0619990000",
-          customer: "Halima Sadia",
-          amount: "$850.00",
-          payment: "Pending",
-          paymentType: "pending",
-          address: "Wadajir, Mogadishu",
-          driver: "Not assigned yet",
-          estimate: "Waiting for payment verification",
-          currentStep: 1,
-          product: "Blush Velvet Arch Bed",
-          date: "May 18, 2026"
-        },
-        {
-          id: "#MF-250522-010",
-          phone: "0611239876",
-          customer: "Farhan Barre",
-          amount: "$1,600.00",
-          payment: "Paid",
-          paymentType: "paid",
-          address: "Karaan, Mogadishu",
-          driver: "Hassan Omar - 0614455667",
-          estimate: "Delivered successfully",
-          currentStep: 5,
-          product: "Emerald Luxe Dining Set",
-          date: "May 17, 2026"
-        },
-        {
-          id: "#MF-250522-011",
-          phone: "0615432109",
-          customer: "Sahra Ilmi",
-          amount: "$980.00",
-          payment: "Paid",
-          paymentType: "paid",
-          address: "Hodan, Mogadishu",
-          driver: "Ahmed Ali - 0619988776",
-          estimate: "Delivered successfully",
-          currentStep: 5,
-          product: "Ivory Cloud Sofa Set",
-          date: "May 17, 2026"
-        },
-        {
-          id: "#MF-250522-012",
-          phone: "0618765432",
-          customer: "Warsame Duale",
-          amount: "$1,450.00",
-          payment: "Pending",
-          paymentType: "pending",
-          address: "Wadajir, Mogadishu",
-          driver: "Not assigned yet",
-          estimate: "Waiting for payment verification",
-          currentStep: 1,
-          product: "Sunhaven Patio Lounge Set",
-          date: "May 16, 2026"
-        }
-      ];
-
-      for (const o of defaultOrders) {
-        await Order.create(o);
-      }
-      console.log('Orders seeded successfully.');
-    }
+    // 3. Orders are never seeded — only real customer orders belong in the database.
 
     // 4. Seed Support Tickets & Messages
     const ticketCount = await SupportTicket.countDocuments();
@@ -703,6 +524,14 @@ const startServer = async () => {
 
     seedDatabase().catch((err) => console.error('Error seeding database:', err));
 
+    try {
+      const { startOrderExpiryJob } = require('./services/orderExpiryService');
+      startOrderExpiryJob();
+      console.log('Unpaid order expiry job started (24h auto-cancel).');
+    } catch (expiryErr) {
+      console.warn('Order expiry job skipped:', expiryErr.message);
+    }
+
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
         console.error(`\nPort ${PORT} is already in use.`);
@@ -712,6 +541,15 @@ const startServer = async () => {
         process.exit(1);
       }
       throw err;
+    });
+
+    // Keep the API process alive on transient errors (do not exit)
+    process.on('unhandledRejection', (reason) => {
+      console.error('[unhandledRejection]', reason?.message || reason);
+    });
+    process.on('uncaughtException', (err) => {
+      console.error('[uncaughtException]', err.message);
+      if (err.code === 'EADDRINUSE') process.exit(1);
     });
   } catch (err) {
     console.error('Failed to start server:', err);

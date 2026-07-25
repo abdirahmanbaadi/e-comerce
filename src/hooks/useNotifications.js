@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiUrl } from '../utils/data';
+import { useIntervalWhenVisible } from './useIntervalWhenVisible';
+
+const DEFAULT_POLL_MS = 30000;
 
 async function parseJsonSafe(response) {
   try {
@@ -9,57 +12,79 @@ async function parseJsonSafe(response) {
   }
 }
 
-export function useNotifications({ enabled = true, pollMs = 20000 } = {}) {
+export function useNotifications({ enabled = true, pollMs = DEFAULT_POLL_MS, onNewItems } = {}) {
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const mountedRef = useRef(true);
+  const initializedRef = useRef(false);
+  const knownIdsRef = useRef(new Set());
+  const onNewItemsRef = useRef(onNewItems);
+
+  useEffect(() => {
+    onNewItemsRef.current = onNewItems;
+  }, [onNewItems]);
 
   const getHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async ({ quiet = false } = {}) => {
     const token = localStorage.getItem('token');
     if (!token) {
       setItems([]);
       setUnreadCount(0);
       setError(null);
+      initializedRef.current = false;
+      knownIdsRef.current = new Set();
       return;
     }
 
-    setLoading(true);
+    if (!quiet || !initializedRef.current) setLoading(true);
     try {
-      const [listRes, countRes] = await Promise.all([
-        fetch(apiUrl('/api/notifications'), { headers: getHeaders() }),
-        fetch(apiUrl('/api/notifications/unread-count'), { headers: getHeaders() }),
-      ]);
-
+      const listRes = await fetch(apiUrl('/api/notifications'), { headers: getHeaders() });
       const listData = await parseJsonSafe(listRes);
-      const countData = await parseJsonSafe(countRes);
 
       if (!mountedRef.current) return;
 
-      if (listRes.status === 401 || countRes.status === 401) {
+      if (listRes.status === 401) {
         setItems([]);
         setUnreadCount(0);
-        setError('Session expired. Fadlan dib u soo gal.');
+        setError('Session expired. Please sign in again.');
+        initializedRef.current = false;
+        knownIdsRef.current = new Set();
         return;
       }
 
-      if (!listRes.ok || !countRes.ok) {
+      if (!listRes.ok) {
         setError('Could not reach notification server.');
         return;
       }
 
       if (listData.success) {
-        setItems(listData.notifications || []);
+        const notifications = listData.notifications || [];
+        const freshUnread = notifications.filter(
+          (item) => item?.id && !knownIdsRef.current.has(item.id) && item.unread
+        );
+
+        notifications.forEach((item) => {
+          if (item?.id) knownIdsRef.current.add(item.id);
+        });
+
+        if (initializedRef.current && onNewItemsRef.current && freshUnread.length > 0) {
+          onNewItemsRef.current(freshUnread);
+        }
+
+        initializedRef.current = true;
+        setItems(notifications);
+        setUnreadCount(
+          typeof listData.unreadCount === 'number'
+            ? listData.unreadCount
+            : notifications.filter((item) => item.unread).length
+        );
         setError(null);
-      }
-      if (countData.success) {
-        setUnreadCount(countData.count || 0);
       }
     } catch (err) {
       if (mountedRef.current) {
@@ -128,9 +153,14 @@ export function useNotifications({ enabled = true, pollMs = 20000 } = {}) {
   useEffect(() => {
     if (!enabled) return undefined;
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, pollMs);
-    return () => clearInterval(interval);
-  }, [enabled, fetchNotifications, pollMs]);
+    return undefined;
+  }, [enabled, fetchNotifications]);
+
+  useIntervalWhenVisible(
+    () => fetchNotifications({ quiet: true }),
+    pollMs,
+    enabled
+  );
 
   return {
     items,

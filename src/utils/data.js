@@ -1,5 +1,32 @@
 export const API_BASE = import.meta.env.VITE_API_URL || '';
 
+import {
+  PRODUCT_PRICES,
+  PRODUCT_OLD_PRICES,
+  DELIVERY_FEES,
+  DELIVERY_FEE,
+  DELIVERY_FEE_ALT,
+  priceForProductId,
+  oldPriceForProductId,
+  getDistrictFee,
+} from './pricing';
+
+export {
+  PRODUCT_PRICES,
+  PRODUCT_OLD_PRICES,
+  DELIVERY_FEES,
+  DELIVERY_FEE,
+  DELIVERY_FEE_ALT,
+  getDistrictFee,
+};
+
+export const DEMO_PRODUCT_PRICES = PRODUCT_PRICES;
+export const DEMO_PRODUCT_OLD_PRICES = PRODUCT_OLD_PRICES;
+export const DEMO_DELIVERY_FEE = DELIVERY_FEE;
+export const DEMO_DELIVERY_FEE_ALT = DELIVERY_FEE_ALT;
+export const DEMO_PRODUCT_PRICE = PRODUCT_PRICES[0];
+export const DEMO_PRODUCT_OLD_PRICE = PRODUCT_OLD_PRICES[0];
+
 const DEFAULT_FETCH_TIMEOUT_MS = 8000;
 
 export function apiUrl(path) {
@@ -293,8 +320,15 @@ export const defaultOrders = [
   { id: "#MF-250522-009", phone: "0619990000", customer: "Halima Sadia", amount: "$850.00", payment: "Pending", paymentType: "pending", address: "Wadajir, Mogadishu", driver: "Not assigned yet", estimate: "Waiting for payment verification", currentStep: 1, product: "Blush Velvet Arch Bed", date: "May 18, 2026" },
   { id: "#MF-250522-010", phone: "0611239876", customer: "Farhan Barre", amount: "$1,600.00", payment: "Paid", paymentType: "paid", address: "Karaan, Mogadishu", driver: "Hassan Omar - 0614455667", estimate: "Delivered successfully", currentStep: 5, product: "Emerald Luxe Dining Set", date: "May 17, 2026" },
   { id: "#MF-250522-011", phone: "0615432109", customer: "Sahra Ilmi", amount: "$980.00", payment: "Paid", paymentType: "paid", address: "Hodan, Mogadishu", driver: "Ahmed Ali - 0619988776", estimate: "Delivered successfully", currentStep: 5, product: "Ivory Cloud Sofa Set", date: "May 17, 2026" },
-  { id: "#MF-250522-012", phone: "0618765432", customer: "Warsame Duale", amount: "$1,450.00", payment: "Pending", paymentType: "pending", address: "Wadajir, Mogadishu", driver: "Not assigned yet", estimate: "Waiting for payment verification", currentStep: 1, product: "Sunhaven Patio Lounge Set", date: "May 16, 2026" }
+  { id: "#MF-250522-012", phone: "0618765432", customer: "Warsame Duale", amount: "$1,450.00", payment: "Pending", paymentType: "pending", address: "Wadajir, Mogadishu", driver: "Not assigned yet", estimate: "Waiting for payment verification", currentStep: 1, product: "Sunhaven Patio Lounge Set", date: "May 16, 2026"   }
 ];
+
+defaultProducts.forEach((product, index) => {
+  product.price = priceForProductId(product.id, index);
+  if (product.oldPrice != null) {
+    product.oldPrice = oldPriceForProductId(product.id, index);
+  }
+});
 
 export const defaultUsers = [
   { id: "USR-001", firstName: "Abdirahman", lastName: "", email: "admin@gmail.com", phone: "+252615000000", address: "Mogadishu, Somalia", password: "admin123", avatar: "https://ui-avatars.com/api/?name=Abdirahman&background=073D35&color=ffffff&bold=true&size=128" },
@@ -303,33 +337,13 @@ export const defaultUsers = [
   { id: "USR-1003", firstName: "Amina", lastName: "Yusuf", email: "amina@gmail.com", phone: "0613334444", address: "Karaan, Mogadishu", password: "customer123", avatar: "" }
 ];
 
-export const DEMO_PRODUCT_PRICE = 0.01;
-export const DEMO_PRODUCT_OLD_PRICE = 0.02;
-
-/** Rotating demo prices — minimum $0.01 for live Waafi/EVC */
-export const DEMO_PRODUCT_PRICES = [0.01, 0.03, 0.01, 0.02, 0.03, 0.01, 0.02, 0.01, 0.03, 0.02];
-export const DEMO_PRODUCT_OLD_PRICES = [0.02, 0.04, 0.02, 0.03, 0.04, 0.02, 0.03, 0.02, 0.04, 0.03];
-
-function demoPriceForProduct(product, index) {
-  const slot = typeof product?.id === 'number' ? product.id - 1 : index;
-  return DEMO_PRODUCT_PRICES[((slot % DEMO_PRODUCT_PRICES.length) + DEMO_PRODUCT_PRICES.length) % DEMO_PRODUCT_PRICES.length];
-}
-
-function demoOldPriceForProduct(product, index) {
-  const slot = typeof product?.id === 'number' ? product.id - 1 : index;
-  return DEMO_PRODUCT_OLD_PRICES[((slot % DEMO_PRODUCT_OLD_PRICES.length) + DEMO_PRODUCT_OLD_PRICES.length) % DEMO_PRODUCT_OLD_PRICES.length];
-}
-
-export const DEMO_DELIVERY_FEE = 0.01;
-export const DEMO_DELIVERY_FEE_ALT = 0.02;
-
 export const DELIVERY_DISTRICTS = [
-  { value: 'Hodan', fee: DEMO_DELIVERY_FEE },
-  { value: 'Wadajir', fee: DEMO_DELIVERY_FEE },
-  { value: 'Karaan', fee: DEMO_DELIVERY_FEE_ALT },
-  { value: 'Hamarweyne', fee: DEMO_DELIVERY_FEE },
-  { value: 'Dayniile', fee: DEMO_DELIVERY_FEE_ALT },
-  { value: 'Yaqshid', fee: DEMO_DELIVERY_FEE },
+  { value: 'Hodan', fee: 0.01 },
+  { value: 'Wadajir', fee: 0.01 },
+  { value: 'Karaan', fee: 0.02 },
+  { value: 'Hamarweyne', fee: 0.01 },
+  { value: 'Dayniile', fee: 0.02 },
+  { value: 'Yaqshid', fee: 0.01 },
 ];
 
 export function findDistrictByDeliveryFee(fee) {
@@ -337,10 +351,6 @@ export function findDistrictByDeliveryFee(fee) {
   if (amount <= 0) return '';
   const match = DELIVERY_DISTRICTS.find((d) => Math.abs(d.fee - amount) < 0.0001);
   return match?.value || DELIVERY_DISTRICTS[0]?.value || '';
-}
-
-export function getDistrictFee(districtValue, districts = DELIVERY_DISTRICTS) {
-  return districts.find((d) => d.value === districtValue)?.fee ?? DEMO_DELIVERY_FEE;
 }
 
 let cachedDeliveryDistricts = null;
@@ -368,14 +378,6 @@ export function clearDeliveryDistrictsCache() {
   cachedDeliveryDistricts = null;
 }
 
-export function normalizeProductPrices(products) {
-  return products.map((p, index) => ({
-    ...p,
-    price: demoPriceForProduct(p, index),
-    oldPrice: p.oldPrice != null ? demoOldPriceForProduct(p, index) : undefined,
-  }));
-}
-
 export function initializeLocalStorage() {
   if (!localStorage.getItem('users')) {
     localStorage.setItem('users', JSON.stringify(defaultUsers));
@@ -389,15 +391,10 @@ export function initializeLocalStorage() {
   }
 
   const hasAll10 = localProducts.length === 10 && localProducts.some(p => p.title === "Bloom Accent Chair Set");
+  const hasLegacyPrices = localProducts.some((p) => Number(p.price) > 1);
 
-  if (!localStorage.getItem('products') || !hasAll10) {
-    const prodsToSave = defaultProducts.map((p, index) => {
-      const copy = { ...p };
-      copy.price = demoPriceForProduct(p, index);
-      if (copy.oldPrice) copy.oldPrice = demoOldPriceForProduct(p, index);
-      return copy;
-    });
-    localStorage.setItem('products', JSON.stringify(prodsToSave));
+  if (!localStorage.getItem('products') || !hasAll10 || hasLegacyPrices) {
+    localStorage.setItem('products', JSON.stringify(defaultProducts));
   }
   if (!localStorage.getItem('orders')) {
     localStorage.setItem('orders', JSON.stringify(defaultOrders));
@@ -412,11 +409,19 @@ export function normalizePhoneNumber(phone) {
   return cleaned;
 }
 
+export function normalizeOrderId(raw) {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return '';
+  const upper = trimmed.toUpperCase();
+  if (upper.startsWith('#')) return upper;
+  if (upper.startsWith('MF-')) return `#${upper}`;
+  return trimmed;
+}
+
 export function getProductsList() {
   try {
-    const list = JSON.parse(localStorage.getItem('products')) || defaultProducts;
-    return normalizeProductPrices(list);
+    return JSON.parse(localStorage.getItem('products')) || defaultProducts;
   } catch {
-    return normalizeProductPrices(defaultProducts);
+    return defaultProducts;
   }
 }

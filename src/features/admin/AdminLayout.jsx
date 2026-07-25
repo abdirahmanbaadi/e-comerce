@@ -11,13 +11,12 @@ const MENU_ITEMS = [
   { id: 'orders', label: 'Orders', icon: 'fa-clipboard-list' },
   { id: 'users', label: 'Users', icon: 'fa-user-group' },
   { id: 'products', label: 'Products', icon: 'fa-couch' },
-  { id: 'stock', label: 'Stock Management', icon: 'fa-cubes' },
+  { id: 'stock', label: 'Stock', icon: 'fa-cubes' },
   { id: 'payments', label: 'Payments', icon: 'fa-credit-card' },
   { id: 'delivery', label: 'Delivery', icon: 'fa-truck', badgeKey: 'delivery' },
   { id: 'driver-applications', label: 'Driver Applications', icon: 'fa-id-card', badgeKey: 'drivers' },
   { id: 'support', label: 'Support / Help', icon: 'fa-headset', badgeKey: 'support' },
   { id: 'reviews', label: 'Reviews', icon: 'fa-star' },
-  { id: 'categories', label: 'Categories', icon: 'fa-layer-group' },
   { id: 'cms', label: 'CMS / Content', icon: 'fa-image' },
   { id: 'settings', label: 'Settings', icon: 'fa-gear' },
 ];
@@ -27,13 +26,12 @@ const TAB_LABELS = {
   orders: 'Orders',
   users: 'Users',
   products: 'Products',
-  stock: 'Stock Management',
+  stock: 'Stock',
   payments: 'Payments',
   delivery: 'Delivery',
   'driver-applications': 'Driver Applications',
   support: 'Support / Help',
   reviews: 'Reviews',
-  categories: 'Categories',
   cms: 'CMS / Content',
   settings: 'Settings',
 };
@@ -41,13 +39,49 @@ const TAB_LABELS = {
 export { TAB_LABELS };
 
 const menuLinkBase =
-  'relative flex w-full cursor-pointer items-center gap-[15px] rounded-xl border-0 bg-transparent px-[18px] py-3 text-left text-[0.92rem] font-semibold text-gray-600 transition-all duration-300 hover:bg-deepGreen/[0.04] hover:text-deepGreen [.admin-dark_&]:text-[#b8c5c0] [.admin-dark_&]:hover:bg-white/[0.06] [.admin-dark_&]:hover:text-white';
+  'relative flex w-full cursor-pointer items-center gap-[15px] overflow-hidden rounded-xl border-0 bg-transparent px-[18px] py-3 text-left text-[0.92rem] font-semibold text-gray-600 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-deepGreen/[0.04] hover:pl-[22px] hover:text-deepGreen hover:shadow-[0_2px_10px_rgba(7,61,53,0.04)] active:scale-[0.98] [.admin-dark_&]:text-[#b8c5c0] [.admin-dark_&]:hover:bg-white/[0.06] [.admin-dark_&]:hover:text-white';
 
 const menuLinkActive =
-  'bg-gradient-to-r from-gold/18 to-transparent border-l-[3px] border-gold font-bold text-deepGreen [.admin-dark_&]:text-white [.admin-dark_&]:bg-white/[0.06]';
+  'translate-x-0.5 bg-gradient-to-r from-gold/18 to-transparent border-l-[3px] border-gold font-bold text-deepGreen shadow-[inset_3px_0_0_rgba(216,161,40,0.35),0_4px_14px_rgba(7,61,53,0.06)] [.admin-dark_&]:text-white [.admin-dark_&]:bg-white/[0.06]';
 
 const menuIconBase =
-  'w-5 text-center text-[1.15rem] text-gray-600 transition-all duration-300 group-hover:text-deepGreen [.admin-dark_&]:text-inherit';
+  'relative z-[1] w-5 text-center text-[1.15rem] text-gray-600 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-110 group-hover:text-deepGreen [.admin-dark_&]:text-inherit';
+
+function staggerStyle(index, baseMs = 55) {
+  return { animationDelay: `${index * baseMs}ms` };
+}
+
+function SidebarMenuButton({ active, collapsed, item, badgeCount, onClick }) {
+  return (
+    <button
+      type="button"
+      className={[
+        'group animate-sidebarItemIn',
+        menuLinkBase,
+        collapsed ? 'justify-center p-2.5 hover:pl-2.5' : '',
+        active ? menuLinkActive : '',
+      ].join(' ')}
+      data-tab={item.id}
+      onClick={onClick}
+      title={item.label}
+    >
+      {active && (
+        <span className="pointer-events-none absolute inset-0 opacity-[0.3]" aria-hidden="true">
+          <span className="absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/50 to-transparent animate-sidebarShimmer [.admin-dark_&]:via-white/20" />
+        </span>
+      )}
+      <i
+        className={`fa-solid ${item.icon} ${menuIconBase} ${active ? 'scale-110 text-deepGreen [.admin-dark_&]:text-gold' : ''}`}
+      />
+      {!collapsed && <span className="relative z-[1] flex-1">{item.label}</span>}
+      {!collapsed && badgeCount > 0 && (
+        <span className="relative z-[1] inline-flex h-5 min-w-5 animate-badgePulse items-center justify-center rounded-full bg-gold px-1.5 text-[0.65rem] font-extrabold text-white">
+          {badgeCount}
+        </span>
+      )}
+    </button>
+  );
+}
 
 export function AdminSidebar({
   activeTab,
@@ -70,31 +104,32 @@ export function AdminSidebar({
 
       <aside
         className={[
-          'fixed left-0 top-0 z-[100] flex h-screen flex-col overflow-hidden border-r border-deepGreen/[0.08] bg-white py-[18px] shadow-[8px_0_32px_rgba(7,61,53,0.06)] transition-all duration-300',
+          'animate-sidebarLogoIn fixed left-0 top-0 z-[100] flex h-screen flex-col overflow-hidden border-r border-deepGreen/[0.08] bg-white py-[18px] shadow-[8px_0_32px_rgba(7,61,53,0.06)] transition-all duration-300',
           collapsed ? 'w-[72px] px-3.5' : 'w-[220px] px-3',
           mobileOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
+          'dark:border-white/[0.06] dark:bg-gradient-to-b dark:from-[#0f1c18] dark:to-[#0a1411] dark:text-[#d1ddd8]',
           '[.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-gradient-to-b [.admin-dark_&]:from-[#0f1c18] [.admin-dark_&]:to-[#0a1411] [.admin-dark_&]:text-[#d1ddd8]',
         ].join(' ')}
       >
         <Link
           to="/"
           className={[
-            'mb-4 flex shrink-0 items-center gap-2.5 px-1 no-underline',
+            'group mb-4 flex shrink-0 items-center gap-2.5 px-1 no-underline transition-transform duration-300 hover:scale-[1.02]',
             collapsed ? 'justify-center px-0' : '',
           ].join(' ')}
           title="Back to store"
         >
-          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
-            <span className="absolute inset-0 rotate-45 rounded-[9px] border-2 border-gold" />
+          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center transition-transform duration-500 group-hover:rotate-3">
+            <span className="absolute inset-0 rotate-45 rounded-[9px] border-2 border-gold transition-colors duration-300 group-hover:border-gold/80" />
             <span className="relative z-[2] font-display text-[1.3rem] font-bold tracking-[-0.5px] text-gold">
               MF
             </span>
           </div>
           {!collapsed && (
             <>
-              <div className="h-[38px] w-[1.5px] bg-gold opacity-85" />
+              <div className="h-[38px] w-[1.5px] bg-gold opacity-85 transition-opacity duration-300 group-hover:opacity-100" />
               <div className="leading-[1.05]">
-                <span className="block font-display text-[1.6rem] font-bold tracking-[0.1px] text-deepGreen [.admin-dark_&]:text-[#f3f7f5]">
+                <span className="block font-display text-[1.6rem] font-bold tracking-[0.1px] text-deepGreen transition-colors duration-300 group-hover:text-deepGreen/90 [.admin-dark_&]:text-[#f3f7f5]">
                   Mogadishu
                 </span>
                 <span className="mt-0.5 block font-sans text-[0.62rem] font-extrabold uppercase tracking-[1.5px] text-deepGreen opacity-90 [.admin-dark_&]:text-[#f3f7f5]">
@@ -110,28 +145,15 @@ export function AdminSidebar({
           aria-label="Admin navigation"
         >
           <ul className="m-0 flex list-none flex-col gap-1 p-0">
-            {MENU_ITEMS.map((item) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  className={[
-                    'group',
-                    menuLinkBase,
-                    collapsed ? 'justify-center p-2.5' : '',
-                    activeTab === item.id ? menuLinkActive : '',
-                  ].join(' ')}
-                  data-tab={item.id}
+            {MENU_ITEMS.map((item, index) => (
+              <li key={item.id} style={staggerStyle(index)}>
+                <SidebarMenuButton
+                  active={activeTab === item.id}
+                  collapsed={collapsed}
+                  item={item}
+                  badgeCount={item.badgeKey ? badgeCounts[item.badgeKey] || 0 : 0}
                   onClick={() => onTabChange(item.id)}
-                  title={item.label}
-                >
-                  <i className={`fa-solid ${item.icon} ${menuIconBase}`} />
-                  {!collapsed && <span className="flex-1">{item.label}</span>}
-                  {!collapsed && item.badgeKey && badgeCounts[item.badgeKey] > 0 && (
-                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gold px-1.5 text-[0.65rem] font-extrabold text-white">
-                      {badgeCounts[item.badgeKey]}
-                    </span>
-                  )}
-                </button>
+                />
               </li>
             ))}
           </ul>
@@ -150,11 +172,12 @@ const SEARCH_PLACEHOLDERS = {
   products: 'Search products...',
   orders: 'Search orders...',
   users: 'Search customers...',
-  stock: 'Search inventory...',
+  stock: 'Search stock...',
+  delivery: 'Search deliveries...',
   support: 'Search messages...',
 };
 
-const SEARCH_TABS = new Set(['dashboard', 'products', 'orders', 'users', 'stock', 'support']);
+const SEARCH_TABS = new Set(['dashboard', 'products', 'orders', 'users', 'stock', 'delivery', 'support']);
 
 function useClickOutside(ref, onClose) {
   useEffect(() => {
@@ -198,6 +221,7 @@ export function AdminHeader({
   notifications = [],
   onMarkNotificationRead,
   onRefreshNotifications,
+  compact = false,
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [msgOpen, setMsgOpen] = useState(false);
@@ -263,11 +287,17 @@ export function AdminHeader({
       open
         ? '-translate-y-px border-deepGreen/[0.18] bg-deepGreen/[0.04] text-deepGreen'
         : 'hover:-translate-y-px hover:border-deepGreen/[0.18] hover:bg-deepGreen/[0.04] hover:text-deepGreen',
+      'dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-[#d7e2de]',
       '[.admin-dark_&]:border-white/[0.08] [.admin-dark_&]:bg-white/[0.04] [.admin-dark_&]:text-[#d7e2de]',
     ].join(' ');
 
   return (
-    <header className="relative z-[1] mb-3 flex flex-col items-stretch justify-between gap-4 pb-[18px] max-md:pb-3.5 md:flex-row md:items-center">
+    <header
+      className={[
+        'relative z-[1] flex flex-col items-stretch justify-between md:flex-row md:items-center',
+        compact ? 'mb-1 gap-2.5 pb-2' : 'mb-3 gap-4 pb-[18px] max-md:pb-3.5',
+      ].join(' ')}
+    >
       <div className="flex min-w-0 items-center gap-2.5">
         <button
           type="button"
@@ -277,7 +307,7 @@ export function AdminHeader({
         >
           <i className="fa-solid fa-bars" />
         </button>
-        <h1 className="m-0 font-display text-[1.65rem] font-bold leading-[1.1] tracking-[-0.3px] text-deepGreen max-md:text-[1.65rem] md:text-[2rem] [.admin-dark_&]:text-[#e8f0ed]">
+        <h1 className="m-0 font-display text-[1.65rem] font-bold leading-[1.1] tracking-[-0.3px] text-deepGreen max-md:text-[1.65rem] md:text-[2rem] dark:text-[#e8f0ed] [.admin-dark_&]:text-[#e8f0ed]">
           {tabLabel}
         </h1>
       </div>

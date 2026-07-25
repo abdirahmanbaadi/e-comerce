@@ -1,8 +1,10 @@
 const Product = require('../models/Product');
 const Review = require('../models/Review');
 const Order = require('../models/Order');
-const { applyDemoPricesToProduct, applyDemoPricesToProducts } = require('../utils/demoPrices');
 const { onProductBackInStock } = require('../services/notificationService');
+const { recordStockChange, getProductStockHistory } = require('../services/stockHistoryService');
+const { getProductStockConsumption, getProductStockInventory } = require('../services/stockConsumptionService');
+const { createStockBatch, reduceBatchesForAdjustment } = require('../services/stockBatchService');
 
 function parseListParam(value) {
   if (!value) return [];
@@ -139,7 +141,7 @@ exports.getProducts = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: products.length,
-      products: applyDemoPricesToProducts(products),
+      products,
     });
   } catch (error) {
     console.error(error);
@@ -154,7 +156,7 @@ exports.getProducts = async (req, res) => {
      if (!product) {
        return res.status(404).json({ success: false, message: 'Product not found!' });
      }
-     return res.status(200).json({ success: true, product: applyDemoPricesToProduct(product) });
+     return res.status(200).json({ success: true, product });
    } catch (error) {
      console.error(error);
      return res.status(500).json({ success: false, message: 'Failed to fetch product details.' });
@@ -224,6 +226,71 @@ exports.getProductDetails = async (req, res) => {
   }
 };
 
+const MIN_PRODUCT_IMAGES = 3;
+const MAX_PRODUCT_IMAGES = 5;
+
+function buildProductImagesFromRequest(req) {
+  const files = req.files || [];
+  let order = [];
+
+  if (req.body.imagesOrder) {
+    try {
+      order =
+        typeof req.body.imagesOrder === 'string'
+          ? JSON.parse(req.body.imagesOrder)
+          : req.body.imagesOrder;
+    } catch {
+      order = [];
+    }
+  }
+
+  if (order.length > 0) {
+    return order
+      .map((slot) => {
+        if (slot.type === 'file' && files[slot.index]) {
+          return `uploads/${files[slot.index].filename}`;
+        }
+        if (slot.type === 'path' && slot.value) {
+          return slot.value;
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }
+
+  if (files.length > 0) {
+    return files.map((file) => `uploads/${file.filename}`);
+  }
+
+  if (req.body.images) {
+    return Array.isArray(req.body.images) ? req.body.images : JSON.parse(req.body.images);
+  }
+
+  return [];
+}
+
+function validateProductImages(productImages) {
+  if (productImages.length < MIN_PRODUCT_IMAGES || productImages.length > MAX_PRODUCT_IMAGES) {
+    return `Product must have ${MIN_PRODUCT_IMAGES} to ${MAX_PRODUCT_IMAGES} images.`;
+  }
+  return null;
+}
+
+function parseOptionalOldPrice(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const n = parseFloat(value);
+  if (Number.isNaN(n) || n <= 0) return null;
+  return n;
+}
+
+const MIN_PRODUCT_PRICE = 0.01;
+
+function parseProductPrice(value) {
+  const n = parseFloat(value);
+  if (Number.isNaN(n) || n < MIN_PRODUCT_PRICE) return null;
+  return n;
+}
+
 // Create Product (Admin Only)
 exports.createProduct = async (req, res) => {
   try {
@@ -248,18 +315,19 @@ exports.createProduct = async (req, res) => {
       availability
     } = req.body;
 
-    if (!title || !category || !price || !color) {
+    if (!title || !category || !color) {
       return res.status(400).json({ success: false, message: 'Please fill in all required fields!' });
     }
 
-    // Process image paths
-    let productImages = [];
-    if (req.files && req.files.length > 0) {
-      // Map uploaded files to URL paths relative to the server
-      productImages = req.files.map(file => `uploads/${file.filename}`);
-    } else if (req.body.images) {
-      // If image paths were passed directly (e.g. seeding or URL references)
-      productImages = Array.isArray(req.body.images) ? req.body.images : JSON.parse(req.body.images);
+    const parsedPrice = parseProductPrice(price);
+    if (parsedPrice == null) {
+      return res.status(400).json({ success: false, message: `Price must be at least $${MIN_PRODUCT_PRICE.toFixed(2)}.` });
+    }
+
+    const productImages = buildProductImagesFromRequest(req);
+    const imageError = validateProductImages(productImages);
+    if (imageError) {
+      return res.status(400).json({ success: false, message: imageError });
     }
 
     // Create the product
@@ -270,8 +338,8 @@ exports.createProduct = async (req, res) => {
       materialType,
       materialLabel,
       material,
-      price: parseFloat(price),
-      oldPrice: oldPrice ? parseFloat(oldPrice) : null,
+      price: parsedPrice,
+      oldPrice: parseOptionalOldPrice(oldPrice),
       discount: discount || '',
       rating: parseFloat(rating) || 4.0,
       popularity: parseInt(popularity) || 50,
@@ -283,7 +351,7 @@ exports.createProduct = async (req, res) => {
       color,
       dimensions: dimensions || '',
       description: description || '',
-      images: productImages.length ? productImages : ['product-images/hero1.jpeg'],
+      images: productImages,
     });
 
     return res.status(201).json({ success: true, message: 'New product added to database successfully!', product });
@@ -304,39 +372,151 @@ exports.updateProduct = async (req, res) => {
     const updateFields = { ...req.body };
     const wasOutOfStock = (product.stockVal ?? 0) <= 0 || product.stock === 'out-of-stock';
 
+    delete updateFields.imagesOrder;
+
     // Parse numeric fields if they exist
-    if (updateFields.price) updateFields.price = parseFloat(updateFields.price);
-    if (updateFields.oldPrice) updateFields.oldPrice = parseFloat(updateFields.oldPrice);
+    if (updateFields.price !== undefined) {
+      const parsedPrice = parseProductPrice(updateFields.price);
+      if (parsedPrice == null) {
+        return res.status(400).json({ success: false, message: `Price must be at least $${MIN_PRODUCT_PRICE.toFixed(2)}.` });
+      }
+      updateFields.price = parsedPrice;
+    }
+    if (updateFields.oldPrice !== undefined) {
+      updateFields.oldPrice = parseOptionalOldPrice(updateFields.oldPrice);
+    }
+    const previousStockVal = product.stockVal ?? 0;
+    let nextStockVal = previousStockVal;
+
     if (updateFields.stockVal !== undefined) {
-      updateFields.stockVal = parseInt(updateFields.stockVal, 10);
-      updateFields.stock = updateFields.stockVal > 0 ? 'in-stock' : 'out-of-stock';
-      updateFields.availability = updateFields.stockVal > 0 ? 'In Stock' : 'Out of Stock';
+      nextStockVal = Math.max(0, parseInt(updateFields.stockVal, 10) || 0);
+      updateFields.stockVal = nextStockVal;
+      updateFields.stock = nextStockVal > 0 ? 'in-stock' : 'out-of-stock';
+      updateFields.availability = nextStockVal > 0 ? 'In Stock' : 'Out of Stock';
     }
 
     if (updateFields.isNewest !== undefined) {
       updateFields.isNewest = updateFields.isNewest === 'true' || updateFields.isNewest === true;
     }
 
-    // Process new uploaded images if any
-    if (req.files && req.files.length > 0) {
-      const newImages = req.files.map(file => `uploads/${file.filename}`);
-      updateFields.images = newImages;
-    } else if (req.body.images) {
-      updateFields.images = Array.isArray(req.body.images) ? req.body.images : JSON.parse(req.body.images);
+    if (req.files?.length || req.body.imagesOrder || req.body.images) {
+      const productImages = buildProductImagesFromRequest(req);
+      const imageError = validateProductImages(productImages);
+      if (imageError) {
+        return res.status(400).json({ success: false, message: imageError });
+      }
+      updateFields.images = productImages;
+    } else {
+      delete updateFields.images;
     }
 
     Object.assign(product, updateFields);
     await product.save();
+
+    let lastStockChange = null;
+    let lastStockBatch = null;
+    if (updateFields.stockVal !== undefined && nextStockVal !== previousStockVal) {
+      const delta = nextStockVal - previousStockVal;
+      await recordStockChange({
+        product,
+        previousStock: previousStockVal,
+        newStock: nextStockVal,
+        user: req.user,
+        source: 'admin_manual',
+      });
+      if (delta > 0) {
+        lastStockBatch = await createStockBatch({
+          product,
+          unitsAdded: delta,
+          stockBefore: previousStockVal,
+          stockAfter: nextStockVal,
+          user: req.user,
+          source: 'admin_manual',
+        });
+      } else if (delta < 0) {
+        await reduceBatchesForAdjustment(product.id, Math.abs(delta));
+      }
+      const history = await getProductStockHistory(product.id, { limit: 1 });
+      lastStockChange = history[0] || null;
+    }
 
     const nowInStock = (product.stockVal ?? 0) > 0 && product.stock === 'in-stock';
     if (wasOutOfStock && nowInStock) {
       onProductBackInStock(product).catch((err) => console.error('Wishlist stock notification failed:', err));
     }
 
-    return res.status(200).json({ success: true, message: 'Product updated successfully!', product });
+    return res.status(200).json({
+      success: true,
+      message: 'Product updated successfully!',
+      product,
+      lastStockChange,
+      lastStockBatch,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to update product.' });
+  }
+};
+
+// Product stock change history (Admin Only)
+exports.getProductStockHistory = async (req, res) => {
+  try {
+    const productId = Number(req.params.id);
+    const product = await Product.findOne({ id: productId }).select('id title').lean();
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found!' });
+    }
+
+    const limit = Number(req.query.limit) || 30;
+    const history = await getProductStockHistory(productId, { limit });
+
+    return res.status(200).json({
+      success: true,
+      productId: product.id,
+      productTitle: product.title,
+      history,
+      lastChange: history[0] || null,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to load stock history.' });
+  }
+};
+
+// Product stock inventory — batches + consumption (Admin Only)
+exports.getProductStockInventory = async (req, res) => {
+  try {
+    const productId = Number(req.params.id);
+    const result = await getProductStockInventory(productId);
+    if (!result) {
+      return res.status(404).json({ success: false, message: 'Product not found!' });
+    }
+    return res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to load stock inventory.' });
+  }
+};
+
+// Product stock consumption / sales breakdown (Admin Only)
+exports.getProductStockConsumption = async (req, res) => {
+  try {
+    const productId = Number(req.params.id);
+    const limit = Number(req.query.limit) || 50;
+    const batchId = req.query.batchId || '';
+    const result = await getProductStockConsumption(productId, { limit, batchId });
+
+    if (!result) {
+      return res.status(404).json({ success: false, message: 'Product not found!' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to load stock consumption.' });
   }
 };
 

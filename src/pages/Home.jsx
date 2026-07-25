@@ -27,6 +27,50 @@ function heroBackgroundStyle(image) {
   };
 }
 
+function PromoBannerCard({ banner }) {
+  const imageUrl = productImage(banner.image);
+  const link = banner.link || '/products';
+  const isExternal = /^https?:\/\//i.test(link);
+
+  const content = (
+    <article className="group relative overflow-hidden rounded-2xl border border-deepGreen/8 bg-white shadow-[0_8px_30px_rgba(7,61,53,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(7,61,53,0.12)]">
+      <div className="grid min-h-[180px] md:grid-cols-12">
+        <div
+          className="min-h-[140px] bg-cover bg-center md:col-span-5"
+          style={{ backgroundImage: `url("${imageUrl}")` }}
+        />
+        <div className="flex flex-col justify-center p-5 md:col-span-7 md:p-6">
+          <span className="mb-2 text-[0.72rem] font-extrabold uppercase tracking-[2px] text-gold">Special Offer</span>
+          <h3 className="mb-2 font-display text-[1.45rem] font-bold leading-tight text-deepGreen md:text-[1.75rem]">
+            {banner.title}
+          </h3>
+          {banner.subtitle && (
+            <p className="mb-4 text-[0.92rem] leading-relaxed text-[#5f5f5f]">{banner.subtitle}</p>
+          )}
+          <span className="inline-flex w-fit items-center gap-2 rounded-md bg-btnDark px-4 py-2 text-[0.82rem] font-extrabold text-white transition group-hover:bg-[#111]">
+            Shop now
+            <i className="fa-solid fa-arrow-right text-[0.75rem]" />
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+
+  if (isExternal) {
+    return (
+      <a href={link} target="_blank" rel="noreferrer" className="block no-underline">
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <Link to={link} className="block no-underline">
+      {content}
+    </Link>
+  );
+}
+
 export default function Home() {
   const { syncFromStorage: syncAuth } = useAuth();
   const { addToCart, syncFromStorage: syncCart } = useCart();
@@ -35,6 +79,7 @@ export default function Home() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [hero, setHero] = useState(DEFAULT_HERO);
+  const [banners, setBanners] = useState([]);
 
   useEffect(() => {
     syncAuth();
@@ -53,6 +98,13 @@ export default function Home() {
               ...cmsHero,
               image: cmsHero.image ? productImage(cmsHero.image) : DEFAULT_HERO.image,
             });
+          }
+          if (Array.isArray(data.cms.banners)) {
+            setBanners(
+              data.cms.banners
+                .filter((b) => b.active !== false)
+                .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+            );
           }
         }
       })
@@ -123,6 +175,24 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {banners.length > 0 && (
+        <section className="container pb-2 pt-8 md:pt-10">
+          <div className="mx-auto mb-6 max-w-[760px] text-center">
+            <span className="mb-2 inline-block text-[0.76rem] font-extrabold uppercase tracking-[3px] text-gold">
+              Limited Time
+            </span>
+            <h2 className="font-display text-[2rem] font-bold tracking-tight text-deepGreen md:text-[2.4rem]">
+              Current Offers
+            </h2>
+          </div>
+          <div className={`grid gap-5 ${banners.length > 1 ? 'md:grid-cols-2' : 'max-w-3xl mx-auto'}`}>
+            {banners.map((banner) => (
+              <PromoBannerCard key={banner.id || banner.title} banner={banner} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <main id="products-section" className="container pb-14 pt-8 md:pt-10">
         <div className="mx-auto mb-8 max-w-[760px] text-center md:mb-10">

@@ -8,7 +8,7 @@
  */
 
 import { formatMoney } from './format';
-import { apiUrl } from './data';
+import { apiUrl, normalizeOrderId } from './data';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SECTION 1 — Toast & UI alerts
@@ -197,13 +197,14 @@ export function getOrderTotalFormatted(order) {
 
 /** Fetch real order details from API for notification modals (falls back to getLastOrderDetails). */
 export async function fetchOrderForNotification(orderId) {
-  if (!orderId) return null;
+  const normalizedId = normalizeOrderId(orderId);
+  if (!normalizedId) return null;
 
   const token = localStorage.getItem('token');
   if (!token) return null;
 
   try {
-    const response = await fetch(apiUrl(`/api/orders/${encodeURIComponent(orderId)}/details`), {
+    const response = await fetch(apiUrl(`/api/orders/${encodeURIComponent(normalizedId)}/details`), {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await response.json();

@@ -18,7 +18,7 @@ const WHY_US = [
   {
     icon: CARD_ICONS.payment,
     title: 'Secure Payments',
-    text: 'Pay with EVC Plus via Waafi or Cash on Delivery at checkout.',
+    text: 'Pay securely with EVC Plus via Waafi at checkout.',
   },
   {
     icon: CARD_ICONS.delivery,
@@ -47,8 +47,8 @@ const STEPS = [
   {
     step: '02',
     icon: CARD_ICONS.payment,
-    title: 'Pay Your Way',
-    text: 'Checkout with EVC Plus or Cash on Delivery. Apply promo codes for extra savings.',
+    title: 'Pay with EVC Plus',
+    text: 'Checkout with EVC Plus mobile money. Apply promo codes for extra savings.',
   },
   {
     step: '03',
@@ -152,7 +152,7 @@ export default function About() {
   const stats = [
     { value: `${activeProducts || '20'}+`, label: 'Furniture Pieces' },
     { value: `${districtCount}+`, label: 'Delivery Districts' },
-    { value: 'EVC & COD', label: 'Payment Options' },
+    { value: 'EVC Plus', label: 'Secure Payments' },
     { value: '24/7', label: 'Order Tracking' },
   ];
 
@@ -252,7 +252,7 @@ export default function About() {
               </p>
               <p className="m-0">
                 Our online store lets you browse products, read reviews, apply promo codes, and pay with
-                EVC Plus or Cash on Delivery — all from your phone. Once you order, track delivery in
+                EVC Plus — all from your phone. Once you order, track delivery in
                 real time until your furniture arrives at your door.
               </p>
 

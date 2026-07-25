@@ -5,7 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "dev:watch": "node --watch --watch-path=./controllers --watch-path=./routes --watch-path=./services --watch-path=./models --watch-path=./utils --watch-path=./middleware --watch-path=./config --watch-path=./server.js server.js",
+    "migrate:prices": "node scripts/migrateStorePrices.js",
+    "migrate:stock-batches": "node scripts/migrateStockBatches.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

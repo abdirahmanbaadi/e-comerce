@@ -25,7 +25,14 @@ export function productImage(src) {
   }
 
   // Keep uploaded admin images working.
-  if (clean.startsWith('uploads/')) return `/${clean}`;
+  if (clean.startsWith('uploads/')) {
+    const apiBase = import.meta.env.VITE_API_URL || '';
+    return `${apiBase}/${clean}`;
+  }
+  if (clean.startsWith('/uploads/')) {
+    const apiBase = import.meta.env.VITE_API_URL || '';
+    return `${apiBase}${clean}`;
+  }
 
   // Product images can be stored either as "product-images/..." or just file name.
   if (clean.startsWith('product-images/')) return `/${clean}`;

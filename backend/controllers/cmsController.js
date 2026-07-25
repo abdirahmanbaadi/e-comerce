@@ -1,7 +1,8 @@
 const CmsContent = require('../models/CmsContent');
 const { logUserActivity } = require('../services/activityService');
-const { onPromotionActivated } = require('../services/notificationService');
+const { onPromotionActivated, onBannerActivated } = require('../services/notificationService');
 const { validateCmsUpdate } = require('../utils/cmsValidation');
+const { FIXED_COUPON_DISCOUNT, discountLabel } = require('../utils/pricing');
 
 function normalizeCmsAssetPath(path) {
   if (!path) return path;
@@ -65,8 +66,8 @@ const DEFAULT_CMS = {
     {
       id: 'promo-1',
       code: 'MMF10',
-      description: '$10 off your order',
-      discountAmount: 10,
+      description: discountLabel(FIXED_COUPON_DISCOUNT),
+      discountAmount: FIXED_COUPON_DISCOUNT,
       discountPercent: 0,
       active: true,
     },
@@ -100,8 +101,9 @@ const DEFAULT_CMS = {
     },
     {
       id: 'faq-4',
-      question: 'What is Cash on Delivery?',
-      answer: 'Pay when your furniture is delivered to your address. No upfront mobile payment is required.',
+      question: 'How do I pay with EVC Plus?',
+      answer:
+        'At checkout, enter your Somali mobile number. After you place the order, approve the EVC Plus prompt on your phone and enter your PIN. Payment is confirmed instantly via Waafi.',
       order: 4,
     },
   ],
@@ -113,6 +115,15 @@ const DEFAULT_CMS = {
     { district: 'Dayniile', fee: 0.02 },
     { district: 'Yaqshid', fee: 0.01 },
   ],
+  storeSettings: {
+    isOpen: true,
+    maintenanceMessage: 'We are temporarily closed for maintenance. Please check back soon.',
+    lowStockThreshold: 5,
+    supportPhone: '+252 61 000 0000',
+    supportEmail: 'support@mogadishumodernfurniture.com',
+    storeDisplayName: 'Mogadishu Modern Furniture',
+    minOrderAmount: 0,
+  },
 };
 
 function migrateLegacyDemoDeliveryFees(cms) {
@@ -161,6 +172,9 @@ exports.getPublicContent = async (_req, res) => {
   }
 };
 
+/** Same as public — prices live in MongoDB */
+exports.getAdminContent = exports.getPublicContent;
+
 exports.updateContent = async (req, res) => {
   try {
     const validation = validateCmsUpdate(req.body);
@@ -172,7 +186,7 @@ exports.updateContent = async (req, res) => {
     }
 
     const cms = await getOrCreateCms();
-    const { hero, banners, promotions, faqs, deliveryFees } = validation.data;
+    const { hero, banners, promotions, faqs, deliveryFees, storeSettings } = validation.data;
     const changedSections = [];
 
     if (hero) {
@@ -180,8 +194,22 @@ exports.updateContent = async (req, res) => {
       changedSections.push('hero');
     }
     if (Array.isArray(banners)) {
+      const previousBanners = cms.banners || [];
+      const previousByKey = new Map(
+        previousBanners.map((b) => [b.id || b.title, b])
+      );
+
       cms.banners = banners;
       changedSections.push('banners');
+
+      for (const banner of banners) {
+        if (!banner?.active) continue;
+        const key = banner.id || banner.title;
+        const previous = previousByKey.get(key);
+        if (!previous || !previous.active) {
+          await onBannerActivated(banner);
+        }
+      }
     }
     if (Array.isArray(promotions)) {
       const previousPromos = cms.promotions || [];
@@ -189,10 +217,21 @@ exports.updateContent = async (req, res) => {
         previousPromos.map((promo) => [promo.id || promo.code, promo])
       );
 
-      cms.promotions = promotions;
+      // Process and calculate expiresAt based on durationDays
+      const processedPromos = promotions.map((promo) => {
+        const item = { ...promo };
+        const prev = previousByKey.get(promo.id || promo.code);
+        
+        if (item.durationDays && (!prev || prev.durationDays !== item.durationDays || !item.expiresAt)) {
+          item.expiresAt = new Date(Date.now() + Number(item.durationDays) * 24 * 60 * 60 * 1000);
+        }
+        return item;
+      });
+
+      cms.promotions = processedPromos;
       changedSections.push('promotions');
 
-      for (const promo of promotions) {
+      for (const promo of processedPromos) {
         if (!promo?.active) continue;
         const key = promo.id || promo.code;
         const previous = previousByKey.get(key);
@@ -208,6 +247,13 @@ exports.updateContent = async (req, res) => {
     if (Array.isArray(deliveryFees)) {
       cms.deliveryFees = deliveryFees;
       changedSections.push('deliveryFees');
+    }
+    if (storeSettings) {
+      cms.storeSettings = {
+        ...(cms.storeSettings?.toObject?.() || cms.storeSettings || {}),
+        ...storeSettings,
+      };
+      changedSections.push('storeSettings');
     }
 
     if (changedSections.length === 0) {
@@ -241,3 +287,23 @@ exports.updateContent = async (req, res) => {
 };
 
 exports.getDefaultCms = () => DEFAULT_CMS;
+
+/** Admin: upload a CMS image (hero / banner). Returns public `/uploads/...` path. */
+exports.uploadImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image file uploaded.' });
+    }
+
+    const imagePath = `/uploads/${req.file.filename}`;
+    return res.status(200).json({
+      success: true,
+      message: 'Image uploaded successfully.',
+      path: imagePath,
+      url: imagePath,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to upload image.' });
+  }
+};

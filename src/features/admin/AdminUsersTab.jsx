@@ -2,9 +2,10 @@
  * ADMIN USERS TAB — customer accounts list, edit & activity modals (Tailwind)
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { apiUrl, fetchWithTimeout } from '../../utils/data';
+import { productImage } from '../../utils/format';
 import { showTopFloatNotification } from '../../utils/notifications';
-import { AppSearchField } from '../nav/StoreNavbar';
 import {
   ADM_TABLE_CARD,
   ADM_TABLE,
@@ -18,6 +19,8 @@ import {
   formatLastLogin,
   formatActivityLabel,
   formatActivityIcon,
+  formatAdminPrice,
+  getOrderPaymentLabel,
 } from './adminShared.js';
 
 const ROLE_LABELS = { user: 'Customer', delivery: 'Driver', admin: 'Admin' };
@@ -63,15 +66,16 @@ function avatarUrl(name) {
 
 function UserAvatar({ user, size = 36 }) {
   const name = fullName(user);
-  const photo = avatarUrl(name);
-  const sz = `${size}px`;
+  const photo = user?.avatar || avatarUrl(name);
+  const sz = typeof size === 'number' ? `${size}px` : size;
+  const textSize = (typeof size === 'number' ? size : 36) >= 44 ? '0.8rem' : '0.72rem';
 
   if (photo) {
     return (
       <img
         src={photo}
-        alt={name}
-        className="shrink-0 rounded-full object-cover"
+        alt=""
+        className="shrink-0 rounded-full object-cover ring-2 ring-black/[0.04]"
         style={{ width: sz, height: sz }}
       />
     );
@@ -79,8 +83,8 @@ function UserAvatar({ user, size = 36 }) {
 
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-deepGreen text-[0.76rem] font-bold text-white"
-      style={{ width: sz, height: sz }}
+      className="flex shrink-0 items-center justify-center rounded-full bg-deepGreen font-bold text-white ring-2 ring-black/[0.04]"
+      style={{ width: sz, height: sz, fontSize: textSize }}
       aria-hidden="true"
     >
       {initials(name) || '?'}
@@ -91,7 +95,7 @@ function UserAvatar({ user, size = 36 }) {
 function StatusBadge({ active }) {
   return (
     <span
-      className={`inline-block rounded-md px-2.5 py-1 text-[0.72rem] font-bold ${
+      className={`inline-block rounded-md px-2 py-0.5 text-[0.68rem] font-extrabold ${
         active
           ? 'bg-emerald-100 text-emerald-700 [.admin-dark_&]:bg-emerald-500/15 [.admin-dark_&]:text-emerald-300'
           : 'bg-red-100 text-red-600 [.admin-dark_&]:bg-red-500/15 [.admin-dark_&]:text-red-300'
@@ -102,40 +106,219 @@ function StatusBadge({ active }) {
   );
 }
 
-/* ═══ EDIT USER MODAL ═══ */
+const USERS_TABLE_MAX_HEIGHT = 'min(520px, 55vh)';
 
-function EditUserModal({ open, title, form, saving, onChange, onClose, onSubmit }) {
-  if (!open) return null;
+function UsersStatCard({ label, value, icon, iconWrapClass, active, onClick }) {
+  const className = [
+    'group flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left shadow-[0_2px_10px_rgba(0,0,0,0.03)] transition-all duration-300',
+    active
+      ? 'border-deepGreen/20 bg-deepGreen/[0.04] shadow-[0_6px_20px_rgba(7,61,53,0.08)]'
+      : 'border-deepGreen/[0.06] bg-white hover:-translate-y-px hover:border-deepGreen/12 hover:shadow-[0_6px_20px_rgba(7,61,53,0.07)]',
+    'cursor-pointer active:scale-[0.99]',
+    '[.admin-dark_&]:border-white/[0.08] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)]',
+    active ? '[.admin-dark_&]:border-emerald-500/25 [.admin-dark_&]:bg-emerald-500/10' : '',
+  ].join(' ');
 
   return (
-    <div
-      className="fixed inset-0 z-[1060] flex items-center justify-center bg-deepGreen/45 p-4 backdrop-blur-sm"
-      onClick={onClose}
-      role="presentation"
+    <button type="button" className={className} onClick={onClick}>
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconWrapClass}`}>
+        <i className={`fa-solid ${icon} text-[0.9rem]`} aria-hidden="true" />
+      </div>
+      <div className="min-w-0 flex-1 text-left">
+        <p className="truncate text-[0.65rem] font-semibold uppercase tracking-wide text-gray-400 [.admin-dark_&]:text-gray-500">
+          {label}
+        </p>
+        <p className="font-display text-[1.15rem] font-bold leading-tight text-deepGreen [.admin-dark_&]:text-[#e8f0ed]">
+          {value}
+        </p>
+      </div>
+      <i
+        className="fa-solid fa-chevron-right shrink-0 text-[0.55rem] text-gray-300 transition group-hover:text-deepGreen [.admin-dark_&]:text-gray-600 [.admin-dark_&]:group-hover:text-emerald-300"
+        aria-hidden="true"
+      />
+    </button>
+  );
+}
+
+function FilterPill({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.68rem] font-bold transition',
+        active
+          ? 'bg-deepGreen text-white shadow-sm [.admin-dark_&]:bg-emerald-600'
+          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-gray-200 [.admin-dark_&]:hover:bg-white/15',
+      ].join(' ')}
     >
+      {children}
+    </button>
+  );
+}
+
+function UsersFilterToolbar({
+  loading,
+  filterStatus,
+  filterRole,
+  statusCounts,
+  onStatusChange,
+  onRoleChange,
+  onExport,
+}) {
+  return (
+    <div className="flex flex-col gap-2.5 rounded-xl border border-deepGreen/[0.06] bg-white px-3.5 py-3 shadow-[0_2px_10px_rgba(0,0,0,0.03)] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between [.admin-dark_&]:border-white/[0.08] [.admin-dark_&]:bg-[#1a2421]">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="me-1 text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Status</span>
+        {[
+          { id: 'all', label: 'All', count: statusCounts.total },
+          { id: 'active', label: 'Active', count: statusCounts.active },
+          { id: 'inactive', label: 'Inactive', count: statusCounts.inactive },
+        ].map((pill) => (
+          <FilterPill key={pill.id} active={filterStatus === pill.id} onClick={() => onStatusChange(pill.id)}>
+            {pill.label}
+            <span
+              className={`rounded-full px-1.5 py-px text-[0.62rem] ${
+                filterStatus === pill.id ? 'bg-white/20' : 'bg-black/5 [.admin-dark_&]:bg-white/10'
+              }`}
+            >
+              {loading ? '…' : pill.count}
+            </span>
+          </FilterPill>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="me-1 text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Role</span>
+        {[
+          { id: 'all', label: 'All' },
+          { id: 'user', label: 'Customer' },
+          { id: 'delivery', label: 'Driver' },
+        ].map((pill) => (
+          <FilterPill key={pill.id} active={filterRole === pill.id} onClick={() => onRoleChange(pill.id)}>
+            {pill.label}
+          </FilterPill>
+        ))}
+        <button
+          type="button"
+          onClick={onExport}
+          className="ms-1 inline-flex items-center gap-1.5 rounded-full border border-deepGreen/15 bg-deepGreen/[0.04] px-2.5 py-1 text-[0.68rem] font-bold text-deepGreen transition hover:bg-deepGreen/10 [.admin-dark_&]:border-emerald-500/20 [.admin-dark_&]:bg-emerald-500/10 [.admin-dark_&]:text-emerald-300"
+        >
+          <i className="fa-solid fa-download text-[0.62rem]" aria-hidden="true" />
+          Export
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function exportUsersToCSV(usersList) {
+  let csvContent = 'data:text/csv;charset=utf-8,';
+  csvContent += 'User ID,Name,Email,Phone,Role,Status,Orders,Joined\n';
+
+  usersList.forEach((u) => {
+    const id = u.id || '';
+    const name = fullName(u).replace(/"/g, '""');
+    const email = (u.email || '').replace(/"/g, '""');
+    const phone = (u.phone || '').replace(/"/g, '""');
+    const role = ROLE_LABELS[u.role] || u.role || 'Customer';
+    const status = u.isActive === false ? 'Inactive' : 'Active';
+    const orders = u.orderCount || 0;
+    const joined = u.joinedDate || '';
+    csvContent += `"${id}","${name}","${email}","${phone}","${role}","${status}","${orders}","${joined}"\n`;
+  });
+
+  const link = document.createElement('a');
+  link.setAttribute('href', encodeURI(csvContent));
+  link.setAttribute('download', `MMF_Users_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showTopFloatNotification('Users exported successfully as CSV!');
+}
+
+function MetaField({ label, children }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">{label}</p>
+      <div className="mt-1 text-[0.86rem] font-semibold text-gray-900 [.admin-dark_&]:text-gray-100">{children}</div>
+    </div>
+  );
+}
+
+function ModalShell({ open, onClose, zClass = 'z-[9999]', maxWidth = 'max-w-xl', children, labelledBy, lockScroll = true }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    document.addEventListener('keydown', onKey);
+    if (!lockScroll) {
+      return () => document.removeEventListener('keydown', onKey);
+    }
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open, onClose, lockScroll]);
+
+  if (!open || typeof document === 'undefined' || !document.body) return null;
+
+  const isAdminDark =
+    typeof document !== 'undefined' && Boolean(document.querySelector('[data-theme="dark"]'));
+
+  return createPortal(
+    <div className={isAdminDark ? 'admin-dark' : ''} data-theme={isAdminDark ? 'dark' : 'light'}>
       <div
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        className={`fixed inset-0 ${zClass} flex items-center justify-center bg-deepGreen/45 p-4 backdrop-blur-[4px]`}
+        onClick={onClose}
+        role="presentation"
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
-          <h3 className="font-display text-xl font-bold text-deepGreen [.admin-dark_&]:text-[#e8f0ed]">{title}</h3>
+        <div
+          className={`animate-productModalIn relative flex max-h-[92vh] w-full ${maxWidth} flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]`}
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={labelledBy}
+        >
           <button
             type="button"
-            className="text-2xl text-gray-500 hover:text-gray-800 [.admin-dark_&]:text-gray-400 [.admin-dark_&]:hover:text-gray-200"
+            className="absolute right-[15px] top-[15px] z-10 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-white text-[1.4rem] leading-none text-[#111] shadow-[0_2px_10px_rgba(0,0,0,0.15)] [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:text-gray-200"
             onClick={onClose}
             aria-label="Close"
           >
             ×
           </button>
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ═══ EDIT USER MODAL ═══ */
+
+function EditUserModal({ open, form, saving, onChange, onClose, onSubmit }) {
+  const name = `${form.firstName || ''} ${form.lastName || ''}`.trim() || 'Edit account';
+
+  return (
+    <ModalShell open={open} onClose={onClose} zClass="z-[10000]" maxWidth="max-w-md" labelledBy="editUserTitle" lockScroll={false}>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6 [scrollbar-width:thin]">
+        <div className="pr-10">
+          <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Edit account</p>
+          <h3 id="editUserTitle" className="mt-1 text-[1.05rem] font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
+            {name}
+          </h3>
         </div>
 
-        <form className="space-y-3 p-5" onSubmit={onSubmit}>
+        <form id="editUserForm" className="mt-5 space-y-3 border-t border-black/[0.06] pt-5 [.admin-dark_&]:border-white/10" onSubmit={onSubmit}>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={ADM_LABEL} htmlFor="admUserFirstName">
-                First Name
+                First name
               </label>
               <input
                 id="admUserFirstName"
@@ -147,7 +330,7 @@ function EditUserModal({ open, title, form, saving, onChange, onClose, onSubmit 
             </div>
             <div>
               <label className={ADM_LABEL} htmlFor="admUserLastName">
-                Last Name
+                Last name
               </label>
               <input
                 id="admUserLastName"
@@ -205,7 +388,7 @@ function EditUserModal({ open, title, form, saving, onChange, onClose, onSubmit 
             </div>
             <div>
               <label className={ADM_LABEL} htmlFor="admUserStatus">
-                Account Status
+                Status
               </label>
               <select
                 id="admUserStatus"
@@ -219,58 +402,267 @@ function EditUserModal({ open, title, form, saving, onChange, onClose, onSubmit 
               </select>
             </div>
           </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className={BTN_GHOST} onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className={BTN_PRIMARY} disabled={saving}>
-              {saving ? (
-                <>
-                  <i className="fa-solid fa-spinner fa-spin" /> Saving…
-                </>
-              ) : (
-                'Save Changes'
-              )}
-            </button>
-          </div>
         </form>
       </div>
-    </div>
+
+      <div className="flex items-center justify-end gap-2 border-t border-black/[0.06] bg-gray-50/80 px-5 py-3.5 [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#141f1b]">
+        <button type="button" className={BTN_GHOST} onClick={onClose}>
+          Cancel
+        </button>
+        <button type="submit" form="editUserForm" className={BTN_PRIMARY} disabled={saving}>
+          {saving ? (
+            <>
+              <i className="fa-solid fa-spinner fa-spin" /> Saving…
+            </>
+          ) : (
+            'Save changes'
+          )}
+        </button>
+      </div>
+    </ModalShell>
   );
 }
 
 /* ═══ VIEW USER / ACTIVITY MODAL ═══ */
 
-function ViewUserModal({ open, loading, error, data, onClose }) {
-  if (!open) return null;
+function parseAmount(value) {
+  return Number(String(value || 0).replace(/[^0-9.-]/g, '')) || 0;
+}
 
-  const user = data?.user;
-  const stats = data?.stats || {};
-  const activities = data?.activities || [];
-  const recentOrders = data?.recentOrders || [];
-  const name = user ? fullName(user) : '';
-  const isActive = user?.isActive !== false;
+function deliveryStageLabel(order) {
+  const step = Number(order?.currentStep);
+  if (step === 0 || order?.status === 'Cancelled') return 'Cancelled';
+  if (step >= 5 || order?.status === 'Delivered') return 'Delivered';
+  if (step === 4 || order?.status === 'Shipped') return 'Out for delivery';
+  if (step === 3) return 'Preparing';
+  const payment = getOrderPaymentLabel(order);
+  if (payment === 'Paid') return 'Paid';
+  if (payment === 'Failed') return 'Failed';
+  if (step === 2) return 'Paid';
+  return 'Placed';
+}
+
+function deliveryStageBadgeClass(label) {
+  if (label === 'Delivered') return 'bg-emerald-100 text-emerald-700 [.admin-dark_&]:bg-emerald-500/15 [.admin-dark_&]:text-emerald-300';
+  if (label === 'Out for delivery') return 'bg-blue-100 text-blue-700 [.admin-dark_&]:bg-blue-500/15 [.admin-dark_&]:text-blue-300';
+  if (label === 'Preparing') return 'bg-amber-100 text-amber-800 [.admin-dark_&]:bg-amber-500/15 [.admin-dark_&]:text-amber-300';
+  if (label === 'Cancelled' || label === 'Failed') return 'bg-red-100 text-red-700 [.admin-dark_&]:bg-red-500/15 [.admin-dark_&]:text-red-300';
+  if (label === 'Paid') return 'bg-emerald-50 text-emerald-700 [.admin-dark_&]:bg-emerald-500/10 [.admin-dark_&]:text-emerald-300';
+  return 'bg-slate-100 text-slate-600 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-slate-300';
+}
+
+function MiniDeliveryProgress({ currentStep, paymentStatus }) {
+  const step = Math.min(Math.max(Number(currentStep) || 1, 1), 5);
+  const payment = String(paymentStatus || 'Pending');
+  const nodes = [
+    { id: 'placed', label: 'Placed', done: true },
+    {
+      id: 'payment',
+      label: payment === 'Failed' ? 'Failed' : payment === 'Pending' ? 'Pending' : 'Paid',
+      done: payment === 'Paid',
+      failed: payment === 'Failed',
+      pending: payment === 'Pending',
+    },
+    { id: 'prep', label: 'Preparing', done: step > 3, current: step === 3 },
+    { id: 'out', label: 'Out', done: step > 4, current: step === 4 },
+    { id: 'done', label: 'Delivered', done: step >= 5, current: false },
+  ];
+
+  return (
+    <div>
+      <p className="mb-2.5 text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Delivery progress</p>
+      <div className="flex items-start">
+        {nodes.map((node, idx) => {
+          const circle =
+            node.failed
+              ? 'bg-red-500 text-white'
+              : node.done || node.current
+                ? 'bg-deepGreen text-white'
+                : node.pending
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-gray-100 text-gray-400 [.admin-dark_&]:bg-white/10';
+          return (
+            <div key={node.id} className="flex min-w-0 flex-1 items-start">
+              <div className="flex w-full flex-col items-center gap-1">
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[0.58rem] font-bold ${circle}`}>
+                  {node.failed ? '!' : node.done ? '✓' : idx + 1}
+                </span>
+                <span className="px-0.5 text-center text-[0.58rem] font-semibold leading-tight text-gray-500">
+                  {node.label}
+                </span>
+              </div>
+              {idx < nodes.length - 1 && (
+                <div
+                  className={`mt-3 h-0.5 w-full min-w-[6px] shrink ${
+                    nodes[idx + 1].done || node.done ? 'bg-deepGreen/40' : 'bg-gray-200 [.admin-dark_&]:bg-white/10'
+                  }`}
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function normalizeProductTitle(title) {
+  return String(title || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function splitProductNames(productField) {
+  return String(productField || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function buildItemsFromProductNames(productField, catalog = []) {
+  const names = splitProductNames(productField);
+  if (!names.length) return [];
+
+  const byTitle = new Map();
+  catalog.forEach((p) => {
+    const key = normalizeProductTitle(p.title);
+    if (key && !byTitle.has(key)) byTitle.set(key, p);
+  });
+
+  return names.map((name) => {
+    const match = byTitle.get(normalizeProductTitle(name));
+    const image = match?.images?.[0] || match?.image || 'product-images/hero1.jpeg';
+    const price = Number(match?.price ?? 0) || 0;
+    return {
+      title: match?.title || name,
+      quantity: 1,
+      price,
+      image,
+      _resolved: Boolean(match),
+    };
+  });
+}
+
+async function loadProductsCatalog() {
+  const res = await fetchWithTimeout(apiUrl('/api/products'), {}, ADMIN_FETCH_TIMEOUT);
+  const data = await res.json().catch(() => ({}));
+  if (data.success && Array.isArray(data.products)) return data.products;
+  if (Array.isArray(data)) return data;
+  return [];
+}
+
+function UserOrderItemsModal({ open, order, onClose }) {
+  const [detail, setDetail] = useState(null);
+  const [lineItems, setLineItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !order?.id) {
+      setDetail(null);
+      setLineItems([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      try {
+        let merged = { ...order };
+        let items = Array.isArray(order.items) ? [...order.items] : [];
+
+        // Always refresh from order details so we get full payload when available.
+        try {
+          const res = await fetchWithTimeout(
+            apiUrl(`/api/orders/${encodeURIComponent(order.id)}/details`),
+            { headers: authHeaders(false) },
+            ADMIN_FETCH_TIMEOUT
+          );
+          const data = await res.json().catch(() => ({}));
+          if (data.success && data.order) {
+            merged = {
+              ...order,
+              ...data.order,
+              product: data.order.product || order.product,
+              amount: data.order.amount ?? order.amount,
+              currentStep: data.order.currentStep ?? order.currentStep,
+              payment: data.order.payment ?? order.payment,
+              paymentType: data.order.paymentType ?? order.paymentType,
+            };
+            if (Array.isArray(data.order.items) && data.order.items.length > 0) {
+              items = data.order.items;
+            }
+          }
+        } catch {
+          /* keep list payload */
+        }
+
+        // Legacy orders: only a comma-separated product string — resolve from catalog.
+        if (!items.length && merged.product) {
+          const catalog = await loadProductsCatalog();
+          items = buildItemsFromProductNames(merged.product, catalog);
+        }
+
+        if (cancelled) return;
+        setDetail(merged);
+        setLineItems(items);
+      } catch {
+        if (!cancelled) {
+          setDetail(order);
+          setLineItems(Array.isArray(order.items) ? order.items : []);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, order]);
+
+  if (!open || !order) return null;
+
+  const source = detail || order;
+  const items = lineItems;
+  const itemsSubtotal = items.reduce(
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1),
+    0
+  );
+  const orderAmount = parseAmount(source.amount);
+  const reconstructed = items.some((item) => Object.prototype.hasOwnProperty.call(item, '_resolved'));
+  const subtotal = reconstructed ? orderAmount || itemsSubtotal : itemsSubtotal || orderAmount;
+  const payment = getOrderPaymentLabel(source);
+  const step = Number(source.currentStep) || 1;
 
   return (
     <div
-      className="fixed inset-0 z-[1060] flex items-center justify-center bg-deepGreen/45 p-4 backdrop-blur-sm"
+      className="absolute inset-0 z-30 flex items-center justify-center bg-black/35 p-4"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]"
+        className="animate-productModalIn flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1f2a26]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-label="Order products"
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
-          <h3 className="font-display text-xl font-bold text-deepGreen [.admin-dark_&]:text-[#e8f0ed]">
-            {loading ? 'Customer Activity' : `Customer Activity — ${name}`}
-          </h3>
+        <div className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-5 py-3.5 [.admin-dark_&]:border-white/10">
+          <div>
+            <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Order products</p>
+            <p className="font-mono text-[0.95rem] font-bold text-deepGreen [.admin-dark_&]:text-emerald-400">{order.id}</p>
+            {!loading && items.length > 0 && (
+              <p className="mt-0.5 text-[0.7rem] text-gray-400">
+                {items.length} item{items.length === 1 ? '' : 's'}
+              </p>
+            )}
+          </div>
           <button
             type="button"
-            className="text-2xl text-gray-500 hover:text-gray-800 [.admin-dark_&]:text-gray-400 [.admin-dark_&]:hover:text-gray-200"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 [.admin-dark_&]:hover:bg-white/10"
             onClick={onClose}
             aria-label="Close"
           >
@@ -278,161 +670,336 @@ function ViewUserModal({ open, loading, error, data, onClose }) {
           </button>
         </div>
 
-        <div className="p-5">
-          {loading && (
-            <div className="py-8 text-center text-gray-500 [.admin-dark_&]:text-gray-400">
-              <i className="fa-solid fa-spinner fa-spin me-2" />
-              Loading customer activity…
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 [scrollbar-width:thin]">
+          {loading ? (
+            <div className="animate-pulse space-y-3">
+              <div className="h-14 rounded-[10px] bg-gray-100 [.admin-dark_&]:bg-white/5" />
+              <div className="h-14 rounded-[10px] bg-gray-100 [.admin-dark_&]:bg-white/5" />
+              <div className="h-14 rounded-[10px] bg-gray-100 [.admin-dark_&]:bg-white/5" />
             </div>
-          )}
-
-          {!loading && error && (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/8 px-4 py-3 text-[0.88rem] font-semibold text-red-700 [.admin-dark_&]:text-red-300">
-              {error}
-            </div>
-          )}
-
-          {!loading && !error && user && (
-            <>
-              <div className="mb-4 grid gap-3 md:grid-cols-2">
-                <div className="h-full rounded-xl border border-gray-100 p-4 [.admin-dark_&]:border-white/10">
-                  <div className="mb-2 text-[0.72rem] font-extrabold uppercase tracking-wide text-gray-500">
-                    Profile
-                  </div>
-                  <div className="mb-1 font-bold text-gray-900 [.admin-dark_&]:text-gray-100">{name}</div>
-                  <div className="text-[0.84rem] text-gray-600 [.admin-dark_&]:text-gray-400">{user.email}</div>
-                  <div className="text-[0.84rem] text-gray-600 [.admin-dark_&]:text-gray-400">
-                    {user.phone || '—'}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="inline-block rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-[0.78rem] font-bold text-gray-700 [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-white/5 [.admin-dark_&]:text-gray-300">
-                      {ROLE_LABELS[user.role] || user.role}
-                    </span>
-                    <StatusBadge active={isActive} />
-                  </div>
-                </div>
-
-                <div className="h-full rounded-xl border border-gray-100 p-4 [.admin-dark_&]:border-white/10">
-                  <div className="mb-2 text-[0.72rem] font-extrabold uppercase tracking-wide text-gray-500">
-                    Stats
-                  </div>
-                  <div className="mb-2 flex justify-between text-[0.88rem]">
-                    <span className="text-gray-600 [.admin-dark_&]:text-gray-400">Total Orders</span>
-                    <span className="font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
-                      {stats.totalOrders || 0}
-                    </span>
-                  </div>
-                  <div className="mb-2 flex justify-between text-[0.88rem]">
-                    <span className="text-gray-600 [.admin-dark_&]:text-gray-400">Total Spent</span>
-                    <span className="font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
-                      ${Number(stats.totalSpent || 0).toFixed(3)}
-                    </span>
-                  </div>
-                  <div className="mb-2 flex justify-between text-[0.88rem]">
-                    <span className="text-gray-600 [.admin-dark_&]:text-gray-400">Last Login</span>
-                    <span className="font-semibold text-gray-800 [.admin-dark_&]:text-gray-200">
-                      {formatLastLogin(user.lastLoginAt)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-[0.88rem]">
-                    <span className="text-gray-600 [.admin-dark_&]:text-gray-400">Joined</span>
-                    <span className="font-semibold text-gray-800 [.admin-dark_&]:text-gray-200">
-                      {user.joinedDate || '—'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <h4 className="mb-3 text-[0.95rem] font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
-                  <i className="fa-solid fa-clock-rotate-left me-2 text-deepGreen" />
-                  Recent Activity
-                </h4>
-                {activities.length === 0 ? (
-                  <p className="mb-0 text-[0.88rem] text-gray-500 [.admin-dark_&]:text-gray-400">
-                    No activity recorded yet for this customer.
-                  </p>
-                ) : (
-                  <div className="space-y-0">
-                    {activities.map((item, idx) => (
-                      <div
-                        key={item.id || `${item.action}-${idx}`}
-                        className="flex gap-3 border-b border-gray-100 py-3 last:border-b-0 [.admin-dark_&]:border-white/10"
-                      >
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-deepGreen/10 text-deepGreen">
-                          <i className={`fa-solid ${formatActivityIcon(item.action)}`} />
-                        </div>
-                        <div>
-                          <div className="text-[0.88rem] font-semibold text-gray-900 [.admin-dark_&]:text-gray-100">
-                            {formatActivityLabel(item.action)}
-                          </div>
-                          {item.description && (
-                            <div className="text-[0.8rem] text-gray-600 [.admin-dark_&]:text-gray-400">
-                              {item.description}
-                            </div>
-                          )}
-                          <div className="text-[0.74rem] text-gray-500 [.admin-dark_&]:text-gray-500">
-                            {formatLastLogin(item.createdAt)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <h4 className="mb-3 text-[0.95rem] font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
-                  <i className="fa-solid fa-receipt me-2 text-deepGreen" />
-                  Recent Orders
-                </h4>
-                {recentOrders.length === 0 ? (
-                  <p className="mb-0 text-[0.88rem] text-gray-500 [.admin-dark_&]:text-gray-400">
-                    No orders placed yet.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse text-[0.84rem]">
-                      <thead>
-                        <tr className="border-b border-gray-100 text-left text-[0.72rem] font-extrabold uppercase tracking-wide text-gray-500 [.admin-dark_&]:border-white/10">
-                          <th className="px-3 py-2">Order</th>
-                          <th className="px-3 py-2">Product</th>
-                          <th className="px-3 py-2">Amount</th>
-                          <th className="px-3 py-2">Status</th>
+          ) : items.length > 0 ? (
+            <div className="overflow-hidden rounded-[12px] border border-black/[0.07] [.admin-dark_&]:border-white/10">
+              <div className="max-h-[min(58vh,480px)] overflow-y-auto [scrollbar-width:thin]">
+                <table className="w-full border-collapse text-left">
+                  <thead className="sticky top-0 z-[1] bg-gray-50 [.admin-dark_&]:bg-[#141f1b]">
+                    <tr className="text-[0.65rem] font-extrabold uppercase tracking-wide text-gray-400">
+                      <th className="w-[72px] px-3 py-2.5">Product</th>
+                      <th className="px-3 py-2.5">Name</th>
+                      <th className="w-[72px] px-3 py-2.5 text-center">Qty</th>
+                      <th className="w-[100px] px-3 py-2.5 text-right">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, idx) => {
+                      const qty = Math.max(1, Number(item.quantity) || 1);
+                      const unit = Number(item.price || 0);
+                      const lineTotal = unit * qty;
+                      return (
+                        <tr
+                          key={`${item.title}-${idx}`}
+                          className="border-t border-black/[0.05] [.admin-dark_&]:border-white/[0.07]"
+                        >
+                          <td className="px-3 py-2.5">
+                            <img
+                              src={productImage(item.image || 'product-images/hero1.jpeg')}
+                              alt=""
+                              className="h-12 w-12 rounded-[10px] border border-black/5 bg-gray-50 object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = productImage('product-images/hero1.jpeg');
+                              }}
+                            />
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <p className="text-[0.88rem] font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
+                              {item.title}
+                            </p>
+                            {unit > 0 && (
+                              <p className="mt-0.5 text-[0.72rem] text-gray-400">{formatAdminPrice(unit)} each</p>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-center text-[0.88rem] font-semibold text-gray-700 [.admin-dark_&]:text-gray-200">
+                            {qty}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-[0.9rem] font-bold text-deepGreen [.admin-dark_&]:text-emerald-300">
+                            {formatAdminPrice(lineTotal)}
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {recentOrders.map((order) => (
-                          <tr
-                            key={order.id}
-                            className="border-b border-gray-100 [.admin-dark_&]:border-white/10"
-                          >
-                            <td className="px-3 py-2 font-semibold text-gray-900 [.admin-dark_&]:text-gray-100">
-                              {order.id}
-                            </td>
-                            <td className="px-3 py-2 text-gray-700 [.admin-dark_&]:text-gray-300">
-                              {order.product || '—'}
-                            </td>
-                            <td className="px-3 py-2 font-medium text-gray-800 [.admin-dark_&]:text-gray-200">
-                              ${Number(order.amount || 0).toFixed(3)}
-                            </td>
-                            <td className="px-3 py-2">
-                              <span className="inline-block rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-[0.78rem] font-bold text-gray-700 [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-white/5 [.admin-dark_&]:text-gray-300">
-                                {order.status || '—'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </>
+            </div>
+          ) : (
+            <div className="rounded-[10px] border border-dashed border-black/10 p-5 text-center">
+              <p className="text-[0.86rem] font-bold text-gray-900">{source.product || 'No products'}</p>
+              <p className="mt-1 text-[0.78rem] text-gray-500">Could not load product lines for this order.</p>
+            </div>
           )}
+
+          <div className="mt-4 flex items-center justify-between border-t border-black/[0.06] pt-3.5 [.admin-dark_&]:border-white/10">
+            <span className="text-[0.78rem] font-bold uppercase tracking-wide text-gray-400">Subtotal</span>
+            <span className="text-[1.05rem] font-bold text-deepGreen [.admin-dark_&]:text-emerald-300">
+              {formatAdminPrice(subtotal)}
+            </span>
+          </div>
+
+          <div className="mt-4 border-t border-black/[0.06] pt-4 [.admin-dark_&]:border-white/10">
+            <MiniDeliveryProgress currentStep={step} paymentStatus={payment} />
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function ViewUserModal({
+  open,
+  loading,
+  error,
+  data,
+  listCustomer,
+  acting,
+  onClose,
+  onEdit,
+  onToggleActive,
+  onDelete,
+}) {
+  const [selectedOrder, setSelectedOrder] = useState(null);
+
+  useEffect(() => {
+    if (!open) setSelectedOrder(null);
+  }, [open]);
+
+  const user = data?.user || listCustomer;
+  const stats = data?.stats || {
+    totalOrders: listCustomer?.orderCount || 0,
+    totalSpent: listCustomer?.totalSpent || 0,
+  };
+  const activities = data?.activities || [];
+  const recentOrders = data?.recentOrders || [];
+  const name = user ? fullName(user) : '';
+  const isActive = user?.isActive !== false;
+  const spentLabel = formatAdminPrice(stats.totalSpent || 0);
+
+  const handleStatusSelect = (e) => {
+    const nextActive = e.target.value === 'true';
+    if (nextActive === isActive) return;
+    onToggleActive?.(user);
+  };
+
+  return (
+    <ModalShell open={open} onClose={onClose} maxWidth="max-w-xl" labelledBy="userDetailTitle">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6 [scrollbar-width:thin]">
+          <div className="pr-10">
+            <div className="flex items-center gap-3">
+              {user && <UserAvatar user={user} size={44} />}
+              <div className="min-w-0 flex-1">
+                <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Customer</p>
+                <h3
+                  id="userDetailTitle"
+                  className="truncate text-[1.05rem] font-bold text-gray-900 [.admin-dark_&]:text-gray-100"
+                >
+                  {loading && !user ? 'Loading…' : name || 'Customer'}
+                </h3>
+                {user?.email && (
+                  <p className="truncate text-[0.78rem] text-gray-500 [.admin-dark_&]:text-gray-400">{user.email}</p>
+                )}
+              </div>
+            </div>
+
+            {user && (
+              <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                <MetaField label="Phone">
+                  <span>{user.phone || '—'}</span>
+                </MetaField>
+                <MetaField label="Role">
+                  <span>{ROLE_LABELS[user.role] || user.role || 'Customer'}</span>
+                </MetaField>
+                <MetaField label="Account status">
+                  <select
+                    className={`${ADM_SELECT} !py-1.5 text-[0.82rem]`}
+                    value={isActive ? 'true' : 'false'}
+                    disabled={acting}
+                    onChange={handleStatusSelect}
+                    aria-label="Account status"
+                  >
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
+                </MetaField>
+                <MetaField label="Orders">
+                  <span>{stats.totalOrders || 0}</span>
+                </MetaField>
+                <MetaField label="Total spent">
+                  <span className="font-bold text-deepGreen [.admin-dark_&]:text-emerald-300">{spentLabel}</span>
+                </MetaField>
+                <MetaField label="Joined">
+                  <span>{user.joinedDate || '—'}</span>
+                </MetaField>
+                <MetaField label="Last login">
+                  <span>{formatLastLogin(user.lastLoginAt)}</span>
+                </MetaField>
+                {user.id && (
+                  <MetaField label="User ID">
+                    <span className="font-mono text-[0.8rem] text-deepGreen">{user.id}</span>
+                  </MetaField>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-5 border-t border-black/[0.06] pt-5 [.admin-dark_&]:border-white/10">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Recent activity</p>
+              {!loading && !error && activities.length > 0 && (
+                <span className="text-[0.68rem] font-semibold text-gray-400">{activities.length} events</span>
+              )}
+            </div>
+
+            {loading && (
+              <div className="py-6 text-center text-[0.84rem] text-gray-400">
+                <i className="fa-solid fa-spinner fa-spin me-2" />
+                Loading…
+              </div>
+            )}
+
+            {!loading && error && (
+              <p className="rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[0.78rem] font-medium text-red-700 [.admin-dark_&]:border-red-500/25 [.admin-dark_&]:bg-red-500/10 [.admin-dark_&]:text-red-300">
+                {error}
+              </p>
+            )}
+
+            {!loading && !error && activities.length === 0 && (
+              <div className="rounded-[12px] border border-dashed border-black/[0.08] px-4 py-5 text-center [.admin-dark_&]:border-white/10">
+                <div className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-deepGreen/[0.06] text-deepGreen">
+                  <i className="fa-solid fa-clock-rotate-left text-[0.8rem]" />
+                </div>
+                <p className="text-[0.84rem] font-semibold text-gray-700 [.admin-dark_&]:text-gray-200">No activity yet</p>
+                <p className="mt-0.5 text-[0.74rem] text-gray-400">Logins and account changes will show here.</p>
+              </div>
+            )}
+
+            {!loading && !error && activities.length > 0 && (
+              <div className="max-h-[168px] overflow-y-auto rounded-[12px] border border-black/[0.06] [scrollbar-width:thin] [.admin-dark_&]:border-white/10">
+                <ul className="relative ms-3 border-l border-deepGreen/15 py-1 pe-2 ps-4 [.admin-dark_&]:border-emerald-500/20">
+                  {activities.slice(0, 12).map((item, idx) => (
+                    <li key={item.id || `${item.action}-${idx}`} className="relative py-2.5">
+                      <span className="absolute -left-[21px] top-3.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-deepGreen [.admin-dark_&]:border-[#1a2421]" />
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-deepGreen/[0.08] text-[0.62rem] text-deepGreen">
+                              <i className={`fa-solid ${formatActivityIcon(item.action)}`} />
+                            </span>
+                            <span className="text-[0.82rem] font-semibold text-gray-900 [.admin-dark_&]:text-gray-100">
+                              {formatActivityLabel(item.action)}
+                            </span>
+                          </div>
+                          {item.description && (
+                            <p className="mt-0.5 truncate text-[0.74rem] text-gray-500">{item.description}</p>
+                          )}
+                        </div>
+                        <span className="shrink-0 text-[0.68rem] text-gray-400">{formatLastLogin(item.createdAt)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {!loading && !error && (
+            <div className="mt-5 border-t border-black/[0.06] pt-5 [.admin-dark_&]:border-white/10">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Recent orders</p>
+                {recentOrders.length > 0 && (
+                  <span className="text-[0.68rem] font-semibold text-gray-400">{recentOrders.length} shown</span>
+                )}
+              </div>
+
+              {recentOrders.length === 0 ? (
+                <p className="text-[0.84rem] text-gray-400">No orders placed yet.</p>
+              ) : (
+                <div className="max-h-[220px] overflow-y-auto overflow-x-hidden rounded-[12px] border border-black/[0.06] [scrollbar-width:thin] [.admin-dark_&]:border-white/10">
+                  <table className="w-full border-collapse text-left text-[0.8rem]">
+                    <thead className="sticky top-0 z-[1] bg-gray-50 [.admin-dark_&]:bg-[#141f1b]">
+                      <tr className="text-[0.62rem] font-extrabold uppercase tracking-wide text-gray-400">
+                        <th className="px-3 py-2">Order</th>
+                        <th className="px-3 py-2">Progress</th>
+                        <th className="px-3 py-2">Date</th>
+                        <th className="px-3 py-2 text-right">Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentOrders.map((order) => {
+                        const stage = deliveryStageLabel(order);
+                        const amount = parseAmount(order.amount);
+                        const dateLabel =
+                          order.date ||
+                          (order.createdAt
+                            ? new Date(order.createdAt).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              })
+                            : '—');
+                        return (
+                          <tr
+                            key={order.id}
+                            onClick={() => setSelectedOrder(order)}
+                            className="cursor-pointer border-t border-black/[0.04] transition hover:bg-deepGreen/[0.03] [.admin-dark_&]:border-white/[0.06]"
+                          >
+                            <td className="px-3 py-2.5 font-mono text-[0.78rem] font-bold text-deepGreen">
+                              {order.id}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <span
+                                className={`inline-block rounded-md px-2 py-0.5 text-[0.66rem] font-extrabold ${deliveryStageBadgeClass(stage)}`}
+                              >
+                                {stage}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 text-gray-500">{dateLabel}</td>
+                            <td className="px-3 py-2.5 text-right font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
+                              {formatAdminPrice(amount)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {recentOrders.length > 4 && (
+                <p className="mt-1.5 text-[0.7rem] text-gray-400">Showing 4 rows — scroll for more. Click a row for products.</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {user && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.06] bg-gray-50/80 px-5 py-3.5 [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#141f1b]">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[0.8rem] font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50 [.admin-dark_&]:hover:bg-red-500/10"
+              disabled={acting}
+              onClick={() => onDelete?.(user)}
+            >
+              <i className="fa-regular fa-trash-can text-[0.75rem]" />
+              Delete
+            </button>
+            <button type="button" className={BTN_PRIMARY} disabled={acting} onClick={() => onEdit?.(user)}>
+              <i className="fa-regular fa-pen-to-square" />
+              Edit
+            </button>
+          </div>
+        )}
+
+        <UserOrderItemsModal open={Boolean(selectedOrder)} order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+      </div>
+    </ModalShell>
   );
 }
 
@@ -441,20 +1008,21 @@ function ViewUserModal({ open, loading, error, data, onClose }) {
 export default function AdminUsersTab({ headerSearch = '' }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [localSearch, setLocalSearch] = useState('');
   const [actingId, setActingId] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterRole, setFilterRole] = useState('all');
 
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
-  const [editTitle, setEditTitle] = useState('Edit User Account');
   const [saving, setSaving] = useState(false);
 
   const [viewOpen, setViewOpen] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
   const [viewError, setViewError] = useState('');
   const [viewData, setViewData] = useState(null);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
 
-  const searchQuery = (headerSearch || localSearch).toLowerCase().trim();
+  const searchQuery = headerSearch.toLowerCase().trim();
 
   const loadUsers = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
@@ -464,7 +1032,7 @@ export default function AdminUsersTab({ headerSearch = '' }) {
         { headers: authHeaders(false) },
         ADMIN_FETCH_TIMEOUT
       );
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data.success) {
         setUsers(data.users || []);
         try {
@@ -472,11 +1040,17 @@ export default function AdminUsersTab({ headerSearch = '' }) {
         } catch {
           /* ignore quota errors */
         }
-      } else {
+      } else if (!quiet) {
         showTopFloatNotification(data.message || 'Failed to load users.', 'danger');
       }
-    } catch {
-      showTopFloatNotification('Could not connect to the server. Try again.', 'danger');
+    } catch (err) {
+      if (!quiet) {
+        const timedOut = err?.name === 'AbortError';
+        showTopFloatNotification(
+          timedOut ? 'Loading users timed out. Try again.' : 'Could not connect to the server. Try again.',
+          'danger'
+        );
+      }
     } finally {
       if (!quiet) setLoading(false);
     }
@@ -492,18 +1066,58 @@ export default function AdminUsersTab({ headerSearch = '' }) {
     return () => window.removeEventListener('admin-users-invalidate', onInvalidate);
   }, [loadUsers]);
 
-  const filtered = useMemo(() => {
-    const customersOnly = users.filter((u) => u.email?.toLowerCase() !== 'admin@gmail.com');
+  const customersOnly = useMemo(
+    () => users.filter((u) => u.email?.toLowerCase() !== 'admin@gmail.com'),
+    [users]
+  );
 
+  const userStats = useMemo(() => {
+    let active = 0;
+    let inactive = 0;
+    let drivers = 0;
+    customersOnly.forEach((u) => {
+      if (u.isActive === false) inactive += 1;
+      else active += 1;
+      if (u.role === 'delivery') drivers += 1;
+    });
+    return {
+      total: customersOnly.length,
+      active,
+      inactive,
+      drivers,
+    };
+  }, [customersOnly]);
+
+  const statusCounts = useMemo(
+    () => ({
+      total: userStats.total,
+      active: userStats.active,
+      inactive: userStats.inactive,
+    }),
+    [userStats]
+  );
+
+  const filtered = useMemo(() => {
     const matched = customersOnly.filter((u) => {
-      if (!searchQuery) return true;
+      const isActive = u.isActive !== false;
       const name = fullName(u).toLowerCase();
-      return (
+
+      const matchesSearch =
+        !searchQuery ||
         name.includes(searchQuery) ||
         u.email?.toLowerCase().includes(searchQuery) ||
         (u.phone && u.phone.includes(searchQuery)) ||
-        String(u.id).includes(searchQuery)
-      );
+        String(u.id).includes(searchQuery);
+
+      const matchesStatus =
+        filterStatus === 'all' ||
+        (filterStatus === 'active' && isActive) ||
+        (filterStatus === 'inactive' && !isActive) ||
+        (filterStatus === 'drivers' && u.role === 'delivery');
+
+      const matchesRole = filterRole === 'all' || u.role === filterRole;
+
+      return matchesSearch && matchesStatus && matchesRole;
     });
 
     return [...matched].sort((a, b) => {
@@ -511,9 +1125,21 @@ export default function AdminUsersTab({ headerSearch = '' }) {
       const nameB = fullName(b).toLowerCase();
       return nameA.localeCompare(nameB);
     });
-  }, [users, searchQuery]);
+  }, [customersOnly, searchQuery, filterStatus, filterRole]);
 
-  const openView = async (userId) => {
+  const activeStatKey =
+    filterStatus === 'all'
+      ? 'total'
+      : filterStatus === 'active'
+        ? 'active'
+        : filterStatus === 'inactive'
+          ? 'inactive'
+          : filterStatus === 'drivers'
+            ? 'drivers'
+            : null;
+
+  const openView = async (customer) => {
+    setSelectedCustomer(customer);
     setViewOpen(true);
     setViewLoading(true);
     setViewError('');
@@ -521,13 +1147,14 @@ export default function AdminUsersTab({ headerSearch = '' }) {
 
     try {
       const res = await fetchWithTimeout(
-        apiUrl(`/api/auth/users/${userId}/details`),
+        apiUrl(`/api/auth/users/${customer.id}/details`),
         { headers: authHeaders(false) },
         ADMIN_FETCH_TIMEOUT
       );
       const data = await res.json();
       if (data.success) {
         setViewData(data);
+        if (data.user) setSelectedCustomer((prev) => ({ ...prev, ...data.user }));
       } else {
         setViewError(data.message || 'Failed to load user details.');
       }
@@ -536,6 +1163,13 @@ export default function AdminUsersTab({ headerSearch = '' }) {
     } finally {
       setViewLoading(false);
     }
+  };
+
+  const closeView = () => {
+    setViewOpen(false);
+    setViewData(null);
+    setViewError('');
+    setSelectedCustomer(null);
   };
 
   const openEdit = (customer) => {
@@ -548,7 +1182,6 @@ export default function AdminUsersTab({ headerSearch = '' }) {
       role: customer.role || 'user',
       isActive: customer.isActive !== false,
     });
-    setEditTitle(`Edit User: ${fullName(customer)}`);
     setEditOpen(true);
   };
 
@@ -581,6 +1214,12 @@ export default function AdminUsersTab({ headerSearch = '' }) {
         setEditOpen(false);
         loadUsers({ quiet: true });
         window.dispatchEvent(new CustomEvent('admin-users-invalidate'));
+        if (viewOpen && selectedCustomer?.id === editForm.id) {
+          setSelectedCustomer((prev) => (prev ? { ...prev, ...payload } : prev));
+          setViewData((prev) =>
+            prev?.user ? { ...prev, user: { ...prev.user, ...payload } } : prev
+          );
+        }
       } else {
         showTopFloatNotification(data.message || 'Request failed.', 'danger');
       }
@@ -610,6 +1249,12 @@ export default function AdminUsersTab({ headerSearch = '' }) {
         );
         loadUsers({ quiet: true });
         window.dispatchEvent(new CustomEvent('admin-users-invalidate'));
+        setSelectedCustomer((prev) => (prev?.id === customer.id ? { ...prev, isActive: nextActive } : prev));
+        setViewData((prev) =>
+          prev?.user?.id === customer.id
+            ? { ...prev, user: { ...prev.user, isActive: nextActive } }
+            : prev
+        );
       } else {
         showTopFloatNotification(data.message || 'Request failed.', 'danger');
       }
@@ -634,6 +1279,8 @@ export default function AdminUsersTab({ headerSearch = '' }) {
       const data = await res.json();
       if (data.success) {
         showTopFloatNotification('Customer account deleted successfully.');
+        closeView();
+        setEditOpen(false);
         loadUsers({ quiet: true });
         window.dispatchEvent(new CustomEvent('admin-users-invalidate'));
       } else {
@@ -647,19 +1294,64 @@ export default function AdminUsersTab({ headerSearch = '' }) {
   };
 
   return (
-    <div className="animate-cardRise">
-      <div className={ADM_TABLE_CARD}>
-        <div className="mb-4">
-          <AppSearchField
-            value={localSearch || headerSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-            placeholder="Search customer accounts..."
-            className="max-w-[320px]"
-          />
-        </div>
+    <div className="animate-cardRise space-y-2.5">
+      <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+        <UsersStatCard
+          label="Total Customers"
+          value={loading ? '…' : userStats.total.toLocaleString()}
+          icon="fa-users"
+          iconWrapClass="bg-blue-500/10 text-blue-600"
+          active={activeStatKey === 'total'}
+          onClick={() => {
+            setFilterStatus('all');
+            setFilterRole('all');
+          }}
+        />
+        <UsersStatCard
+          label="Active"
+          value={loading ? '…' : userStats.active.toLocaleString()}
+          icon="fa-user-check"
+          iconWrapClass="bg-emerald-500/10 text-emerald-600"
+          active={activeStatKey === 'active'}
+          onClick={() => setFilterStatus('active')}
+        />
+        <UsersStatCard
+          label="Inactive"
+          value={loading ? '…' : userStats.inactive.toLocaleString()}
+          icon="fa-user-slash"
+          iconWrapClass="bg-amber-500/10 text-amber-600"
+          active={activeStatKey === 'inactive'}
+          onClick={() => setFilterStatus('inactive')}
+        />
+        <UsersStatCard
+          label="Drivers"
+          value={loading ? '…' : userStats.drivers.toLocaleString()}
+          icon="fa-motorcycle"
+          iconWrapClass="bg-violet-500/10 text-violet-600"
+          active={activeStatKey === 'drivers'}
+          onClick={() => {
+            setFilterStatus('drivers');
+            setFilterRole('all');
+          }}
+        />
+      </div>
 
-        <div className="max-h-[480px] overflow-x-auto overflow-y-auto rounded-xl border border-black/5 [.admin-dark_&]:border-white/10">
-          <table className={ADM_TABLE}>
+      <UsersFilterToolbar
+        loading={loading}
+        filterStatus={filterStatus === 'drivers' ? 'all' : filterStatus}
+        filterRole={filterRole}
+        statusCounts={statusCounts}
+        onStatusChange={(id) => setFilterStatus(id)}
+        onRoleChange={setFilterRole}
+        onExport={() => exportUsersToCSV(filtered)}
+      />
+
+      <div className={`${ADM_TABLE_CARD} !p-0 overflow-hidden`}>
+        <div
+          className="overflow-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-deepGreen/15 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar]:w-1.5"
+          style={{ maxHeight: USERS_TABLE_MAX_HEIGHT }}
+        >
+          <table className={`${ADM_TABLE} [&_tbody_tr]:cursor-pointer [&_tbody_tr]:transition-colors`}>
             <thead className="sticky top-0 z-[5] bg-white [.admin-dark_&]:bg-[#1a2421]">
               <tr>
                 <th>User</th>
@@ -669,13 +1361,12 @@ export default function AdminUsersTab({ headerSearch = '' }) {
                 <th>Orders</th>
                 <th>Last Login</th>
                 <th>Joined</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-gray-400">
+                  <td colSpan={7} className="cursor-default py-8 text-center text-gray-400">
                     <i className="fa-solid fa-spinner fa-spin me-2" />
                     Loading customers…
                   </td>
@@ -684,8 +1375,8 @@ export default function AdminUsersTab({ headerSearch = '' }) {
 
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-gray-400">
-                    No customer accounts registered yet.
+                  <td colSpan={7} className="cursor-default py-8 text-center text-gray-400">
+                    No customer accounts match these filters.
                   </td>
                 </tr>
               )}
@@ -694,10 +1385,13 @@ export default function AdminUsersTab({ headerSearch = '' }) {
                 filtered.map((customer) => {
                   const name = fullName(customer);
                   const isActive = customer.isActive !== false;
-                  const busy = actingId === customer.id;
 
                   return (
-                    <tr key={customer.id}>
+                    <tr
+                      key={customer.id}
+                      onClick={() => openView(customer)}
+                      className="hover:bg-deepGreen/[0.03]"
+                    >
                       <td>
                         <div className="flex items-center gap-2">
                           <UserAvatar user={customer} />
@@ -729,50 +1423,6 @@ export default function AdminUsersTab({ headerSearch = '' }) {
                       <td className="text-[0.84rem] text-gray-600 [.admin-dark_&]:text-gray-400">
                         {customer.joinedDate || 'May 20, 2026'}
                       </td>
-                      <td>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            className="border-0 bg-transparent p-0 text-[0.95rem] text-deepGreen hover:text-teal disabled:opacity-50"
-                            title="View Activity"
-                            disabled={busy}
-                            onClick={() => openView(customer.id)}
-                          >
-                            <i className="fa-regular fa-eye" />
-                          </button>
-                          <button
-                            type="button"
-                            className="border-0 bg-transparent p-0 text-[0.95rem] text-gray-600 hover:text-gray-800 disabled:opacity-50 [.admin-dark_&]:text-gray-400 [.admin-dark_&]:hover:text-gray-200"
-                            title="Edit Account"
-                            disabled={busy}
-                            onClick={() => openEdit(customer)}
-                          >
-                            <i className="fa-regular fa-pen-to-square" />
-                          </button>
-                          <button
-                            type="button"
-                            className={`border-0 bg-transparent p-0 text-[0.95rem] disabled:opacity-50 ${
-                              isActive
-                                ? 'text-amber-600 hover:text-amber-700'
-                                : 'text-emerald-600 hover:text-emerald-700'
-                            }`}
-                            title={isActive ? 'Deactivate' : 'Activate'}
-                            disabled={busy}
-                            onClick={() => toggleActive(customer)}
-                          >
-                            <i className={`fa-solid ${isActive ? 'fa-user-slash' : 'fa-user-check'}`} />
-                          </button>
-                          <button
-                            type="button"
-                            className="border-0 bg-transparent p-0 text-[0.95rem] text-red-600 hover:text-red-700 disabled:opacity-50"
-                            title="Delete Account"
-                            disabled={busy}
-                            onClick={() => handleDelete(customer)}
-                          >
-                            <i className="fa-regular fa-trash-can" />
-                          </button>
-                        </div>
-                      </td>
                     </tr>
                   );
                 })}
@@ -783,7 +1433,6 @@ export default function AdminUsersTab({ headerSearch = '' }) {
 
       <EditUserModal
         open={editOpen}
-        title={editTitle}
         form={editForm}
         saving={saving}
         onChange={handleEditChange}
@@ -796,7 +1445,12 @@ export default function AdminUsersTab({ headerSearch = '' }) {
         loading={viewLoading}
         error={viewError}
         data={viewData}
-        onClose={() => setViewOpen(false)}
+        listCustomer={selectedCustomer}
+        acting={Boolean(actingId && selectedCustomer && actingId === selectedCustomer.id)}
+        onClose={closeView}
+        onEdit={openEdit}
+        onToggleActive={toggleActive}
+        onDelete={handleDelete}
       />
     </div>
   );

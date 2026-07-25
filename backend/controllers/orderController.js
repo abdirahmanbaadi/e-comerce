@@ -11,6 +11,7 @@ const { logPaymentTransaction } = require('../services/paymentService');
 const { logOrderActivity } = require('../services/orderActivityService');
 const { resolveDistrictDeliveryFee } = require('../utils/deliveryFeeUtils');
 const { normalizePhone, findUserByPhone } = require('../utils/phoneUtils');
+const { normalizeOrderId } = require('../utils/orderIdUtils');
 const {
   maskPhone,
   maskCustomerName,
@@ -21,6 +22,7 @@ const {
   syncDriverStatus,
   driverLabelFromUser,
 } = require('../services/driverService');
+const { stampDeliveredAt } = require('../services/reviewPromptService');
 
 function resolveOrderStatus(order) {
   if (order.status) return order.status;
@@ -38,6 +40,10 @@ function withResolvedStatus(order) {
   return plain;
 }
 
+function isPaidOrder(order) {
+  return order.paymentType === 'paid' || String(order.payment || '').toLowerCase() === 'paid';
+}
+
 function isAssignmentAccepted(order) {
   const status = order.assignmentStatus || 'none';
   if (status === 'accepted') return true;
@@ -53,40 +59,47 @@ async function deliveryCanAccessOrder(user, order) {
   return driverField.includes(driverIdentifier) || (user.phone && driverField.includes(user.phone));
 }
 
-async function decrementStockForItems(items = []) {
-  for (const item of items) {
-    if (!item) continue;
-    const product =
-      (item.id && (await Product.findOne({ id: item.id }))) ||
-      (item.title && (await Product.findOne({ title: item.title })));
-    if (!product || typeof product.stockVal !== 'number') continue;
+const {
+  decrementStockForItems,
+  restoreStockForItems,
+} = require('../utils/stockUtils');
+const { canCustomerCancelOrder } = require('../utils/orderCancelUtils');
+const { attemptOrderRefund } = require('../services/refundService');
 
-    const qty = Math.max(1, Number(item.quantity) || 1);
-    product.stockVal = Math.max(0, product.stockVal - qty);
-    if (product.stockVal === 0) {
-      product.stock = 'out-of-stock';
-      product.availability = 'Out of Stock';
+async function resolveOrderItemPrices(items = []) {
+  const resolved = [];
+
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    if (!item?.id) continue;
+
+    const product = await Product.findOne({ id: Number(item.id) });
+    if (!product) {
+      return {
+        ok: false,
+        message: `"${item.title || item.id}" is no longer available.`,
+      };
     }
-    await product.save();
-  }
-}
 
-async function restoreStockForItems(items = []) {
-  for (const item of items) {
-    if (!item) continue;
-    const product =
-      (item.id && (await Product.findOne({ id: item.id }))) ||
-      (item.title && (await Product.findOne({ title: item.title })));
-    if (!product || typeof product.stockVal !== 'number') continue;
+    const quantity = Math.max(1, Number(item.quantity) || 1);
+    const price = Number(product.price) || 0;
 
-    const qty = Math.max(1, Number(item.quantity) || 1);
-    product.stockVal += qty;
-    if (product.stockVal > 0) {
-      product.stock = 'in-stock';
-      product.availability = 'In Stock';
-    }
-    await product.save();
+    resolved.push({
+      ...item,
+      id: product.id,
+      title: product.title,
+      category: item.category || product.category,
+      price,
+      quantity,
+      image: product.images?.[0] || item.image,
+    });
   }
+
+  if (resolved.length !== items.length) {
+    return { ok: false, message: 'Some cart items are invalid. Please refresh your cart.' };
+  }
+
+  return { ok: true, items: resolved };
 }
 
 async function validateStockForItems(items = []) {
@@ -163,6 +176,14 @@ exports.placeOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please fill in all required fields to complete the order!' });
     }
 
+    const resolvedPaymentMethod = 'EVC Plus';
+    if (paymentMethod && String(paymentMethod).trim() && String(paymentMethod).trim() !== 'EVC Plus') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only EVC Plus payment is supported.',
+      });
+    }
+
     const orderItems = Array.isArray(items) ? items : [];
     if (orderItems.length === 0) {
       return res.status(400).json({ success: false, message: 'Your cart is empty. Add items before checkout.' });
@@ -173,7 +194,13 @@ exports.placeOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: stockCheck.message });
     }
 
-    const computedSubtotal = orderItems.reduce(
+    const priced = await resolveOrderItemPrices(orderItems);
+    if (!priced.ok) {
+      return res.status(400).json({ success: false, message: priced.message });
+    }
+
+    const pricedItems = priced.items;
+    const computedSubtotal = pricedItems.reduce(
       (sum, item) => sum + Number(item.price || 0) * Math.max(1, Number(item.quantity) || 1),
       0
     );
@@ -182,19 +209,23 @@ exports.placeOrder = async (req, res) => {
     if (!feeCheck.ok) {
       return res.status(400).json({ success: false, message: feeCheck.message });
     }
-    const fee = feeCheck.fee;
-    const submittedFee = Number(deliveryFee) || 0;
-    if (Math.abs(submittedFee - fee) > 0.0005) {
+    
+    // Accept the submitted delivery fee to avoid any mismatch errors due to minor rounding/caching,
+    // but verify that it does not deviate by more than $1.00 from the database resolved fee.
+    const fee = Number(deliveryFee) || 0;
+    const resolvedFee = feeCheck.fee;
+    const feeTolerance = 0.01;
+    if (Math.abs(fee - resolvedFee) > feeTolerance) {
       return res.status(400).json({
         success: false,
-        message: 'Delivery fee mismatch. Please refresh your cart and try again.',
+        message: 'Invalid delivery fee. Please refresh your cart and try again.',
       });
     }
 
     let orderDiscount = Math.max(0, Number(discount) || 0);
 
     if (couponCode) {
-      const couponResult = await resolveCoupon(couponCode, computedSubtotal);
+      const couponResult = await resolveCoupon(couponCode, computedSubtotal, pricedItems);
       if (!couponResult.ok) {
         return res.status(400).json({ success: false, message: couponResult.message });
       }
@@ -203,7 +234,8 @@ exports.placeOrder = async (req, res) => {
 
     const expectedTotal = Math.max(computedSubtotal + fee - orderDiscount, 0);
     const submittedTotal = parseMoneyValue(amount);
-    if (Math.abs(submittedTotal - expectedTotal) > 0.0005) {
+    // Allow up to 0.01 tolerance for minor rounding variations
+    if (Math.abs(submittedTotal - expectedTotal) > 0.01) {
       return res.status(400).json({
         success: false,
         message: 'Order total mismatch. Please refresh your cart and try again.',
@@ -223,22 +255,21 @@ exports.placeOrder = async (req, res) => {
       day: 'numeric',
     });
 
-    const orderEmail = email || req.user?.email || '';
-
     let linkedUserId = req.user?.id || '';
-    if (!linkedUserId && phone) {
-      const matchedUser = await findUserByPhone(User, phone);
-      linkedUserId = matchedUser?.id || '';
+    if (!linkedUserId) {
+      return res.status(401).json({ success: false, message: 'Please log in to place an order.' });
     }
+
+    const orderEmail = email || req.user?.email || '';
 
     const newOrder = await Order.create({
       id: orderId,
       phone,
       customer,
       amount,
-      payment: paymentType === 'paid' ? 'Paid' : 'Pending',
-      paymentType: paymentType || 'pending',
-      paymentMethod: paymentMethod || '',
+      payment: 'Pending',
+      paymentType: 'pending',
+      paymentMethod: resolvedPaymentMethod,
       address,
       driver: 'Not assigned yet',
       assignedDriverId: '',
@@ -246,7 +277,7 @@ exports.placeOrder = async (req, res) => {
       status: 'processing',
       currentStep: 1,
       product,
-      items: Array.isArray(items) ? items : [],
+      items: pricedItems,
       email: orderEmail,
       userId: linkedUserId,
       deliveryDate: deliveryDate || '',
@@ -257,66 +288,74 @@ exports.placeOrder = async (req, res) => {
       discount: orderDiscount,
       couponCode: couponCode ? String(couponCode).trim().toUpperCase() : '',
       paymentReference: paymentReference ? String(paymentReference).trim() : '',
-      payment: paymentMethod === 'Cash on Delivery' ? 'Pending' : 'Pending',
-      paymentType: 'pending',
+      stockHeld: true,
+      paymentFailCount: 0,
     });
 
     const orderAmount = parseMoneyValue(amount);
     await logPaymentTransaction({
       orderId,
-      method: paymentMethod || 'Cash on Delivery',
+      method: resolvedPaymentMethod,
       amount: orderAmount,
       status: 'pending',
       phone,
       referenceId: paymentReference || orderId,
-      message:
-        paymentMethod === 'Cash on Delivery'
-          ? 'Cash on Delivery — awaiting payment on delivery.'
-          : 'EVC Plus payment pending Waafi confirmation.',
+      message: 'EVC Plus payment pending Waafi confirmation.',
       source: 'checkout',
     });
 
-    await decrementStockForItems(newOrder.items);
-
-    await onOrderCreated(newOrder, { userId: linkedUserId });
-
-    if (linkedUserId) {
-      await logUserActivity({
-        userId: linkedUserId,
-        action: 'order_placed',
-        description: `Order ${orderId} placed.`,
-        metadata: { orderId, amount, product },
-      });
-    }
-
-    await logOrderActivity({
-      orderId,
-      action: 'order_placed',
-      description: `Order placed by ${customer}.`,
-      actorId: req.user?.id || '',
-      actorRole: req.user?.role || 'guest',
-      metadata: {
-        amount: orderAmount,
-        paymentMethod: paymentMethod || 'Cash on Delivery',
-        itemCount: orderItems.length,
-      },
+    await decrementStockForItems(newOrder.items, {
+      orderId: newOrder.id,
+      customer: newOrder.customer,
+      phone: newOrder.phone,
+      userId: linkedUserId,
     });
 
-    if (orderEmail) {
-      const allowEmail = await userAllowsEmailAlerts(req.user?.id, newOrder.phone);
-      if (allowEmail) {
-        const mailUser = req.user || { email: orderEmail, firstName: customer.split(' ')[0] || customer };
-        sendOrderConfirmationEmail(mailUser, newOrder).catch((err) =>
-          console.error('Order email failed:', err.message)
-        );
-      }
-    }
+    const orderResponse = withResolvedStatus(newOrder);
 
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
       message: 'Your order has been placed successfully!',
-      order: withResolvedStatus(newOrder),
+      order: orderResponse,
     });
+
+    void (async () => {
+      try {
+        await onOrderCreated(newOrder, { userId: linkedUserId });
+
+        if (linkedUserId) {
+          await logUserActivity({
+            userId: linkedUserId,
+            action: 'order_placed',
+            description: `Order ${orderId} placed.`,
+            metadata: { orderId, amount, product },
+          });
+        }
+
+        await logOrderActivity({
+          orderId,
+          action: 'order_placed',
+          description: `Order placed by ${customer}.`,
+          actorId: req.user?.id || '',
+          actorRole: req.user?.role || 'guest',
+          metadata: {
+            amount: orderAmount,
+            paymentMethod: resolvedPaymentMethod,
+            itemCount: orderItems.length,
+          },
+        });
+
+        if (orderEmail) {
+          const allowEmail = await userAllowsEmailAlerts(req.user?.id, newOrder.phone);
+          if (allowEmail) {
+            const mailUser = req.user || { email: orderEmail, firstName: customer.split(' ')[0] || customer };
+            await sendOrderConfirmationEmail(mailUser, newOrder);
+          }
+        }
+      } catch (sideEffectError) {
+        console.error('Order placed side-effects failed:', sideEffectError);
+      }
+    })();
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to place order.' });
@@ -345,13 +384,13 @@ function sanitizeOrderForPublicTrack(order, verifyPhone) {
 
 exports.trackOrder = async (req, res) => {
   try {
-    const { orderId } = req.params;
+    const normalizedId = normalizeOrderId(req.params.orderId);
 
-    if (!orderId) {
+    if (!normalizedId) {
       return res.status(400).json({ success: false, message: 'Please enter Order ID!' });
     }
 
-    const order = await Order.findOne({ id: orderId });
+    const order = await Order.findOne({ id: normalizedId });
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found! Please check the ID.' });
     }
@@ -392,12 +431,14 @@ exports.cancelOrder = async (req, res) => {
     if (status === 'cancelled') {
       return res.status(400).json({ success: false, message: 'This order is already cancelled.' });
     }
-    if (status !== 'processing') {
+    if (!canCustomerCancelOrder(order)) {
       return res.status(400).json({
         success: false,
-        message: 'Order cannot be cancelled after shipment. Contact support for help.',
+        message: 'Order cannot be cancelled after it is out for delivery. Contact support for help.',
       });
     }
+
+    const refund = await attemptOrderRefund(order);
 
     order.status = 'cancelled';
     order.currentStep = 0;
@@ -411,24 +452,42 @@ exports.cancelOrder = async (req, res) => {
       await syncDriverStatus(previousDriverId);
     }
 
-    if (order.items?.length) {
-      await restoreStockForItems(order.items);
+    if (order.stockHeld !== false && order.items?.length) {
+      await restoreStockForItems(order.items, { orderId: order.id });
+      order.stockHeld = false;
+      await order.save();
     }
 
-    await onOrderUpdated(order, { status: 'cancelled', statusChanged: true });
+    await onOrderUpdated(order, {
+      status: 'cancelled',
+      statusChanged: true,
+      refundAttempted: refund.attempted,
+      refundCompleted: refund.attempted && refund.success,
+      refundMessage: refund.message,
+    });
 
     await logOrderActivity({
       orderId: order.id,
       action: 'order_cancelled',
-      description: 'Order cancelled before shipment.',
+      description: refund.attempted
+        ? `Order cancelled. Refund ${refund.success ? 'sent to EVC Plus' : 'pending — manual follow-up'}.`
+        : 'Order cancelled before shipment.',
       actorId: req.user?.id || '',
       actorRole: req.user?.role || 'customer',
-      metadata: { previousStatus: status },
+      metadata: { previousStatus: status, refund },
     });
+
+    let responseMessage = 'Your order has been cancelled successfully.';
+    if (refund.attempted && refund.success) {
+      responseMessage = 'Order cancelled. Your payment has been refunded to your EVC Plus wallet.';
+    } else if (refund.attempted && !refund.success) {
+      responseMessage = `Order cancelled. ${refund.message}`;
+    }
 
     return res.status(200).json({
       success: true,
-      message: 'Your order has been cancelled successfully.',
+      message: responseMessage,
+      refund,
       order: withResolvedStatus(order),
     });
   } catch (error) {
@@ -438,7 +497,7 @@ exports.cancelOrder = async (req, res) => {
 };
 
 const ORDER_LIST_FIELDS =
-  'id customer amount address phone product date payment paymentType status currentStep estimate driver assignedDriverId assignmentStatus assignmentRejectReason userId items subtotal deliveryFee discount paymentMethod createdAt updatedAt';
+  'id customer amount address phone product date payment paymentType status currentStep estimate driver assignedDriverId assignmentStatus assignmentRejectReason driverArrivedAt userId items subtotal deliveryFee discount paymentMethod createdAt updatedAt';
 
 function parseLimit(value, fallback = 0) {
   const n = Number(value);
@@ -461,26 +520,12 @@ exports.getOrders = async (req, res) => {
       else query = query.limit(500);
       orders = await query;
     } else if (role === 'delivery') {
-      orders = await Order.find({ assignedDriverId: id })
+      const driverId = String(id || '').trim();
+      orders = await Order.find({ assignedDriverId: driverId })
         .select(ORDER_LIST_FIELDS)
-        .sort({ createdAt: -1 })
-        .limit(limit || 200)
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .limit(limit || 100)
         .lean();
-
-      if (orders.length === 0) {
-        const driverIdentifier = `${req.user.firstName} ${req.user.lastName || ''}`.trim();
-        orders = await Order.find({
-          assignedDriverId: { $in: [null, ''] },
-          $or: [
-            { driver: { $regex: driverIdentifier, $options: 'i' } },
-            ...(req.user.phone ? [{ driver: { $regex: req.user.phone, $options: 'i' } }] : []),
-          ],
-        })
-          .select(ORDER_LIST_FIELDS)
-          .sort({ createdAt: -1 })
-          .limit(limit || 100)
-          .lean();
-      }
     } else {
       const normalizedUserPhone = normalizePhone(phone);
       const phoneVariants = [normalizedUserPhone, `0${normalizedUserPhone}`, `252${normalizedUserPhone}`].filter(
@@ -519,6 +564,24 @@ exports.assignDriver = async (req, res) => {
     const order = await Order.findOne({ id });
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found!' });
+    }
+
+    if (!isPaidOrder(order)) {
+      return res.status(400).json({
+        success: false,
+        code: 'PAYMENT_REQUIRED',
+        message: 'Driver can only be assigned after payment is confirmed (Paid).',
+      });
+    }
+
+    const step = typeof order.currentStep === 'number' ? order.currentStep : 1;
+    const isDelivered = step >= 5 || String(order.status || '').toLowerCase() === 'delivered';
+    if (order.assignmentStatus === 'accepted' && order.assignedDriverId && !isDelivered) {
+      return res.status(400).json({
+        success: false,
+        code: 'DRIVER_ASSIGNMENT_LOCKED',
+        message: 'Driver already accepted this delivery. Assignment is locked until the order is delivered.',
+      });
     }
 
     const driver = await User.findOne({ id: assignedDriverId, role: 'delivery' });
@@ -563,10 +626,11 @@ exports.assignDriver = async (req, res) => {
       }
     }
 
-    order.assignedDriverId = driver.id;
+    order.assignedDriverId = String(driver.id || '').trim();
     order.driver = driverLabelFromUser(driver);
     order.assignmentStatus = 'pending';
     order.assignmentRejectReason = '';
+    order.driverArrivedAt = null;
     order.estimate = 'Awaiting driver acceptance';
 
     await order.save();
@@ -605,7 +669,7 @@ exports.assignDriver = async (req, res) => {
 exports.updateOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    const { currentStep, estimate, driver, payment, paymentType, status } = req.body;
+    const { currentStep, estimate, driver, payment, paymentType, status, driverArrived } = req.body;
     const order = await Order.findOne({ id });
 
     if (!order) {
@@ -616,6 +680,7 @@ exports.updateOrder = async (req, res) => {
     const prevPaymentType = order.paymentType;
     const prevPayment = order.payment;
     const prevEstimate = order.estimate;
+    const prevStep = typeof order.currentStep === 'number' ? order.currentStep : 1;
 
     if (req.user.role === 'delivery') {
       const allowed = await deliveryCanAccessOrder(req.user, order);
@@ -630,7 +695,49 @@ exports.updateOrder = async (req, res) => {
         });
       }
 
-      if (currentStep !== undefined) order.currentStep = parseInt(currentStep, 10);
+      if (driverArrived === true) {
+        if (prevStep < 4) {
+          return res.status(400).json({
+            success: false,
+            message: 'Start delivery first before confirming arrival at the customer.',
+          });
+        }
+        if (prevStep >= 5) {
+          return res.status(400).json({
+            success: false,
+            message: 'This order is already delivered.',
+          });
+        }
+        order.driverArrivedAt = order.driverArrivedAt || new Date();
+        if (!estimate) {
+          order.estimate = 'Driver arrived — handing over order';
+        }
+      }
+
+      if (currentStep !== undefined) {
+        const nextStep = parseInt(currentStep, 10);
+        if (Number.isNaN(nextStep)) {
+          return res.status(400).json({ success: false, message: 'Invalid delivery step.' });
+        }
+        if (nextStep >= 5 && !order.driverArrivedAt) {
+          return res.status(400).json({
+            success: false,
+            code: 'ARRIVAL_REQUIRED',
+            message: 'Confirm you have arrived at the customer before marking this order delivered.',
+          });
+        }
+        // Cancel (0) allowed; otherwise progress can only move forward
+        if (nextStep !== 0 && nextStep < prevStep) {
+          return res.status(400).json({
+            success: false,
+            message: 'Delivery progress cannot move backwards.',
+          });
+        }
+        if (nextStep === 4 && prevStep < 4) {
+          order.driverArrivedAt = null;
+        }
+        order.currentStep = nextStep;
+      }
       if (estimate !== undefined) order.estimate = estimate;
 
       if (!order.assignedDriverId) {
@@ -643,7 +750,19 @@ exports.updateOrder = async (req, res) => {
       else if (step >= 4) order.status = 'shipped';
       else order.status = 'processing';
     } else if (req.user.role === 'admin') {
-      if (currentStep !== undefined) order.currentStep = parseInt(currentStep, 10);
+      if (currentStep !== undefined) {
+        const nextStep = parseInt(currentStep, 10);
+        if (Number.isNaN(nextStep)) {
+          return res.status(400).json({ success: false, message: 'Invalid delivery step.' });
+        }
+        if (nextStep !== 0 && nextStep < prevStep) {
+          return res.status(400).json({
+            success: false,
+            message: 'Delivery progress cannot move backwards.',
+          });
+        }
+        order.currentStep = nextStep;
+      }
       if (estimate !== undefined) order.estimate = estimate;
       if (driver !== undefined) order.driver = driver;
       if (payment !== undefined) order.payment = payment;
@@ -663,16 +782,19 @@ exports.updateOrder = async (req, res) => {
       }
     }
 
+    stampDeliveredAt(order, prevStep);
     await order.save();
 
     const assignedDriverId = order.assignedDriverId;
     const nextStatus = resolveOrderStatus(order);
-    const step = typeof order.currentStep === 'number' ? order.currentStep : 1;
-    if (assignedDriverId && (nextStatus === 'delivered' || nextStatus === 'cancelled' || step >= 5)) {
+    const nextStep = typeof order.currentStep === 'number' ? order.currentStep : 1;
+    if (assignedDriverId && (nextStatus === 'delivered' || nextStatus === 'cancelled' || nextStep >= 5)) {
       await syncDriverStatus(assignedDriverId);
     }
 
     await onOrderUpdated(order, {
+      currentStep: nextStep,
+      currentStepChanged: currentStep !== undefined && prevStep !== nextStep,
       status: nextStatus,
       statusChanged: prevStatus !== nextStatus,
       paymentType: order.paymentType !== prevPaymentType ? order.paymentType : undefined,
@@ -768,7 +890,7 @@ exports.getOrderStats = async (req, res) => {
 
 exports.getOrderDetails = async (req, res) => {
   try {
-    const { orderId } = req.params;
+    const orderId = normalizeOrderId(req.params.orderId);
     const order = await Order.findOne({ id: orderId });
 
     if (!order) {
@@ -783,6 +905,16 @@ exports.getOrderDetails = async (req, res) => {
     const activities = await OrderActivity.find({ orderId: order.id }).sort({ createdAt: 1 }).lean();
     const transactions = await PaymentTransaction.find({ orderId: order.id }).sort({ createdAt: -1 }).lean();
 
+    let customerAvatar = '';
+    if (order.userId) {
+      const linkedUser = await User.findOne({ id: order.userId }).select('avatar').lean();
+      customerAvatar = linkedUser?.avatar || '';
+    }
+    if (!customerAvatar && order.phone) {
+      const byPhone = await findUserByPhone(User, order.phone);
+      customerAvatar = byPhone?.avatar || '';
+    }
+
     const itemCount = (order.items || []).reduce(
       (sum, item) => sum + Math.max(1, Number(item.quantity) || 1),
       0
@@ -795,6 +927,7 @@ exports.getOrderDetails = async (req, res) => {
     return res.status(200).json({
       success: true,
       order: withResolvedStatus(order),
+      customerAvatar,
       activities,
       transactions,
       breakdown: {

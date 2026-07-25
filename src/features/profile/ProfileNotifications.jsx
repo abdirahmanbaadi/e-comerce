@@ -9,7 +9,7 @@ import {
   showTopFloatNotification,
 } from '../../utils/notifications';
 import { apiUrl } from '../../utils/data';
-import { formatMoney } from '../../utils/format';
+import { formatMoney, productImage } from '../../utils/format';
 
 /* ═══ SECTION: MODAL SHELL ═══ */
 export function ModalBackdrop({ children, onClose, maxWidth = 'max-w-lg', className = '' }) {
@@ -28,13 +28,16 @@ export function ModalBackdrop({ children, onClose, maxWidth = 'max-w-lg', classN
   if (typeof document === 'undefined' || !document.body) return null;
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[1050] flex items-center justify-center bg-black/45 p-4"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div className={`w-full ${maxWidth} ${className}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        {children}
+    <div className="fixed inset-0 z-[1050] overflow-y-auto bg-black/45" role="presentation">
+      <div className="flex min-h-full items-center justify-center p-4 sm:p-5" onClick={onClose}>
+        <div
+          className={`my-auto w-full ${maxWidth} ${className}`}
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+        >
+          {children}
+        </div>
       </div>
     </div>,
     document.body
@@ -109,10 +112,12 @@ export function PremiumDeco({ children, className = 'mb-6' }) {
 }
 
 export const premiumCardClass =
-  'relative rounded-3xl border-0 bg-base px-9 py-10 text-center font-sans shadow-[0_15px_45px_rgba(0,0,0,0.08)]';
+  'relative max-h-[min(90dvh,620px)] overflow-y-auto overscroll-contain rounded-3xl border-0 bg-base px-6 py-7 text-center font-sans shadow-[0_15px_45px_rgba(0,0,0,0.08)] sm:px-8 sm:py-8 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-deepGreen/20';
 
 export const formCardClass =
-  'relative rounded-[20px] border-0 bg-softBg p-8 font-sans shadow-[0_15px_45px_rgba(0,0,0,0.12)]';
+  'relative max-h-[min(90dvh,620px)] overflow-y-auto overscroll-contain rounded-[20px] border-0 bg-softBg p-5 font-sans shadow-[0_15px_45px_rgba(0,0,0,0.12)] sm:p-7 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-deepGreen/20';
+
+export const compactPremiumCardClass = `${premiumCardClass} px-5 py-6 sm:px-7 sm:py-7`;
 
 export function BtnPrimary({ children, className = '', ...props }) {
   return (
@@ -207,9 +212,45 @@ const WEEKEND_OFFER = {
   image: '/product-images/ivory-cloud-sofa-set-main.jpeg.jpeg',
 };
 
-function SuccessCircle({ children, className = 'bg-[#e2ece9]' }) {
+function SuccessCircle({ children, className = 'bg-[#e2ece9]', compact = false }) {
+  const sizeClass = compact ? 'h-16 w-16' : 'h-20 w-20';
   return (
-    <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full ${className}`}>{children}</div>
+    <div className={`mx-auto flex ${sizeClass} items-center justify-center rounded-full ${className}`}>{children}</div>
+  );
+}
+
+function OrderPlacedModal({ onClose, onViewDetails, order: orderProp }) {
+  const order = orderProp || getLastOrderDetails();
+
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={premiumCardClass}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco>
+          <SuccessCircle className="bg-[#fef3c7]">
+            <i className="fa-solid fa-bag-shopping text-[2rem] text-[#b45309]" />
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-[#2b3a30]">Order Placed</h2>
+        <GoldStarSeparator />
+        <p className="mx-auto mb-6 max-w-[320px] text-[0.92rem] leading-relaxed text-[#666666]">
+          Your order is saved. Approve EVC Plus payment on your phone to complete checkout.
+        </p>
+        <InfoBox>
+          <InfoRow icon="fa-regular fa-file-lines" label="Order ID" value={order.orderId} />
+          <InfoRow icon="fa-regular fa-calendar" label="Order Date" value={order.orderDate || 'May 15, 2025'} />
+          <InfoRow
+            icon="fa-regular fa-clock"
+            label="Current Status"
+            badge={<span className="rounded-md bg-amber-100 px-2 py-0.5 text-[0.8rem] font-bold text-amber-800">Payment Pending</span>}
+          />
+        </InfoBox>
+        <div className="mt-6 flex gap-3">
+          <BtnPrimary onClick={onViewDetails}>View Order Details</BtnPrimary>
+          <BtnSecondary onClick={onClose}>Close</BtnSecondary>
+        </div>
+      </div>
+    </ModalBackdrop>
   );
 }
 
@@ -398,14 +439,23 @@ function PaymentFailedModal({ onClose, onRetry, order }) {
   );
 }
 
-const PROGRESS_STEPS = [
-  { icon: 'fa-solid fa-check', label: 'Order\nConfirmed', state: 'completed' },
-  { icon: 'fa-solid fa-box-open', label: 'Processing', state: 'active' },
-  { icon: 'fa-solid fa-truck', label: 'Out for\nDelivery', state: '' },
-  { icon: 'fa-solid fa-thumbs-up', label: 'Delivered', state: '' },
-];
+function OrderProcessingModal({ onClose, item, activeStep = 1 }) {
+  const title = item?.title || 'Order Processing';
+  const message =
+    item?.desc ||
+    "Good news! We've received your order and are currently processing it.";
 
-function OrderProcessingModal({ onClose }) {
+  const steps = [
+    { icon: 'fa-solid fa-box-open', label: 'Processing', state: activeStep >= 1 ? (activeStep > 1 ? 'completed' : 'active') : '' },
+    { icon: 'fa-solid fa-credit-card', label: 'Payment\nVerified', state: activeStep >= 2 ? (activeStep > 2 ? 'completed' : 'active') : '' },
+    { icon: 'fa-solid fa-box', label: 'Preparing\nOrder', state: activeStep >= 3 ? (activeStep > 3 ? 'completed' : 'active') : '' },
+    { icon: 'fa-solid fa-truck', label: 'Out for\nDelivery', state: activeStep >= 4 ? (activeStep > 4 ? 'completed' : 'active') : '' },
+    { icon: 'fa-solid fa-thumbs-up', label: 'Delivered', state: activeStep >= 5 ? 'completed' : '' },
+  ];
+
+  const progressWidth =
+    activeStep <= 1 ? '8%' : activeStep === 2 ? '25%' : activeStep === 3 ? '50%' : activeStep === 4 ? '75%' : '100%';
+
   return (
     <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
       <div className={premiumCardClass}>
@@ -426,19 +476,17 @@ function OrderProcessingModal({ onClose }) {
             </div>
           </SuccessCircle>
         </PremiumDeco>
-        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-[#2b3a30]">Order Processing</h2>
+        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-[#2b3a30]">{title}</h2>
         <GoldStarSeparator />
-        <p className="mx-auto mb-6 max-w-[380px] text-[0.92rem] text-[#666666]">
-          Good news! We&apos;ve received your order and are currently processing it.
-        </p>
+        <p className="mx-auto mb-6 max-w-[380px] text-[0.92rem] text-[#666666]">{message}</p>
 
-        <div className="relative mb-6 px-2">
-          <div className="absolute left-[12%] right-[12%] top-5 h-0.5 bg-gray-200">
-            <div className="h-full w-1/3 bg-deepGreen" />
+        <div className="relative mb-6 px-1">
+          <div className="absolute left-[8%] right-[8%] top-5 h-0.5 bg-gray-200">
+            <div className="h-full bg-deepGreen transition-all duration-500" style={{ width: progressWidth }} />
           </div>
-          <div className="relative flex justify-between">
-            {PROGRESS_STEPS.map((step) => (
-              <div key={step.label} className="flex w-16 flex-col items-center gap-1.5">
+          <div className="relative flex justify-between gap-1">
+            {steps.map((step) => (
+              <div key={step.label} className="flex w-14 flex-col items-center gap-1.5">
                 <div
                   className={`flex h-10 w-10 items-center justify-center rounded-full text-sm ${
                     step.state === 'completed'
@@ -450,7 +498,7 @@ function OrderProcessingModal({ onClose }) {
                 >
                   <i className={step.icon} />
                 </div>
-                <span className={`whitespace-pre-line text-center text-[0.62rem] font-semibold leading-tight ${step.state ? 'text-deepGreen' : 'text-gray-400'}`}>
+                <span className={`whitespace-pre-line text-center text-[0.58rem] font-semibold leading-tight ${step.state ? 'text-deepGreen' : 'text-gray-400'}`}>
                   {step.label}
                 </span>
               </div>
@@ -458,18 +506,100 @@ function OrderProcessingModal({ onClose }) {
           </div>
         </div>
 
-        <div className="mb-6 flex items-center gap-3 rounded-xl bg-[#f4f7f5] p-4 text-left">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e2ece9] text-deepGreen">
-            <i className="fa-regular fa-clock" />
-          </div>
-          <div>
-            <span className="block text-[0.82rem] font-bold text-[#333333]">Estimated Time</span>
-            <span className="text-[0.8rem] text-[#666666]">
-              Your order will be on the way within <strong>24 hours</strong>.
-            </span>
-          </div>
-        </div>
+        <BtnCloseFooter onClick={onClose} className="mx-auto w-full max-w-[160px]" />
+      </div>
+    </ModalBackdrop>
+  );
+}
 
+function OrderShippedModal({ onClose, item, order }) {
+  const orderId = order?.orderId || item?.orderId || item?.metadata?.orderId || '—';
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={premiumCardClass}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco>
+          <SuccessCircle className="bg-[#e5ebe4]">
+            <i className="fa-solid fa-truck-fast text-[2rem] text-[#4a6454]" />
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-[#2b3a30]">{item?.title || 'Out for Delivery'}</h2>
+        <GoldStarSeparator />
+        <p className="mx-auto mb-6 max-w-[360px] text-[0.92rem] leading-relaxed text-[#666666]">
+          {item?.desc || `Your order ${orderId} is on the way to your address.`}
+        </p>
+        <InfoBox>
+          <InfoRow icon="fa-regular fa-file-lines" label="Order ID" value={orderId} />
+        </InfoBox>
+        <div className="mt-6">
+          <BtnCloseFooter onClick={onClose} className="mx-auto w-full max-w-[160px]" />
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function OrderDeliveredModal({ onClose, item, order }) {
+  const orderId = order?.orderId || item?.orderId || item?.metadata?.orderId || '—';
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={premiumCardClass}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco>
+          <SuccessCircle className="bg-[#e2ece9]">
+            <i className="fa-solid fa-circle-check text-[2rem] text-[#4a6454]" />
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-[#2b3a30]">{item?.title || 'Order Delivered'}</h2>
+        <GoldStarSeparator />
+        <p className="mx-auto mb-6 max-w-[360px] text-[0.92rem] leading-relaxed text-[#666666]">
+          {item?.desc || `Order ${orderId} has been delivered. Thank you for shopping with us!`}
+        </p>
+        <InfoBox>
+          <InfoRow icon="fa-regular fa-file-lines" label="Order ID" value={orderId} />
+        </InfoBox>
+        <div className="mt-6">
+          <BtnCloseFooter onClick={onClose} className="mx-auto w-full max-w-[160px]" />
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function DeliveryAssignedModal({ onClose, item }) {
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={premiumCardClass}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco>
+          <SuccessCircle className="bg-[#e5ebe4]">
+            <i className="fa-solid fa-truck text-[2rem] text-[#4a6454]" />
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-[#2b3a30]">{item?.title || 'Driver Assigned'}</h2>
+        <GoldStarSeparator />
+        <p className="mx-auto mb-6 max-w-[360px] text-[0.92rem] leading-relaxed text-[#666666]">
+          {item?.desc || 'A driver has been assigned to your order.'}
+        </p>
+        <BtnCloseFooter onClick={onClose} className="mx-auto w-full max-w-[160px]" />
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function GenericNotificationModal({ item, onClose }) {
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={premiumCardClass}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco>
+          <SuccessCircle className="bg-[#e5ebe4]">
+            <i className="fa-regular fa-bell text-[2rem] text-[#4a6454]" />
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2.1rem] font-bold text-[#2b3a30]">{item?.title || 'Notification'}</h2>
+        <GoldStarSeparator />
+        <p className="mx-auto mb-6 max-w-[360px] text-[0.92rem] leading-relaxed text-[#666666]">{item?.desc || ''}</p>
         <BtnCloseFooter onClick={onClose} className="mx-auto w-full max-w-[160px]" />
       </div>
     </ModalBackdrop>
@@ -669,9 +799,12 @@ function WeekendOfferModal({ onClose, navigate, item }) {
       ? `${formatMoney(meta.discountAmount)} OFF`
       : '15% OFF';
 
+  const productTitle = meta.productTitle || WEEKEND_OFFER.productTitle;
+  const image = meta.image ? productImage(meta.image) : WEEKEND_OFFER.image;
+
   return (
-    <ModalBackdrop onClose={onClose} maxWidth="max-w-[850px]">
-      <div className="relative overflow-hidden rounded-3xl bg-base shadow-[0_15px_45px_rgba(0,0,0,0.08)]">
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[720px]">
+      <div className="relative max-h-[min(90dvh,560px)] overflow-hidden overflow-y-auto overscroll-contain rounded-3xl bg-base shadow-[0_15px_45px_rgba(0,0,0,0.08)]">
         <button
           type="button"
           className="absolute right-[18px] top-[18px] z-[12] rounded-full bg-white/85 p-2 shadow-[0_2px_10px_rgba(0,0,0,0.05)]"
@@ -680,11 +813,11 @@ function WeekendOfferModal({ onClose, navigate, item }) {
         >
           <i className="fa-solid fa-xmark" />
         </button>
-        <div className="flex h-[500px] flex-col overflow-hidden md:flex-row md:max-md:h-auto">
-          <div className="h-60 w-full shrink-0 overflow-hidden bg-[#f3efe6] md:h-auto md:w-[45%]">
-            <img src={WEEKEND_OFFER.image} alt={WEEKEND_OFFER.productTitle} className="block h-full w-full object-cover object-center" />
+        <div className="flex min-h-0 flex-col md:flex-row">
+          <div className="h-48 w-full shrink-0 overflow-hidden bg-[#f3efe6] md:h-auto md:min-h-[320px] md:w-[42%]">
+            <img src={image} alt={productTitle} className="block h-full w-full object-cover object-center" />
           </div>
-          <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#faf8f5] px-6 py-8 md:px-10 md:pb-8 md:pt-10">
+          <div className="relative flex min-w-0 flex-1 flex-col overflow-y-auto bg-[#faf8f5] px-5 py-6 md:px-8 md:py-8">
             <span className="absolute right-[52px] top-5 rounded-full border border-deepGreen/10 bg-[#e5ece9] px-3.5 py-1.5 text-[0.72rem] font-bold uppercase text-deepGreen">
               {discountLabel}
             </span>
@@ -717,7 +850,7 @@ function WeekendOfferModal({ onClose, navigate, item }) {
                 type="button"
                 className="flex-1 rounded-full border border-[#d4cebc] bg-[#fcfbf9] px-6 py-3 text-[0.95rem] font-bold text-[#4a3e35] transition hover:border-[#ebdcb9] hover:bg-[#faf6f0]"
                 onClick={() => {
-                  localStorage.setItem('openProductModalOnLoad', WEEKEND_OFFER.productTitle);
+                  localStorage.setItem('openProductModalOnLoad', productTitle);
                   navigate('/products');
                   onClose();
                 }}
@@ -733,6 +866,127 @@ function WeekendOfferModal({ onClose, navigate, item }) {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
+function CouponNotificationModal({ onClose, navigate, item }) {
+  const meta = item?.metadata || {};
+  const promoCode = meta.promoCode || '';
+  const description = meta.description || 'Qiimo dhimis gaar ah oo kuu diyaar ah.';
+  
+  const discountLabel = meta.discountPercent
+    ? `${meta.discountPercent}% OFF`
+    : meta.discountAmount
+      ? `${formatMoney(meta.discountAmount)} OFF`
+      : 'Qiimo Dhimis';
+
+  // Format restrictions message
+  let restrictionMsg = '';
+  if (meta.applicableCategory || meta.applicableProduct) {
+    const catText = meta.applicableCategory ? `qaybta "${meta.applicableCategory}"` : '';
+    const prodText = meta.applicableProduct ? `alaabta "${meta.applicableProduct}"` : '';
+    restrictionMsg = `Kuuboonkan wuxuu u shaqeeyaa oo kaliya ${[catText, prodText].filter(Boolean).join(' ama ')}.`;
+  }
+
+  // Format expiration message
+  let expiryMsg = 'Waqtigeedu waa xadidan yahay.';
+  if (meta.expiresAt) {
+    const expDate = new Date(meta.expiresAt);
+    if (!isNaN(expDate.getTime())) {
+      expiryMsg = `Wuxuu shaqaynayaa ilaa: ${expDate.toLocaleDateString('so-SO', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      })}`;
+    }
+  } else if (meta.durationDays) {
+    expiryMsg = `Wuxuu shaqaynayaa ${meta.durationDays} maalmood oo kaliya.`;
+  }
+
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(promoCode);
+    setCopied(true);
+    showTopFloatNotification('Koodhka kuuboonka waa la koobbiyeeyay! ✅');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
+      <div className={compactPremiumCardClass}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco className="mb-4">
+          <SuccessCircle className="bg-[#FAF6F0] relative border-2 border-dashed border-gold">
+            <i className="fa-solid fa-ticket text-[2rem] text-gold" />
+          </SuccessCircle>
+        </PremiumDeco>
+        
+        <h2 className="mb-1 font-display text-[2.1rem] font-bold text-deepGreen">
+          {item?.title || 'Kuuboon Cusub!'}
+        </h2>
+        <span className="inline-block rounded-full bg-gold/15 px-3 py-1 text-[0.78rem] font-extrabold uppercase tracking-wider text-gold mb-3">
+          {discountLabel}
+        </span>
+        <GoldStarSeparator />
+        
+        <p className="mx-auto mb-5 max-w-[360px] text-[0.92rem] leading-relaxed text-[#666666]">
+          {description}
+        </p>
+
+        {/* Styled Coupon Card */}
+        <div className="mb-5 rounded-2xl border-2 border-dashed border-[#e6dfcc] bg-[#FAF8F5] p-5 relative overflow-hidden flex flex-col items-center">
+          {/* Half circles on sides for ticket effect */}
+          <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-base" />
+          <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-base" />
+          
+          <span className="text-[0.72rem] font-bold text-[#a0947e] uppercase tracking-widest mb-1.5">
+            KOODHKA QIIMO DHIMISTA
+          </span>
+          <div className="font-mono text-2xl font-extrabold tracking-widest text-[#4a3e35] bg-white px-6 py-2 rounded-xl border border-black/[0.05] shadow-sm select-all">
+            {promoCode}
+          </div>
+          
+          <button 
+            type="button" 
+            onClick={handleCopy} 
+            className="mt-3.5 inline-flex items-center gap-1.5 border-0 bg-transparent text-[0.82rem] font-extrabold text-deepGreen hover:text-teal transition"
+          >
+            <i className={copied ? "fa-solid fa-check" : "fa-regular fa-copy"} />
+            {copied ? 'Waa la koobbiyeeyay' : 'Koobbi koodhka'}
+          </button>
+        </div>
+
+        {/* Constraints Info Box */}
+        {(restrictionMsg || expiryMsg) && (
+          <div className="mb-6 rounded-[14px] border border-black/[0.04] bg-black/[0.015] px-4.5 py-3 text-left">
+            {restrictionMsg && (
+              <div className="flex gap-2 text-[0.82rem] text-[#666666] mb-1.5 last:mb-0">
+                <span className="text-gold text-[0.9rem]"><i className="fa-solid fa-circle-info" /></span>
+                <span className="font-semibold leading-normal">{restrictionMsg}</span>
+              </div>
+            )}
+            {expiryMsg && (
+              <div className="flex gap-2 text-[0.82rem] text-[#666666] last:mb-0">
+                <span className="text-[#a0947e] text-[0.9rem]"><i className="fa-regular fa-clock" /></span>
+                <span className="font-semibold leading-normal">{expiryMsg}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <BtnPrimary 
+            onClick={() => {
+              navigate('/products');
+              onClose();
+            }}
+          >
+            Ku Isticmaal Hadda (Shop)
+          </BtnPrimary>
+          <BtnSecondary onClick={onClose}>Xir (Close)</BtnSecondary>
         </div>
       </div>
     </ModalBackdrop>
@@ -785,85 +1039,71 @@ function RetryPaymentModal({ onClose, onSuccess, order, userPhone }) {
   };
 
   return (
-    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
-      <div className={`${premiumCardClass} px-8`}>
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[480px]">
+      <div className={compactPremiumCardClass}>
         <CloseAbsoluteBtn onClose={onClose} />
-        <PremiumDeco>
-          <SuccessCircle className="relative bg-[#e5ebe4]">
-            <i className="fa-regular fa-credit-card text-[2.1rem] text-[#4a6454]" />
-            <span className="absolute -bottom-1 -right-1 text-[1rem] text-green-600">
+        <PremiumDeco className="mb-4">
+          <SuccessCircle compact className="relative bg-[#e5ebe4]">
+            <i className="fa-regular fa-credit-card text-[1.65rem] text-[#4a6454]" />
+            <span className="absolute -bottom-1 -right-1 text-[0.85rem] text-green-600">
               <i className="fa-solid fa-circle-check" />
             </span>
           </SuccessCircle>
         </PremiumDeco>
-        <h2 className="mb-2 font-display text-[2.3rem] font-bold text-deepGreen">Retry Payment</h2>
+        <h2 className="mb-1.5 font-display text-[1.75rem] font-bold leading-tight text-deepGreen sm:text-[1.85rem]">Retry Payment</h2>
         <GoldStarSeparator />
-        <p className="mx-auto mb-6 max-w-[390px] text-[0.92rem] leading-relaxed text-[#555555]">
+        <p className="mx-auto mb-4 max-w-[360px] text-[0.88rem] leading-relaxed text-[#555555]">
           Your previous EVC Plus payment was not completed. Please confirm your number and try again.
         </p>
 
-        <div className="mb-6 flex rounded-xl border border-[#f0eee8] bg-[#FAF8F5] text-left">
-          <div className="flex flex-1 items-center gap-3 p-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f2ece1] text-[#8c7a6b]">
+        <div className="mb-4 flex rounded-xl border border-[#f0eee8] bg-[#FAF8F5] text-left">
+          <div className="flex flex-1 items-center gap-2.5 p-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f2ece1] text-[0.85rem] text-[#8c7a6b]">
               <i className="fa-regular fa-file-lines" />
             </div>
-            <div>
-              <span className="block text-[0.78rem] text-[#888888]">Order ID:</span>
-              <span className="font-bold">{order.orderId}</span>
+            <div className="min-w-0">
+              <span className="block text-[0.72rem] text-[#888888]">Order ID:</span>
+              <span className="block truncate text-[0.88rem] font-bold">{order.orderId}</span>
             </div>
           </div>
           <div className="w-px bg-[#f0eee8]" />
-          <div className="flex flex-1 items-center gap-3 p-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f2ece1] text-[#8c7a6b]">
+          <div className="flex flex-1 items-center gap-2.5 p-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f2ece1] text-[0.85rem] text-[#8c7a6b]">
               <i className="fa-solid fa-dollar-sign" />
             </div>
-            <div>
-              <span className="block text-[0.78rem] text-[#888888]">Total Amount:</span>
-              <span className="font-bold">{getOrderTotalFormatted(order)}</span>
+            <div className="min-w-0">
+              <span className="block text-[0.72rem] text-[#888888]">Total Amount:</span>
+              <span className="block text-[0.88rem] font-bold">{getOrderTotalFormatted(order)}</span>
             </div>
           </div>
         </div>
 
-        <div className="mb-2 text-left text-[0.82rem] font-bold text-[#333333]">Payment Method</div>
-        <div className="mb-4 flex items-center gap-3 rounded-lg border border-black/[0.08] bg-white px-4 py-3 text-left">
-          <span className="h-4 w-4 rounded-full border-2 border-deepGreen" />
-          <span className="font-bold">EVC Plus</span>
+        <div className="mb-1.5 text-left text-[0.78rem] font-bold text-[#333333]">Payment Method</div>
+        <div className="mb-3 flex items-center gap-3 rounded-lg border border-black/[0.08] bg-white px-3.5 py-2.5 text-left">
+          <span className="h-3.5 w-3.5 rounded-full border-2 border-deepGreen" />
+          <span className="text-[0.88rem] font-bold">EVC Plus</span>
         </div>
 
-        <div className="mb-2 text-left text-[0.82rem] font-bold text-[#333333]">EVC Phone Number</div>
+        <div className="mb-1.5 text-left text-[0.78rem] font-bold text-[#333333]">EVC Phone Number</div>
         <div className="mb-1 flex items-center rounded-lg border border-black/[0.08] bg-white px-3">
-          <span className="pr-3 text-deepGreen"><i className="fa-solid fa-phone" /></span>
-          <div className="h-6 w-px bg-gray-200" />
-          <input type="tel" className="flex-1 border-0 bg-transparent px-3 py-2.5 text-[0.9rem] outline-none" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <span className="pr-2.5 text-[0.9rem] text-deepGreen"><i className="fa-solid fa-phone" /></span>
+          <div className="h-5 w-px bg-gray-200" />
+          <input type="tel" className="flex-1 border-0 bg-transparent px-2.5 py-2 text-[0.88rem] outline-none" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </div>
-        <p className="mb-6 text-left text-[0.78rem] text-[#888888]">Use the same EVC number for this payment.</p>
+        <p className="mb-4 text-left text-[0.74rem] text-[#888888]">Use the same EVC number for this payment.</p>
 
         <div className="flex justify-center gap-3">
-          <BtnDeepGreen onClick={handlePay} disabled={paying} className="max-w-[160px] flex-none">
+          <BtnDeepGreen onClick={handlePay} disabled={paying} className="max-w-[140px] flex-none px-5 py-2.5 text-[0.88rem]">
             {paying ? 'Processing...' : 'Pay Now'}
           </BtnDeepGreen>
-          <BtnCloseFooter onClick={onClose} />
+          <BtnCloseFooter onClick={onClose} className="max-w-[140px] px-5 py-2.5 text-[0.88rem]" />
         </div>
       </div>
     </ModalBackdrop>
   );
 }
 
-function SimpleAlertModal({ item, onClose }) {
-  return (
-    <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
-      <div className="rounded-2xl border-0 bg-white p-8 text-center shadow-lg">
-        <h2 className="mb-2 text-lg font-bold text-green-700">{item?.title || 'Notification'}</h2>
-        <p className="mb-6 text-gray-500">{item?.desc || ''}</p>
-        <button type="button" className="rounded-lg bg-green-600 px-6 py-2.5 font-bold text-white hover:bg-green-700" onClick={onClose}>
-          Close
-        </button>
-      </div>
-    </ModalBackdrop>
-  );
-}
-
-function NotificationDetailModal({
+export function NotificationDetailModal({
   item,
   onClose,
   user,
@@ -930,6 +1170,8 @@ function NotificationDetailModal({
   if (!item) return null;
 
   switch (item.modalType) {
+    case 'order-placed':
+      return <OrderPlacedModal order={order} onClose={onClose} onViewDetails={() => setSubModal('orderDetails')} />;
     case 'order-confirmed':
       return <OrderConfirmedModal order={order} onClose={onClose} onViewDetails={() => setSubModal('orderDetails')} />;
     case 'payment-success':
@@ -937,7 +1179,15 @@ function NotificationDetailModal({
     case 'payment-failed':
       return <PaymentFailedModal order={order} onClose={onClose} onRetry={() => setSubModal('retryPayment')} />;
     case 'order-processing':
-      return <OrderProcessingModal onClose={onClose} />;
+      return <OrderProcessingModal item={item} onClose={onClose} activeStep={item.metadata?.currentStep || 1} />;
+    case 'order-payment-verified':
+      return <OrderProcessingModal item={item} onClose={onClose} activeStep={2} />;
+    case 'order-preparing':
+      return <OrderProcessingModal item={item} onClose={onClose} activeStep={3} />;
+    case 'order-shipped':
+      return <OrderShippedModal item={item} order={order} onClose={onClose} />;
+    case 'order-delivered':
+      return <OrderDeliveredModal item={item} order={order} onClose={onClose} />;
     case 'support-replied':
       return (
         <SupportRepliedModal
@@ -952,11 +1202,14 @@ function NotificationDetailModal({
       return <WishlistAvailableModal item={item} navigate={navigate} onClose={onClose} />;
     case 'weekend-offer':
       return <WeekendOfferModal item={item} navigate={navigate} onClose={onClose} />;
+    case 'coupon-offer':
+      return <CouponNotificationModal item={item} navigate={navigate} onClose={onClose} />;
     case 'delivery-assigned':
+      return <DeliveryAssignedModal item={item} onClose={onClose} />;
     case 'review-moderated':
-      return <SimpleAlertModal item={item} onClose={onClose} />;
+      return <GenericNotificationModal item={item} onClose={onClose} />;
     default:
-      return null;
+      return <GenericNotificationModal item={item} onClose={onClose} />;
   }
 }
 
@@ -981,6 +1234,13 @@ const DOT_STYLES = {
 
 function NotificationIcon({ type }) {
   switch (type) {
+    case 'order-placed':
+      return (
+        <div className="relative inline-flex items-center justify-center">
+          <i className="fa-solid fa-bag-shopping" />
+          <i className="fa-solid fa-clock absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border-[1.5px] border-white bg-amber-500 text-[0.55rem] text-white" />
+        </div>
+      );
     case 'order-confirmed':
       return (
         <div className="relative inline-flex items-center justify-center">
@@ -998,6 +1258,8 @@ function NotificationIcon({ type }) {
       return <i className="fa-solid fa-comment-dots" />;
     case 'wishlist':
       return <i className="fa-regular fa-heart" />;
+    case 'coupon_offer':
+      return <i className="fa-solid fa-ticket" />;
     case 'weekend-offer':
       return <i className="fa-solid fa-tag" />;
     case 'delivery-assigned':

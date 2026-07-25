@@ -21,7 +21,7 @@ import {
   hasServerSideFilters,
   parseFiltersFromSearchParams,
 } from '../utils/productFilters';
-import { apiUrl, normalizeProductPrices } from '../utils/data';
+import { apiUrl } from '../utils/data';
 import { showTopFloatNotification } from '../utils/notifications';
 
 function toggleArrayValue(list, value) {
@@ -74,7 +74,7 @@ export default function Products() {
         });
         const data = await response.json();
         if (data.success && Array.isArray(data.products)) {
-          setApiProducts(normalizeProductPrices(data.products));
+          setApiProducts(data.products);
         } else {
           setApiProducts([]);
         }

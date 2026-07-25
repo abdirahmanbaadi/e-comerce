@@ -9,11 +9,11 @@ export async function validateCartItems(items) {
   return response.json();
 }
 
-export async function validateCouponCode(code, subtotal) {
+export async function validateCouponCode(code, subtotal, items) {
   const response = await fetch(apiUrl('/api/coupons/validate'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code, subtotal }),
+    body: JSON.stringify({ code, subtotal, items }),
   });
   return response.json();
 }

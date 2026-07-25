@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
-  darkMode: 'class',
+  darkMode: ['class', '[data-admin-theme="dark"]'],
   blocklist: ['collapse'],
   theme: {
     extend: {
@@ -50,6 +50,26 @@ export default {
           from: { opacity: '0', transform: 'translateY(20px) scale(0.98)' },
           to: { opacity: '1', transform: 'translateY(0) scale(1)' },
         },
+        sidebarItemIn: {
+          from: { opacity: '0', transform: 'translateX(-16px)' },
+          to: { opacity: '1', transform: 'translateX(0)' },
+        },
+        sidebarLogoIn: {
+          from: { opacity: '0', transform: 'translateY(-8px) scale(0.96)' },
+          to: { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+        profileTabIn: {
+          from: { opacity: '0', transform: 'translateY(12px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        badgePulse: {
+          '0%, 100%': { transform: 'scale(1)', opacity: '1' },
+          '50%': { transform: 'scale(1.35)', opacity: '0.75' },
+        },
+        sidebarShimmer: {
+          from: { transform: 'translateX(-120%)' },
+          to: { transform: 'translateX(220%)' },
+        },
       },
       animation: {
         cardRise: 'cardRise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
@@ -59,6 +79,11 @@ export default {
         adminDropIn: 'adminDropIn 0.22s ease both',
         navDropIn: 'navDropIn 0.22s ease both',
         productModalIn: 'productModalIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
+        sidebarItemIn: 'sidebarItemIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both',
+        sidebarLogoIn: 'sidebarLogoIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) both',
+        profileTabIn: 'profileTabIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both',
+        badgePulse: 'badgePulse 2s ease-in-out infinite',
+        sidebarShimmer: 'sidebarShimmer 2.8s ease-in-out infinite',
       },
     },
   },

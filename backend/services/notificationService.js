@@ -100,11 +100,11 @@ async function notifyOrderCustomer(order, payload) {
 async function onOrderCreated(order, { userId } = {}) {
   const orderId = order.id;
   const customerPayload = {
-    type: 'order_confirmed',
-    title: 'Order Confirmed',
-    message: `Your order ${orderId} has been confirmed.`,
+    type: 'order_placed',
+    title: 'Order Placed',
+    message: `Your order ${orderId} was placed. Approve EVC Plus payment on your phone to complete checkout.`,
     relatedId: orderId,
-    metadata: { orderId, amount: order.amount },
+    metadata: { orderId, amount: order.amount, paymentStatus: 'pending' },
   };
 
   if (userId || order.userId) {
@@ -116,7 +116,7 @@ async function onOrderCreated(order, { userId } = {}) {
   await notifyAdmins({
     type: 'new_order',
     title: 'New Order Received',
-    message: `${order.customer} placed order ${orderId} (${order.amount}).`,
+    message: `${order.customer} placed order ${orderId} (${order.amount}) — payment pending.`,
     relatedId: orderId,
     metadata: { orderId, customer: order.customer, amount: order.amount },
   });
@@ -124,13 +124,72 @@ async function onOrderCreated(order, { userId } = {}) {
   await maybeSendSmsAlert({
     userId: userId || order.userId,
     phone: order.phone,
-    message: `Mogadishu Modern Furniture: Order ${orderId} confirmed. Total ${order.amount}. Track at our website.`,
+    message: `MMF: Order ${orderId} placed (${order.amount}). Approve EVC Plus on your phone to pay. Track on our website.`,
   });
 }
 
 async function onOrderUpdated(order, changes = {}) {
   const orderId = order.id;
   const userPayload = (payload) => notifyOrderCustomer(order, payload);
+
+  const DELIVERY_STEP_NOTIFY = {
+    3: {
+      type: 'order_preparing',
+      title: 'Preparing Your Order',
+      message: `Your order ${orderId} is being prepared for delivery.`,
+    },
+    4: {
+      type: 'order_shipped',
+      title: 'Out for Delivery',
+      message: `Your order ${orderId} is on the way!`,
+    },
+    5: {
+      type: 'order_delivered',
+      title: 'Order Delivered',
+      message: `Your order ${orderId} has been delivered. Thank you!`,
+    },
+  };
+
+  if (changes.currentStepChanged && changes.currentStep >= 3) {
+    const stepPayload = DELIVERY_STEP_NOTIFY[changes.currentStep];
+    if (stepPayload) {
+      await userPayload({
+        ...stepPayload,
+        metadata: { orderId, currentStep: changes.currentStep, amount: order.amount },
+      });
+
+      if (changes.currentStep === 4) {
+        await maybeSendSmsAlert({
+          userId: order.userId,
+          phone: order.phone,
+          message: `MMF: Order ${orderId} is out for delivery.`,
+        });
+      }
+      if (changes.currentStep === 5) {
+        await maybeSendSmsAlert({
+          userId: order.userId,
+          phone: order.phone,
+          message: `MMF: Order ${orderId} has been delivered. Thank you for shopping with us!`,
+        });
+      }
+
+      const adminStepMessages = {
+        3: `Order ${orderId} — preparing for delivery.`,
+        4: `Order ${orderId} — out for delivery.`,
+        5: `Order ${orderId} — delivered.`,
+      };
+      const adminMsg = adminStepMessages[changes.currentStep];
+      if (adminMsg) {
+        await notifyAdmins({
+          type: 'order_status_changed',
+          title: 'Delivery Step Updated',
+          message: adminMsg,
+          relatedId: orderId,
+          metadata: { orderId, currentStep: changes.currentStep, customer: order.customer },
+        });
+      }
+    }
+  }
 
   if (changes.paymentType === 'paid' || changes.payment === 'Paid') {
     await userPayload({
@@ -155,7 +214,7 @@ async function onOrderUpdated(order, changes = {}) {
     });
   }
 
-  if (changes.status === 'processing' && changes.statusChanged) {
+  if (changes.status === 'processing' && changes.statusChanged && !changes.currentStepChanged) {
     await userPayload({
       type: 'order_processing',
       title: 'Order Processing',
@@ -164,7 +223,7 @@ async function onOrderUpdated(order, changes = {}) {
     });
   }
 
-  if (changes.status === 'shipped' && changes.statusChanged) {
+  if (changes.status === 'shipped' && changes.statusChanged && !changes.currentStepChanged) {
     await userPayload({
       type: 'order_shipped',
       title: 'Order Shipped',
@@ -178,7 +237,7 @@ async function onOrderUpdated(order, changes = {}) {
     });
   }
 
-  if (changes.status === 'delivered' && changes.statusChanged) {
+  if (changes.status === 'delivered' && changes.statusChanged && !changes.currentStepChanged) {
     await userPayload({
       type: 'order_delivered',
       title: 'Order Delivered',
@@ -193,15 +252,26 @@ async function onOrderUpdated(order, changes = {}) {
   }
 
   if (changes.status === 'cancelled' && changes.statusChanged) {
+    let message = `Your order ${orderId} has been cancelled.`;
+    if (changes.refundCompleted) {
+      message = `Your order ${orderId} was cancelled and your payment was refunded to your EVC Plus wallet.`;
+    } else if (changes.refundAttempted && !changes.refundCompleted) {
+      message = `Your order ${orderId} was cancelled. ${changes.refundMessage || 'Contact support to receive your refund.'}`;
+    }
+
     await userPayload({
       type: 'order_cancelled',
-      title: 'Order Cancelled',
-      message: `Your order ${orderId} has been cancelled.`,
-      metadata: { orderId },
+      title: changes.refundCompleted ? 'Order Cancelled — Refunded' : 'Order Cancelled',
+      message,
+      metadata: {
+        orderId,
+        refundAttempted: Boolean(changes.refundAttempted),
+        refundCompleted: Boolean(changes.refundCompleted),
+      },
     });
   }
 
-  if (changes.statusChanged && changes.status) {
+  if (changes.statusChanged && changes.status && !changes.currentStepChanged) {
     const adminStatusMessages = {
       processing: `Order ${orderId} moved to processing.`,
       shipped: `Order ${orderId} has been shipped.`,
@@ -369,14 +439,47 @@ async function onProductBackInStock(product) {
 
 async function onPromotionActivated(promo) {
   const code = promo.code || '';
-  const description = promo.description || 'Special offer available now';
-  const title = 'Weekend Offer';
-  const message = code
-    ? `${description}. Use code ${code} at checkout.`
-    : description;
+  const description = promo.description || 'Qiimo dhimis cusub';
+  const title = 'Qiimo Dhimis Cusub!';
+  const message = `Koodhka qiimo dhimista: ${code}. Fadlan macamiil ka faaideyso fursadan gaarka ah ee qiimo dhimista!`;
 
   const customers = await User.find({
-    role: { $in: ['customer', 'user', ''] },
+    status: { $ne: 'Inactive' },
+  }).select('id');
+
+  const userIds = customers.map((u) => u.id).filter(Boolean);
+  if (userIds.length === 0) return;
+
+  await Notification.insertMany(
+    userIds.map((userId, index) => ({
+      id: `NTF-${Date.now()}-${index}-${Math.floor(Math.random() * 9000 + 1000)}`,
+      audience: 'user',
+      userId,
+      type: 'coupon_offer',
+      title,
+      message,
+      relatedId: promo.id || code,
+      read: false,
+      metadata: {
+        promoCode: code,
+        description: `${description}. Isticmaal koodhka qiimo dhimista marka aad checkout-ka joogto si aad u hesho dhimis.`,
+        discountAmount: promo.discountAmount || 0,
+        discountPercent: promo.discountPercent || 0,
+        applicableCategory: promo.applicableCategory || '',
+        applicableProduct: promo.applicableProduct || '',
+        durationDays: promo.durationDays || 0,
+        expiresAt: promo.expiresAt || null,
+      },
+    }))
+  );
+}
+
+async function onBannerActivated(banner) {
+  const title = banner.title || 'Dallacsiin Cusub!';
+  const message = banner.subtitle || 'Ka faa\'iideyso qiimo dhimis gaar ah oo hadda firfircoon!';
+  const image = banner.image || '';
+
+  const customers = await User.find({
     status: { $ne: 'Inactive' },
   }).select('id');
 
@@ -391,13 +494,13 @@ async function onPromotionActivated(promo) {
       type: 'weekend_offer',
       title,
       message,
-      relatedId: promo.id || code,
+      relatedId: banner.id || '',
       read: false,
       metadata: {
-        promoCode: code,
-        description,
-        discountAmount: promo.discountAmount || 0,
-        discountPercent: promo.discountPercent || 0,
+        promoCode: 'OFFER',
+        description: banner.subtitle || 'Dallacsiin gaar ah oo ku saabsan alaabteena.',
+        image,
+        productTitle: banner.title || 'Alaabta Dallacsiinta',
       },
     }))
   );
@@ -422,4 +525,5 @@ module.exports = {
   onDriverApplication,
   onProductBackInStock,
   onPromotionActivated,
+  onBannerActivated,
 };

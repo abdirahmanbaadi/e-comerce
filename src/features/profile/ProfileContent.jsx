@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useProducts } from '../../context/ProductsContext';
 import { apiUrl } from '../../utils/data';
-import { formatChatTime, formatMoney, productImage } from '../../utils/format';
+import { formatMoney, productImage } from '../../utils/format';
 import { downloadInvoice } from '../../utils/invoiceActions';
 import { getDeliveryBadge, getPaymentBadge, resolveOrderStatus } from '../../utils/orderStatus';
+import { canCustomerCancelOrder } from '../../utils/orderCancel';
 import { showTopFloatNotification } from '../../utils/notifications';
 import RetryPaymentModal from '../checkout/RetryPaymentModal';
+import WriteReviewModal from '../products/WriteReviewModal';
 import { AppSearchField } from '../nav/StoreNavbar';
+import ProfileSupportChat from './ProfileSupportChat';
 
 /* ═══ SECTION: INFO TAB ═══ */
 function ProfileField({ label, htmlFor, icon, children }) {
@@ -287,21 +290,85 @@ function countOrderItems(order) {
   return 1;
 }
 
+function resolveOrderProduct(order, products) {
+  const item = Array.isArray(order.items) ? order.items.find((i) => i?.id || i?.title) : null;
+  if (item?.id) {
+    return { id: Number(item.id), title: item.title || order.product || 'Product' };
+  }
+  const title = order.product || item?.title;
+  if (!title) return null;
+  const match = products.find(
+    (p) => p.title?.toLowerCase() === title.toLowerCase() || title.toLowerCase().includes(p.title?.toLowerCase())
+  );
+  if (match?.id) return { id: match.id, title: match.title };
+  return null;
+}
+
+function canShowOrderReview(order) {
+  const status = resolveOrderStatus(order);
+  const payment = getPaymentBadge(order.paymentType, order.payment);
+  return status === 'delivered' && payment.className === 'paid';
+}
+
 const STATUS_BADGE = {
-  paid: 'bg-[rgba(8,116,67,0.08)] text-[#087443]',
-  pending: 'bg-[rgba(216,161,40,0.08)] text-[#A07000]',
-  failed: 'bg-[rgba(192,57,43,0.08)] text-[#c0392b]',
-  delivered: 'bg-[rgba(8,116,67,0.08)] text-[#087443]',
-  processing: 'bg-[rgba(216,161,40,0.08)] text-[#A07000]',
-  'out-for-delivery': 'bg-[rgba(43,89,219,0.08)] text-[#2B59DB]',
+  paid: 'bg-[#E8F5EE] text-[#087443] ring-1 ring-[#087443]/12',
+  pending: 'bg-[#FFF6E5] text-[#A07000] ring-1 ring-[#D8A128]/15',
+  failed: 'bg-[#FCE8E6] text-[#c0392b] ring-1 ring-[#c0392b]/12',
+  delivered: 'bg-[#E8F5EE] text-[#087443] ring-1 ring-[#087443]/12',
+  processing: 'bg-[#FFF6E5] text-[#A07000] ring-1 ring-[#D8A128]/15',
+  'out-for-delivery': 'bg-[#EEEAF8] text-[#2B59DB] ring-1 ring-[#2B59DB]/12',
 };
 
-const actionLinkClass =
-  'cursor-pointer border-0 bg-transparent p-0 text-[0.85rem] font-bold text-blue-600 hover:underline';
+const FILTER_OPTIONS = [
+  { value: 'all', label: 'All Status' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'out-for-delivery', label: 'Out for Delivery' },
+  { value: 'processing', label: 'Processing' },
+];
 
-export function ProfileOrdersTab() {
+const actionBtnClass =
+  'inline-flex items-center gap-1 rounded-md border-0 bg-transparent px-0 py-0.5 text-[0.8rem] font-bold text-blue-600 transition hover:text-blue-700 hover:underline';
+
+function OrdersEmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-14 text-center">
+      <i className="fa-solid fa-bag-shopping mb-3 text-[2rem] text-gold/80" />
+      <h3 className="mb-1 font-display text-[1.25rem] font-bold text-deepGreen">No orders found</h3>
+      <p className="mb-4 max-w-[300px] text-[0.88rem] leading-relaxed text-[#888888]">
+        You haven&apos;t placed any orders yet, or nothing matches your search.
+      </p>
+      <Link
+        to="/products"
+        className="inline-flex items-center gap-2 text-[0.88rem] font-bold text-deepGreen no-underline transition hover:underline"
+      >
+        Start Shopping
+        <i className="fa-solid fa-arrow-right text-[0.75rem]" />
+      </Link>
+    </div>
+  );
+}
+
+function OrdersLoadingState() {
+  return (
+    <div className="space-y-2 py-2">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex animate-pulse items-center gap-4 border-b border-black/[0.04] py-4">
+          <div className="h-10 w-10 rounded-lg bg-[#EAEAEA]" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-32 rounded bg-[#EAEAEA]" />
+            <div className="h-2.5 w-48 rounded bg-[#F0F0F0]" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ProfileOrdersTab({ onTrackOrder }) {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const { products } = useProducts();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -309,6 +376,7 @@ export function ProfileOrdersTab() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [cancellingId, setCancellingId] = useState('');
   const [retryOrder, setRetryOrder] = useState(null);
+  const [reviewTarget, setReviewTarget] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -367,19 +435,22 @@ export function ProfileOrdersTab() {
     });
   }, [orders, search, statusFilter]);
 
-  const handleTrack = (orderId) => {
-    localStorage.setItem('lastTrackingCode', orderId);
-    navigate('/track-order');
+  const handleTrack = (id) => {
+    if (onTrackOrder) {
+      onTrackOrder(id);
+      return;
+    }
+    localStorage.setItem('lastTrackingCode', id);
   };
 
   const handleCancel = async (order) => {
-    if (resolveOrderStatus(order) !== 'processing') {
+    if (!canCustomerCancelOrder(order)) {
       showTopFloatNotification('This order can no longer be cancelled.', 'danger');
       return;
     }
 
     const confirmed = window.confirm(
-      `Cancel order ${order.id}? This can only be done before shipment.`
+      `Cancel order ${order.id}? This can only be done before out for delivery.`
     );
     if (!confirmed) return;
 
@@ -402,7 +473,7 @@ export function ProfileOrdersTab() {
             item.id === order.id ? { ...item, ...data.order, status: resolveOrderStatus(data.order) } : item
           )
         );
-        showTopFloatNotification('Order cancelled successfully.');
+        showTopFloatNotification(data.message || 'Order cancelled successfully.');
       } else {
         showTopFloatNotification(data.message || 'Could not cancel this order.', 'danger');
       }
@@ -415,150 +486,148 @@ export function ProfileOrdersTab() {
 
   return (
     <div>
-      <h1 className="mb-0.5 font-display text-[2.3rem] font-bold text-deepGreen">My Orders</h1>
-      <p className="mb-2 text-[0.92rem] text-[#666666]">View and track your order history</p>
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="mb-1 font-display text-[2.3rem] font-bold text-deepGreen">My Orders</h1>
+          <p className="m-0 text-[0.92rem] text-[#666666]">View and track your order history</p>
+        </div>
 
-      <div className="rounded-2xl border border-black/[0.04] bg-white px-9 py-10 shadow-[0_10px_30px_rgba(7,61,53,0.03)] max-sm:px-6">
-        <div className="relative mb-5 font-display text-[1.45rem] font-bold text-deepGreen">Order History</div>
-
-        <div className="mb-5 flex flex-wrap items-center gap-4">
-          <AppSearchField
-            variant="full"
-            id="orderSearchInput"
-            placeholder="Search by Order ID"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <div className="relative flex items-center">
-            <i className="fa-solid fa-filter pointer-events-none absolute left-3.5 z-[2] text-[#7A6F62]" />
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto lg:shrink-0">
+          <div className="min-w-0 sm:w-[260px]">
+            <AppSearchField
+              variant="full"
+              id="orderSearchInput"
+              placeholder="Search by Order ID…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full"
+            />
+          </div>
+          <div className="relative w-full sm:w-[170px]">
+            <i className="fa-solid fa-sliders pointer-events-none absolute left-3 top-1/2 z-[2] -translate-y-1/2 text-[0.8rem] text-[#7A6F62]" />
             <select
-              className="cursor-pointer appearance-none rounded-[10px] border-[1.5px] border-black/[0.08] bg-white py-2.5 pl-9 pr-9 text-[0.9rem] font-semibold text-[#111111] outline-none transition-all duration-[250ms] focus:border-deepGreen"
+              className="w-full cursor-pointer appearance-none rounded-xl border border-black/[0.08] bg-white py-2.5 pl-9 pr-9 text-[0.86rem] font-semibold text-[#333333] outline-none transition focus:border-deepGreen focus:ring-2 focus:ring-deepGreen/10"
               id="orderStatusFilter"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
-              <option value="all">All Status</option>
-              <option value="paid">Paid</option>
-              <option value="pending">Pending</option>
-              <option value="failed">Failed</option>
-              <option value="delivered">Delivered</option>
-              <option value="out-for-delivery">Out for Delivery</option>
-              <option value="processing">Processing</option>
+              {FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
+            <i className="fa-solid fa-chevron-down pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.65rem] text-[#999999]" />
           </div>
         </div>
+      </div>
 
-        <div className="max-h-[290px] w-full overflow-x-auto overflow-y-auto rounded-xl border border-black/[0.04]">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="border-b-2 border-black/[0.06] px-3 py-2.5 text-left text-[0.8rem] font-extrabold uppercase tracking-wide text-[#7A6F62]">
-                  Order ID
-                </th>
-                <th className="border-b-2 border-black/[0.06] px-3 py-2.5 text-left text-[0.8rem] font-extrabold uppercase tracking-wide text-[#7A6F62]">
-                  Date
-                </th>
-                <th className="border-b-2 border-black/[0.06] px-3 py-2.5 text-left text-[0.8rem] font-extrabold uppercase tracking-wide text-[#7A6F62]">
-                  Product
-                </th>
-                <th className="border-b-2 border-black/[0.06] px-3 py-2.5 text-left text-[0.8rem] font-extrabold uppercase tracking-wide text-[#7A6F62]">
-                  Items
-                </th>
-                <th className="border-b-2 border-black/[0.06] px-3 py-2.5 text-left text-[0.8rem] font-extrabold uppercase tracking-wide text-[#7A6F62]">
-                  Total
-                </th>
-                <th className="border-b-2 border-black/[0.06] px-3 py-2.5 text-left text-[0.8rem] font-extrabold uppercase tracking-wide text-[#7A6F62]">
-                  Payment Status
-                </th>
-                <th className="border-b-2 border-black/[0.06] px-3 py-2.5 text-left text-[0.8rem] font-extrabold uppercase tracking-wide text-[#7A6F62]">
-                  Delivery Status
-                </th>
-                <th className="border-b-2 border-black/[0.06] px-3 py-2.5 text-left text-[0.8rem] font-extrabold uppercase tracking-wide text-[#7A6F62]">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody id="ordersTableBody">
-              {loading && (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '24px' }}>
-                    Loading orders...
-                  </td>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="m-0 font-display text-[1.35rem] font-bold text-deepGreen">Order History</h2>
+        {!loading && (
+          <span className="text-[0.8rem] font-semibold text-[#888888]">
+            {filteredOrders.length} result{filteredOrders.length !== 1 ? 's' : ''}
+            {!loading && orders.length > 0 ? ` · ${orders.length} total` : ''}
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <OrdersLoadingState />
+      ) : filteredOrders.length === 0 ? (
+        <OrdersEmptyState />
+      ) : (
+        <div className="overflow-x-auto border-t border-black/[0.06]">
+          <table className="w-full min-w-[880px] border-collapse">
+              <thead>
+                <tr className="border-b border-black/[0.06]">
+                  {['Order ID', 'Date', 'Order', 'Total', 'Payment', 'Delivery', 'Actions'].map((label) => (
+                    <th
+                      key={label}
+                      className="border-b border-black/[0.06] px-4 py-3.5 text-left text-[0.72rem] font-extrabold uppercase tracking-[0.08em] text-[#7A6F62]"
+                    >
+                      {label}
+                    </th>
+                  ))}
                 </tr>
-              )}
-              {!loading && filteredOrders.length === 0 && (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: '#888' }}>
-                    No orders found. <Link to="/products">Start shopping</Link>
-                  </td>
-                </tr>
-              )}
-              {!loading &&
-                filteredOrders.map((order) => {
+              </thead>
+              <tbody id="ordersTableBody">
+                {filteredOrders.map((order, index) => {
                   const imgSrc = findProductImage(products, order.product);
                   const payment = getPaymentBadge(order.paymentType, order.payment);
                   const delivery = getDeliveryBadge(order.status);
                   const amountNum = parseFloat(String(order.amount).replace(/[^0-9.]/g, '')) || 0;
                   const itemCount = countOrderItems(order);
-                  const canCancel = resolveOrderStatus(order) === 'processing';
+                  const canCancel = canCustomerCancelOrder(order);
                   const canRetry =
                     payment.className === 'failed' &&
                     String(order.paymentMethod || '').toLowerCase().includes('evc');
+                  const orderProduct = resolveOrderProduct(order, products);
+                  const showReview = canShowOrderReview(order) && orderProduct;
 
                   return (
-                    <tr key={order.id} className="border-b border-black/[0.05]">
-                      <td className="px-3 py-2.5 text-[0.88rem] font-extrabold text-deepGreen">#{order.id}</td>
-                      <td className="px-3 py-2.5 text-[0.88rem] text-[#666666]">{order.date}</td>
-                      <td className="px-3 py-2.5">
-                        {imgSrc ? (
-                          <img
-                            src={imgSrc}
-                            alt={order.product}
-                            className="h-10 w-10 rounded-md border border-black/[0.04] bg-[#FAF8F5] object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-10 w-10 items-center justify-center rounded-md border border-black/[0.04] bg-gray-100 text-gray-400">
-                            <i className="fa-solid fa-couch" />
-                          </div>
-                        )}
+                    <tr
+                      key={order.id}
+                      className="border-b border-black/[0.04] transition-colors duration-200 hover:bg-white/60"
+                      style={{ animationDelay: `${index * 40}ms` }}
+                    >
+                      <td className="px-4 py-4">
+                        <span className="font-mono text-[0.86rem] font-extrabold text-deepGreen">#{order.id}</span>
                       </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[0.88rem] font-bold text-[#111111]">{order.product}</span>
-                          <span className="text-[0.78rem] font-semibold text-[#777777]">Qty: {itemCount}</span>
+                      <td className="px-4 py-4 text-[0.84rem] text-[#666666]">{order.date}</td>
+                      <td className="px-4 py-4">
+                        <div className="flex min-w-[200px] items-center gap-3">
+                          {imgSrc ? (
+                            <img
+                              src={imgSrc}
+                              alt={order.product}
+                              className="h-12 w-12 shrink-0 rounded-xl border border-black/[0.06] bg-[#FAF8F5] object-cover shadow-[0_2px_6px_rgba(0,0,0,0.04)]"
+                            />
+                          ) : (
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-black/[0.06] bg-[#FAF8F5] text-[#BBBBBB]">
+                              <i className="fa-solid fa-couch" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="m-0 truncate text-[0.88rem] font-bold text-[#222222]">{order.product}</p>
+                            <p className="m-0 mt-0.5 text-[0.76rem] font-semibold text-[#888888]">
+                              {itemCount} item{itemCount !== 1 ? 's' : ''}
+                            </p>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-[0.88rem] font-bold text-[#111111]">
+                      <td className="px-4 py-4 text-[0.88rem] font-extrabold text-[#222222]">
                         {order.amount?.startsWith('$') ? order.amount : formatMoney(amountNum)}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-4 py-4">
                         <span
-                          className={`inline-block rounded-lg px-3 py-1.5 text-center text-[0.82rem] font-bold ${STATUS_BADGE[payment.className] || STATUS_BADGE.pending}`}
+                          className={`inline-flex rounded-full px-2.5 py-1 text-[0.76rem] font-bold ${STATUS_BADGE[payment.className] || STATUS_BADGE.pending}`}
                         >
                           {payment.label}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-4 py-4">
                         <span
-                          className={`inline-block rounded-lg px-3 py-1.5 text-center text-[0.82rem] font-bold ${STATUS_BADGE[delivery.className] || STATUS_BADGE.pending}`}
+                          className={`inline-flex rounded-full px-2.5 py-1 text-[0.76rem] font-bold ${STATUS_BADGE[delivery.className] || STATUS_BADGE.pending}`}
                         >
                           {delivery.label}
                         </span>
                         {(order.deliveryDate || order.deliveryTime) && (
-                          <div className="mt-1 text-xs text-gray-500">
+                          <p className="m-0 mt-1 text-[0.72rem] text-[#999999]">
                             {order.deliveryDate}
-                            {order.deliveryTime ? ` ${order.deliveryTime}` : ''}
-                          </div>
+                            {order.deliveryTime ? ` · ${order.deliveryTime}` : ''}
+                          </p>
                         )}
                       </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex flex-col items-start gap-1">
-                          <button type="button" className={actionLinkClass} onClick={() => handleTrack(order.id)}>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                          <button type="button" className={actionBtnClass} onClick={() => handleTrack(order.id)}>
+                            <i className="fa-solid fa-location-dot text-[0.72rem]" />
                             Track
                           </button>
                           <button
                             type="button"
-                            className={actionLinkClass}
+                            className={actionBtnClass}
                             onClick={() =>
                               downloadInvoice({
                                 trackingCode: order.id,
@@ -574,25 +643,41 @@ export function ProfileOrdersTab() {
                               })
                             }
                           >
+                            <i className="fa-regular fa-file-pdf text-[0.72rem]" />
                             PDF
                           </button>
+                          {showReview && (
+                            <button
+                              type="button"
+                              className={`${actionBtnClass} text-gold hover:text-[#b8860b]`}
+                              onClick={() =>
+                                setReviewTarget({
+                                  productId: orderProduct.id,
+                                  productTitle: orderProduct.title,
+                                })
+                              }
+                            >
+                              <i className="fa-regular fa-star text-[0.72rem]" />
+                              Review
+                            </button>
+                          )}
                           {canRetry && (
                             <button
                               type="button"
-                              className={`${actionLinkClass} text-[#c0392b]`}
+                              className={`${actionBtnClass} text-[#c0392b] hover:text-[#a93226]`}
                               onClick={() => setRetryOrder(order)}
                             >
-                              Retry Payment
+                              Retry
                             </button>
                           )}
                           {canCancel && (
                             <button
                               type="button"
-                              className={`${actionLinkClass} text-red-600`}
+                              className={`${actionBtnClass} text-red-600 hover:text-red-700`}
                               disabled={cancellingId === order.id}
                               onClick={() => handleCancel(order)}
                             >
-                              {cancellingId === order.id ? 'Cancelling…' : 'Cancel'}
+                              {cancellingId === order.id ? '…' : 'Cancel'}
                             </button>
                           )}
                         </div>
@@ -600,10 +685,10 @@ export function ProfileOrdersTab() {
                     </tr>
                   );
                 })}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
         </div>
-      </div>
+      )}
 
       {retryOrder && (
         <RetryPaymentModal
@@ -620,6 +705,13 @@ export function ProfileOrdersTab() {
           }}
         />
       )}
+
+      <WriteReviewModal
+        open={Boolean(reviewTarget)}
+        productId={reviewTarget?.productId}
+        productTitle={reviewTarget?.productTitle}
+        onClose={() => setReviewTarget(null)}
+      />
     </div>
   );
 }
@@ -631,7 +723,7 @@ const FALLBACK_FAQS = [
   {
     icon: 'fa-solid fa-box',
     title: 'How can I track my order?',
-    body: 'You can track your order from the Track Order page. Enter your Order ID to view your order status and latest updates.',
+    body: 'Open Track Order from the sidebar, enter your Order ID, and view status updates in your profile.',
   },
   {
     icon: 'fa-regular fa-credit-card',
@@ -699,7 +791,7 @@ function FaqAccordion({ items }) {
   );
 }
 
-const cardClass =
+const faqCardClass =
   'flex h-[560px] flex-col rounded-2xl border border-black/[0.06] bg-white p-[30px] shadow-[0_4px_20px_rgba(0,0,0,0.015)]';
 
 export function ProfileHelpTab({ supportChat }) {
@@ -716,57 +808,6 @@ export function ProfileHelpTab({ supportChat }) {
       .catch(() => {});
   }, []);
 
-  const {
-    tickets,
-    activeTicket,
-    messages,
-    view,
-    sending,
-    createConversation,
-    sendMessage,
-    openTicket,
-    backToForm,
-    formatPastChatTime,
-  } = supportChat;
-
-  const [subject, setSubject] = useState('');
-  const [message, setMessage] = useState('');
-  const [chatInput, setChatInput] = useState('');
-  const messagesRef = useRef(null);
-
-  useEffect(() => {
-    messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, view]);
-
-  const handleSupportSubmit = async (e) => {
-    e.preventDefault();
-    if (!subject || !message.trim()) return;
-    const ok = await createConversation(subject, message.trim());
-    if (ok) {
-      setSubject('');
-      setMessage('');
-    }
-  };
-
-  const handleChatSubmit = async (e) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
-    const ok = await sendMessage(chatInput);
-    if (ok) setChatInput('');
-  };
-
-  const statusBadgeClass =
-    activeTicket?.status === 'Open'
-      ? 'bg-amber-400 text-gray-900'
-      : activeTicket?.status === 'Replied'
-        ? 'bg-green-600 text-white'
-        : 'bg-gray-500 text-white';
-
-  const userMessages = useMemo(
-    () => messages.filter((msg) => msg.senderRole === 'user'),
-    [messages]
-  );
-
   return (
     <div>
       <h1 className="mb-1.5 font-display text-[2.2rem] font-extrabold text-deepGreen">Help & Support</h1>
@@ -778,158 +819,10 @@ export function ProfileHelpTab({ supportChat }) {
         <span>Help & Support</span>
       </p>
 
-      <div className="mb-3 grid gap-3 lg:grid-cols-2">
-        <div className={cardClass} id="customerSupportCard">
-          {view === 'form' ? (
-            <div className="flex h-full flex-col overflow-hidden">
-              <h3 className="mb-6 text-[1.25rem] font-bold text-deepGreen">Submit a Support Request</h3>
-              <form className="shrink-0" onSubmit={handleSupportSubmit}>
-                <label htmlFor="customerSupportSubject" className="mb-2 block text-[0.82rem] font-bold text-[#1c3022]">
-                  Subject
-                </label>
-                <div className="relative mb-5">
-                  <select
-                    id="customerSupportSubject"
-                    required
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    className="w-full cursor-pointer appearance-none rounded-[10px] border-[1.5px] border-black/[0.08] bg-white px-4 py-3 text-[0.88rem] text-gray-600 outline-none transition-all duration-300 focus:border-deepGreen focus:shadow-[0_0_0_3px_rgba(7,61,53,0.08)]"
-                  >
-                    <option value="" disabled>
-                      Select a subject
-                    </option>
-                    <option value="Payment Issue">Payment Issue</option>
-                    <option value="Delivery Delay">Delivery Delay</option>
-                    <option value="Product Damage">Product Damage</option>
-                    <option value="Account Issue">Account Issue</option>
-                  </select>
-                  <i className="fa-solid fa-chevron-down pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[0.8rem] text-gray-500" />
-                </div>
+      <div className="mb-3 grid gap-3 lg:grid-cols-[1.4fr_1fr]">
+        <ProfileSupportChat supportChat={supportChat} />
 
-                <label htmlFor="customerSupportMessage" className="mb-2 block text-[0.82rem] font-bold text-[#1c3022]">
-                  Message
-                </label>
-                <div className="relative w-full">
-                  <textarea
-                    id="customerSupportMessage"
-                    placeholder="Write your problem here..."
-                    required
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    className="min-h-[180px] w-full resize-none rounded-xl border-[1.5px] border-black/[0.08] px-4 py-4 pr-12 text-[0.88rem] outline-none transition-all duration-300 focus:border-deepGreen focus:shadow-[0_0_0_3px_rgba(7,61,53,0.08)]"
-                  />
-                  <button
-                    type="submit"
-                    className="absolute bottom-5 right-5 flex items-center justify-center border-0 bg-transparent p-0 text-[1.3rem] text-deepGreen transition-all duration-200 hover:scale-110 hover:text-[#0b5e52] active:scale-95 disabled:opacity-50"
-                    title="Submit Request"
-                    disabled={sending}
-                  >
-                    <i className="fa-regular fa-paper-plane" />
-                  </button>
-                </div>
-              </form>
-
-              {tickets.length > 0 && (
-                <div className="mt-3 overflow-y-auto">
-                  <h4 className="mb-2.5 text-[0.85rem] font-bold">Past Conversations</h4>
-                  <div id="customerPastChatsList">
-                    {tickets.map((ticket) => (
-                      <button
-                        key={ticket.id}
-                        type="button"
-                        className="mb-1.5 flex w-full cursor-pointer items-center justify-between rounded-lg border border-deepGreen/[0.05] bg-base px-3 py-2.5 text-left transition-all duration-200 hover:translate-x-0.5 hover:bg-deepGreen/[0.03]"
-                        onClick={() => openTicket(ticket.id)}
-                      >
-                        <div className="mr-2 min-w-0 flex-1">
-                          <div className="text-[0.8rem] font-bold text-deepGreen">{ticket.subject}</div>
-                          <div className="max-w-[180px] truncate text-[0.72rem] text-[#666666]">
-                            {ticket.lastMessageText || ticket.subject || 'No messages'}
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-[0.68rem] text-[#888888]">
-                          {formatPastChatTime(ticket.lastMessageAt)}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex h-full flex-col">
-              <div className="mb-2 flex shrink-0 items-center justify-between border-b border-gray-200 pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-deepGreen text-[0.8rem] font-bold text-white">
-                    {(activeTicket?.subject || 'S').slice(0, 1).toUpperCase()}
-                  </div>
-                  <div>
-                    <span className="block max-w-[140px] truncate text-[0.85rem] font-bold text-[#111111]">
-                      {activeTicket?.subject || 'Subject'}
-                    </span>
-                    <span className={`inline-block rounded px-1.5 py-0.5 text-[0.6rem] ${statusBadgeClass}`}>
-                      {activeTicket?.status || 'Open'}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-md border border-gray-300 px-2 py-1 text-[0.75rem] text-gray-600 transition-colors hover:bg-gray-50"
-                  onClick={backToForm}
-                >
-                  <i className="fa-solid fa-arrow-left mr-1" /> Back
-                </button>
-              </div>
-
-              <div
-                ref={messagesRef}
-                className="mb-2 flex max-h-80 flex-grow flex-col overflow-y-auto rounded-xl border border-black/[0.03] bg-[#f9f9f9] p-2"
-                id="customerChatMessagesList"
-              >
-                {activeTicket?.status === 'Replied' ? (
-                  <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-[0.78rem] leading-relaxed text-green-800">
-                    <i className="fa-regular fa-bell mr-1.5" />
-                    Support wuu ka soo jawaabay. Jawaabta buuxda waxaad ka arki kartaa{' '}
-                    <strong>Notifications → Support Replied</strong>.
-                  </div>
-                ) : null}
-
-                {userMessages.map((msg) => (
-                  <div key={msg.id || `${msg.createdAt}-${msg.messageText}`} className="mb-2 flex w-full justify-end">
-                    <div className="relative max-w-[80%] rounded-xl rounded-br-sm bg-deepGreen px-3.5 py-2.5 text-[0.82rem] leading-snug text-white">
-                      <div className="mb-0.5 text-[0.65rem] font-bold opacity-85">Aniga</div>
-                      {msg.messageText}
-                      <span className="mt-1 block text-right text-[0.6rem] opacity-70">
-                        {formatChatTime(msg.createdAt)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <form className="flex shrink-0 gap-2" onSubmit={handleChatSubmit}>
-                <input
-                  type="text"
-                  id="customerChatMessageInput"
-                  placeholder="Write your message here..."
-                  className="flex-grow rounded-lg border border-gray-200 px-3 py-2 text-[0.85rem] outline-none focus:border-deepGreen focus:shadow-[0_0_0_3px_rgba(7,61,53,0.08)]"
-                  required
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  disabled={sending}
-                />
-                <button
-                  type="submit"
-                  className="rounded-lg border-0 bg-deepGreen px-4 py-2 text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                  disabled={sending}
-                >
-                  <i className="fa-regular fa-paper-plane" />
-                </button>
-              </form>
-            </div>
-          )}
-        </div>
-
-        <div className={cardClass}>
+        <div className={faqCardClass}>
           <h3 className="mb-6 text-[1.25rem] font-bold text-deepGreen">Quick Help / FAQ</h3>
           <FaqAccordion items={faqItems} />
         </div>

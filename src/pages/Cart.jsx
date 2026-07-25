@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import StoreNavbar from '../features/nav/StoreNavbar';
+import CheckoutAuthModal from '../features/checkout/CheckoutAuthModal';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { validateCartItems, validateCouponCode } from '../utils/cartApi';
@@ -9,6 +10,7 @@ import { showTopFloatNotification } from '../utils/notifications';
 
 export default function Cart() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, syncFromStorage: syncAuth } = useAuth();
   const {
     cartItems,
@@ -29,12 +31,20 @@ export default function Cart() {
     () => Number(localStorage.getItem('cartDiscount')) || 0
   );
   const [validating, setValidating] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [stockHints, setStockHints] = useState({});
 
   useEffect(() => {
     syncFromStorage();
     syncAuth();
   }, [syncFromStorage, syncAuth]);
+
+  useEffect(() => {
+    if (location.state?.showCheckoutAuth && !user.isLoggedIn) {
+      setAuthModalOpen(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, user.isLoggedIn, navigate, location.pathname]);
 
   useEffect(() => {
     if (cartItems.length === 0) {
@@ -102,7 +112,7 @@ export default function Cart() {
     }
 
     try {
-      const data = await validateCouponCode(couponValue, subtotal);
+      const data = await validateCouponCode(couponValue, subtotal, cartItems);
       if (data.success) {
         setDiscountAmount(data.discount);
         localStorage.setItem('cartDiscount', String(data.discount));
@@ -171,6 +181,11 @@ export default function Cart() {
 
       if (data.items?.length) {
         setCartItems(data.items.map(({ maxStock, stockOk, priceChanged, ...item }) => item));
+      }
+
+      if (!user.isLoggedIn) {
+        setAuthModalOpen(true);
+        return;
       }
 
       navigate('/checkout');
@@ -372,12 +387,18 @@ export default function Cart() {
 
                 {!user.isLoggedIn && (
                   <div className="note-box">
-                    Guest checkout available — you can complete your order without an account.
+                    You need an account to checkout. Log in or register when you proceed.
                   </div>
                 )}
               </aside>
             </div>
           )}
+
+          <CheckoutAuthModal
+            isOpen={authModalOpen}
+            onClose={() => setAuthModalOpen(false)}
+            returnTo="/checkout"
+          />
 
           {isEmpty && (
             <div className="empty-box">

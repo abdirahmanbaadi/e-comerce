@@ -1,5 +1,4 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ProductsProvider } from './context/ProductsContext';
@@ -15,11 +14,11 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 import ApplyDelivery from './pages/ApplyDelivery';
 import Delivery from './pages/Delivery';
+import Admin from './pages/Admin';
 import ProtectedRoute from './components/ProtectedRoute';
 import ScrollToTop from './components/ScrollToTop';
 import ErrorBoundary from './components/ErrorBoundary';
-
-const Admin = lazy(() => import('./pages/Admin'));
+import PostDeliveryReviewProvider from './components/PostDeliveryReviewProvider';
 
 function AppRoutes() {
   return (
@@ -55,18 +54,9 @@ function AppRoutes() {
         path="/admin"
         element={
           <ProtectedRoute roles={['admin']}>
-            <Suspense
-              fallback={
-                <div className="flex min-h-screen items-center justify-center bg-[#f4f7f6] text-[#073d35]">
-                  <div className="flex items-center gap-3 rounded-2xl border border-[#073d35]/10 bg-white px-5 py-4 font-bold shadow-sm">
-                    <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" />
-                    Loading admin panel…
-                  </div>
-                </div>
-              }
-            >
+            <ErrorBoundary>
               <Admin />
-            </Suspense>
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -81,15 +71,19 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <AuthProvider>
-        <ProductsProvider>
-          <CartProvider>
-            <WishlistProvider>
-              <AppRoutes />
-            </WishlistProvider>
-          </CartProvider>
-        </ProductsProvider>
-      </AuthProvider>
+      <ErrorBoundary>
+        <AuthProvider>
+          <PostDeliveryReviewProvider>
+            <ProductsProvider>
+              <CartProvider>
+                <WishlistProvider>
+                  <AppRoutes />
+                </WishlistProvider>
+              </CartProvider>
+            </ProductsProvider>
+          </PostDeliveryReviewProvider>
+        </AuthProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

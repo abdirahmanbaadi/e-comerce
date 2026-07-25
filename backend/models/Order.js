@@ -140,6 +140,53 @@ const orderSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    stockHeld: {
+      type: Boolean,
+      default: true,
+    },
+    paymentFailCount: {
+      type: Number,
+      default: 0,
+    },
+    refundTransactionId: {
+      type: String,
+      default: '',
+    },
+    refundedAt: {
+      type: Date,
+      default: null,
+    },
+    driverArrivedAt: {
+      type: Date,
+      default: null,
+    },
+    deliveredAt: {
+      type: Date,
+      default: null,
+    },
+    deliveryRating: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 5,
+    },
+    deliveryRatingComment: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    deliveryRatedAt: {
+      type: Date,
+      default: null,
+    },
+    reviewPromptCount: {
+      type: Number,
+      default: 0,
+    },
+    reviewPromptLastAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

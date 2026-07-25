@@ -1,9 +1,5 @@
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
-const {
-  demoPriceForProductId,
-  applyDemoPricesToCartItems,
-} = require('../utils/demoPrices');
 
 function mergeCartItems(existing = [], incoming = []) {
   const map = new Map();
@@ -27,6 +23,25 @@ function mergeCartItems(existing = [], incoming = []) {
   }
 
   return Array.from(map.values());
+}
+
+async function refreshCartPrices(items = []) {
+  const refreshed = [];
+  for (const item of items) {
+    if (!item?.id) continue;
+    const product = await Product.findOne({ id: Number(item.id) });
+    if (!product) {
+      refreshed.push(item);
+      continue;
+    }
+    refreshed.push({
+      ...item,
+      title: product.title,
+      price: Number(product.price) || 0,
+      image: product.images?.[0] || item.image,
+    });
+  }
+  return refreshed;
 }
 
 exports.validateCart = async (req, res) => {
@@ -67,8 +82,8 @@ exports.validateCart = async (req, res) => {
         issues.push(`"${product.title}" — only ${maxStock} left in stock.`);
       }
 
-      const currentPrice = demoPriceForProductId(product.id);
-      const priceChanged = Math.abs(Number(item.price) - Number(currentPrice)) > 0.0000001;
+      const currentPrice = Number(product.price) || 0;
+      const priceChanged = Math.abs(Number(item.price) - currentPrice) > 0.0000001;
       const safeQty = maxStock > 0 ? Math.min(quantity, maxStock) : 0;
 
       validatedItems.push({
@@ -104,10 +119,12 @@ exports.validateCart = async (req, res) => {
 exports.getCart = async (req, res) => {
   try {
     const doc = await Cart.findOne({ userId: req.user.id });
+    const cartItems = await refreshCartPrices(doc?.cartItems || []);
+    const savedItems = await refreshCartPrices(doc?.savedItems || []);
     return res.status(200).json({
       success: true,
-      cartItems: applyDemoPricesToCartItems(doc?.cartItems || []),
-      savedItems: applyDemoPricesToCartItems(doc?.savedItems || []),
+      cartItems,
+      savedItems,
     });
   } catch (error) {
     console.error(error);
@@ -124,14 +141,12 @@ exports.syncCart = async (req, res) => {
     if (!doc) {
       doc = await Cart.create({
         userId: req.user.id,
-        cartItems: applyDemoPricesToCartItems(incomingCart),
-        savedItems: applyDemoPricesToCartItems(incomingSaved),
+        cartItems: await refreshCartPrices(incomingCart),
+        savedItems: await refreshCartPrices(incomingSaved),
       });
     } else {
-      doc.cartItems = mergeCartItems(doc.cartItems, incomingCart);
-      doc.savedItems = mergeCartItems(doc.savedItems, incomingSaved);
-      doc.cartItems = applyDemoPricesToCartItems(doc.cartItems);
-      doc.savedItems = applyDemoPricesToCartItems(doc.savedItems);
+      doc.cartItems = await refreshCartPrices(mergeCartItems(doc.cartItems, incomingCart));
+      doc.savedItems = await refreshCartPrices(mergeCartItems(doc.savedItems, incomingSaved));
       await doc.save();
     }
 

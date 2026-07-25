@@ -3,13 +3,14 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 import ProfileSidebar from '../features/profile/ProfileLayout';
 import { ProfileInfoTab, ProfileOrdersTab, ProfileHelpTab } from '../features/profile/ProfileContent';
 import ProfileSettingsTab from '../features/profile/ProfileAccount';
+import ProfileTrackOrderTab from '../features/profile/ProfileTrackOrder';
 import { useAuth } from '../context/AuthContext';
 import { useSupportChat } from '../hooks/useSupportChat';
 import { useNotifications } from '../hooks/useNotifications';
 
 const ProfileNotificationsTab = lazy(() => import('../features/profile/ProfileNotifications'));
 
-const VALID_TABS = ['profile', 'orders', 'notifications', 'help', 'settings'];
+const VALID_TABS = ['profile', 'orders', 'track', 'notifications', 'help', 'settings'];
 
 export default function Profile() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -17,10 +18,11 @@ export default function Profile() {
 
   const tabParam = searchParams.get('tab');
   const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'profile';
+  const trackOrderId = searchParams.get('orderId') || '';
   const supportEnabled = user?.isLoggedIn && (activeTab === 'notifications' || activeTab === 'help');
 
   const [unreadCount, setUnreadCount] = useState(0);
-  const notifications = useNotifications({ enabled: user?.isLoggedIn, pollMs: 20000 });
+  const notifications = useNotifications({ enabled: user?.isLoggedIn, pollMs: 45000 });
 
   const refreshNotifications = notifications.refresh;
 
@@ -45,8 +47,14 @@ export default function Profile() {
   }, [notifications.unreadCount]);
 
   const handleTabChange = useCallback(
-    (tab) => {
-      setSearchParams(tab === 'profile' ? {} : { tab });
+    (tab, extra = {}) => {
+      if (tab === 'profile') {
+        setSearchParams({});
+        return;
+      }
+      const params = { tab };
+      if (extra.orderId) params.orderId = extra.orderId;
+      setSearchParams(params);
     },
     [setSearchParams]
   );
@@ -61,8 +69,12 @@ export default function Profile() {
           <ProfileSidebar activeTab={activeTab} unreadCount={unreadCount} onTabChange={handleTabChange} />
 
           <main className="flex min-h-screen flex-col gap-5 px-4 py-4 sm:px-6 sm:py-5 lg:px-10 lg:py-6">
+            <div key={activeTab} className="animate-profileTabIn flex min-h-0 flex-1 flex-col">
             {activeTab === 'profile' && <ProfileInfoTab />}
-            {activeTab === 'orders' && <ProfileOrdersTab />}
+            {activeTab === 'orders' && (
+              <ProfileOrdersTab onTrackOrder={(id) => handleTabChange('track', { orderId: id })} />
+            )}
+            {activeTab === 'track' && <ProfileTrackOrderTab initialOrderId={trackOrderId} />}
             {activeTab === 'notifications' && (
               <Suspense
                 fallback={
@@ -81,6 +93,7 @@ export default function Profile() {
             )}
             {activeTab === 'help' && <ProfileHelpTab supportChat={supportChat} />}
             {activeTab === 'settings' && <ProfileSettingsTab />}
+            </div>
           </main>
       </div>
     </div>

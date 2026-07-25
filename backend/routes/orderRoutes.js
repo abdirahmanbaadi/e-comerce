@@ -4,7 +4,7 @@ const orderController = require('../controllers/orderController');
 const { protect, optionalProtect, authorize } = require('../middleware/authMiddleware');
 
 // Public Order Endpoints
-router.post('/', optionalProtect, orderController.placeOrder);
+router.post('/', protect, orderController.placeOrder);
 router.get('/track/:orderId', orderController.trackOrder);
 router.patch('/cancel/:orderId', optionalProtect, orderController.cancelOrder);
 

@@ -15,21 +15,25 @@ function formatTime(date) {
 }
 
 const UI_META = {
+  order_placed: { iconType: 'order-placed', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-placed', highlight: true },
   order_confirmed: { iconType: 'order-confirmed', dot: 'green', iconWrap: 'solid-green', modalType: 'order-confirmed', highlight: true },
   payment_success: { iconType: 'payment-success', dot: 'green', iconWrap: 'solid-green', modalType: 'payment-success' },
   payment_failed: { iconType: 'payment-failed', dot: 'red', iconWrap: 'solid-red', modalType: 'payment-failed' },
   order_processing: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-processing' },
-  order_shipped: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-processing' },
-  order_delivered: { iconType: 'order-confirmed', dot: 'green', iconWrap: 'solid-green', modalType: 'order-confirmed' },
+  order_payment_verified: { iconType: 'order-processing', dot: 'green', iconWrap: 'solid-green', modalType: 'order-payment-verified' },
+  order_preparing: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-preparing' },
+  order_shipped: { iconType: 'delivery-assigned', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-shipped' },
+  order_delivered: { iconType: 'order-confirmed', dot: 'green', iconWrap: 'solid-green', modalType: 'order-delivered' },
   order_cancelled: { iconType: 'payment-failed', dot: 'red', iconWrap: 'solid-red', modalType: 'payment-failed' },
   driver_assigned: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-processing' },
   support_replied: { iconType: 'support-replied', dot: 'grey', iconWrap: 'solid-brown', modalType: 'support-replied', dynamic: true },
   wishlist_stock: { iconType: 'wishlist', dot: 'grey', iconWrap: 'solid-yellow', modalType: 'wishlist-available' },
   weekend_offer: { iconType: 'weekend-offer', dot: 'grey', iconWrap: 'solid-orange', modalType: 'weekend-offer' },
+  coupon_offer: { iconType: 'weekend-offer', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'coupon-offer' },
   new_order: { iconType: 'order-confirmed', dot: 'green', iconWrap: 'solid-green', modalType: 'order-confirmed' },
   driver_application: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-processing' },
   new_support_ticket: { iconType: 'support-replied', dot: 'grey', iconWrap: 'solid-brown', modalType: 'support-replied' },
-  delivery_assigned: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'delivery-assigned' },
+  delivery_assigned: { iconType: 'delivery-assigned', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'delivery-assigned' },
   delivery_accepted: { iconType: 'order-confirmed', dot: 'green', iconWrap: 'solid-green', modalType: 'order-confirmed' },
   driver_rejected: { iconType: 'payment-failed', dot: 'red', iconWrap: 'solid-red', modalType: 'payment-failed' },
   support_message: { iconType: 'support-replied', dot: 'grey', iconWrap: 'solid-brown', modalType: 'support-replied' },
@@ -79,11 +83,15 @@ function queryForUser(user) {
 exports.getNotifications = async (req, res) => {
   try {
     const filter = queryForUser(req.user);
-    const items = await Notification.find(filter).sort({ createdAt: -1 }).limit(100);
+    const [items, unreadCount] = await Promise.all([
+      Notification.find(filter).sort({ createdAt: -1 }).limit(50).lean(),
+      Notification.countDocuments({ ...filter, read: false }),
+    ]);
 
     return res.status(200).json({
       success: true,
       count: items.length,
+      unreadCount,
       notifications: items.map(mapNotification),
     });
   } catch (error) {

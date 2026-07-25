@@ -26,6 +26,10 @@ function normalizePromotion(entry, index) {
     discountAmount: Math.max(0, Number(entry.discountAmount) || 0),
     discountPercent: Math.min(100, Math.max(0, Number(entry.discountPercent) || 0)),
     active: entry.active !== false,
+    applicableCategory: trimStr(entry.applicableCategory, 80),
+    applicableProduct: trimStr(entry.applicableProduct, 120),
+    durationDays: Number(entry.durationDays) || 0,
+    expiresAt: entry.expiresAt ? new Date(entry.expiresAt) : null,
   };
 }
 
@@ -47,6 +51,20 @@ function normalizeDeliveryFee(entry) {
   const fee = Number(entry.fee);
   if (!district || Number.isNaN(fee) || fee < 0) return null;
   return { district, fee };
+}
+
+function normalizeStoreSettings(input = {}) {
+  const threshold = Number(input.lowStockThreshold);
+  const minOrder = Number(input.minOrderAmount);
+  return {
+    isOpen: input.isOpen !== false,
+    maintenanceMessage: trimStr(input.maintenanceMessage, 300),
+    lowStockThreshold: Number.isFinite(threshold) ? Math.min(100, Math.max(1, threshold)) : 5,
+    supportPhone: trimStr(input.supportPhone, 40),
+    supportEmail: trimStr(input.supportEmail, 120),
+    storeDisplayName: trimStr(input.storeDisplayName, 80) || 'Mogadishu Modern Furniture',
+    minOrderAmount: Number.isFinite(minOrder) && minOrder >= 0 ? minOrder : 0,
+  };
 }
 
 function validateCmsUpdate(body = {}) {
@@ -84,6 +102,10 @@ function validateCmsUpdate(body = {}) {
     if (body.deliveryFees.length > 0 && data.deliveryFees.length === 0) {
       errors.push('Delivery fees must include a district name and a valid fee.');
     }
+  }
+
+  if (body.storeSettings && typeof body.storeSettings === 'object') {
+    data.storeSettings = normalizeStoreSettings(body.storeSettings);
   }
 
   return { ok: errors.length === 0, errors, data };

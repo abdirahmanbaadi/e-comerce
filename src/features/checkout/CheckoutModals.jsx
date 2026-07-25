@@ -130,31 +130,7 @@ export function InvoiceLetter({ order, variant = 'full' }) {
   );
 }
 
-function resolveModalVariant(order) {
-  const status = String(order?.paymentStatus || '').toLowerCase();
-  const method = String(order?.paymentMethod || '');
-
-  if (status === 'failed') {
-    return {
-      icon: 'fa-triangle-exclamation',
-      iconBg: 'bg-[#c0392b]',
-      title: 'Payment Not Completed',
-      description:
-        order.paymentFailureMessage ||
-        'Your order was saved, but EVC Plus payment did not go through. Approve the prompt on your phone and enter your PIN, then retry payment.',
-    };
-  }
-
-  if (method === 'Cash on Delivery' || status === 'pending') {
-    return {
-      icon: 'fa-check',
-      iconBg: 'bg-deepGreen',
-      title: 'Order Placed Successfully',
-      description:
-        'Your order has been received. Pay cash when your delivery arrives, or use the tracking code below to follow progress.',
-    };
-  }
-
+function resolveModalVariant(_order) {
   return {
     icon: 'fa-check',
     iconBg: 'bg-deepGreen',
@@ -165,10 +141,101 @@ function resolveModalVariant(order) {
 }
 
 // =============================================================================
-// OrderConfirmModal
+// PaymentFailedCompactModal — small alert, no products / invoice
 // =============================================================================
 
-export default function OrderConfirmModal({ isOpen, order, onClose, onRetryPayment, retryingPayment = false }) {
+export function PaymentFailedCompactModal({
+  isOpen,
+  order,
+  onClose,
+  onRetryPayment,
+  onCancelOrder,
+  retryingPayment = false,
+  cancellingOrder = false,
+}) {
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen || !order) return null;
+
+  const message =
+    order.paymentFailureMessage ||
+    'EVC Plus payment did not complete. Approve the prompt on your phone and enter your PIN.';
+
+  return (
+    <div
+      className="fixed inset-0 z-[1060] flex items-center justify-center bg-deepGreen/45 p-4 backdrop-blur-[4px]"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="animate-cardRise w-full max-w-[340px] rounded-2xl border border-red-100 bg-base px-5 py-6 text-center shadow-[0_12px_40px_rgba(180,35,24,0.15)]"
+        onClick={(e) => e.stopPropagation()}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="paymentFailedTitle"
+      >
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#fce8e6] text-[#b42318]">
+          <i className="fa-solid fa-circle-xmark text-xl" aria-hidden="true" />
+        </div>
+        <h2 id="paymentFailedTitle" className="mb-1.5 font-display text-[1.35rem] font-bold text-[#b42318]">
+          Payment Failed
+        </h2>
+        <p className="mx-auto mb-4 max-w-[280px] text-[0.84rem] leading-relaxed text-[#555]">{message}</p>
+        {order.trackingCode && (
+          <p className="mb-4 font-mono text-[0.78rem] font-bold text-deepGreen">{order.trackingCode}</p>
+        )}
+        <div className="flex flex-col gap-2">
+          {typeof onRetryPayment === 'function' && (
+            <button
+              type="button"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-[10px] border-0 bg-deepGreen px-4 py-2.5 text-[0.84rem] font-bold text-white transition hover:bg-[#052b25] disabled:opacity-60"
+              disabled={retryingPayment || cancellingOrder}
+              onClick={onRetryPayment}
+            >
+              <i className={`fa-solid ${retryingPayment ? 'fa-spinner fa-spin' : 'fa-rotate-right'}`} />
+              {retryingPayment ? 'Processing…' : 'Retry Payment'}
+            </button>
+          )}
+          {typeof onCancelOrder === 'function' && (
+            <button
+              type="button"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-[10px] border border-red-200 bg-white px-4 py-2.5 text-[0.84rem] font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+              disabled={retryingPayment || cancellingOrder}
+              onClick={onCancelOrder}
+            >
+              <i className={`fa-solid ${cancellingOrder ? 'fa-spinner fa-spin' : 'fa-xmark'}`} />
+              {cancellingOrder ? 'Cancelling…' : 'Cancel Order'}
+            </button>
+          )}
+          <button
+            type="button"
+            className="inline-flex w-full items-center justify-center rounded-[10px] border border-gray-300 bg-white px-4 py-2.5 text-[0.84rem] font-bold text-deepGreen transition hover:bg-gray-50"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// OrderConfirmModal — success / paid only
+// =============================================================================
+
+export default function OrderConfirmModal({ isOpen, order, onClose }) {
   const [showInvoice, setShowInvoice] = useState(false);
 
   useEffect(() => {
@@ -193,8 +260,6 @@ export default function OrderConfirmModal({ isOpen, order, onClose, onRetryPayme
   if (!isOpen || !order) return null;
 
   const variant = resolveModalVariant(order);
-  const isFailed = String(order.paymentStatus || '').toLowerCase() === 'failed';
-  const canRetry = isFailed && order.paymentMethod === 'EVC Plus' && typeof onRetryPayment === 'function';
 
   if (showInvoice) {
     return (
@@ -277,13 +342,7 @@ export default function OrderConfirmModal({ isOpen, order, onClose, onRetryPayme
             </div>
             <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-5 py-[13px]">
               <dt className="m-0 bg-transparent text-[0.8125rem] font-semibold text-gray-400">Payment</dt>
-              <dd
-                className={`m-0 text-right text-[0.875rem] font-bold ${
-                  isFailed ? 'text-[#c0392b]' : 'text-gray-900'
-                }`}
-              >
-                {order.payment}
-              </dd>
+              <dd className="m-0 text-right text-[0.875rem] font-bold text-gray-900">{order.payment}</dd>
             </div>
             {order.transactionId && (
               <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-5 py-[13px]">
@@ -314,19 +373,7 @@ export default function OrderConfirmModal({ isOpen, order, onClose, onRetryPayme
           </div>
         </section>
 
-        <div className={`grid grid-cols-1 gap-2 ${canRetry ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
-          {canRetry && (
-            <button
-              type="button"
-              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border-0 bg-[#c0392b] px-1.5 py-[11px] text-center font-[inherit] text-[0.72rem] font-bold leading-tight text-white transition hover:bg-[#a93226] disabled:cursor-not-allowed disabled:opacity-60 max-[480px]:px-4 max-[480px]:py-3 max-[480px]:text-[0.8125rem] sm:col-span-2"
-              disabled={retryingPayment}
-              onClick={onRetryPayment}
-            >
-              <i className="fa-solid fa-rotate-right shrink-0 text-[0.85rem]" />
-              {retryingPayment ? 'Processing…' : 'Retry Payment'}
-            </button>
-          )}
-
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <Link
             to="/track-order"
             className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border-0 bg-deepGreen px-1.5 py-[11px] text-center font-[inherit] text-[0.72rem] font-bold leading-tight text-white no-underline transition hover:bg-[#052b25] max-[480px]:px-4 max-[480px]:py-3 max-[480px]:text-[0.8125rem]"
@@ -337,24 +384,22 @@ export default function OrderConfirmModal({ isOpen, order, onClose, onRetryPayme
           </Link>
 
           <Link
-            to={isFailed ? '/profile' : '/products'}
+            to="/products"
             className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border-[1.5px] border-gray-300 bg-white px-1.5 py-[11px] text-center font-[inherit] text-[0.72rem] font-bold leading-tight text-deepGreen no-underline transition hover:border-deepGreen hover:bg-gray-50 max-[480px]:px-4 max-[480px]:py-3 max-[480px]:text-[0.8125rem]"
             onClick={onClose}
           >
-            <i className={`fa-solid ${isFailed ? 'fa-user' : 'fa-bag-shopping'} shrink-0 text-[0.85rem]`} />
-            {isFailed ? 'My Orders' : 'Continue Shopping'}
+            <i className="fa-solid fa-bag-shopping shrink-0 text-[0.85rem]" />
+            Continue Shopping
           </Link>
 
-          {!canRetry && (
-            <button
-              type="button"
-              className="inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border-0 bg-gold px-1.5 py-[11px] text-center font-[inherit] text-[0.72rem] font-bold leading-tight text-deepGreen transition hover:bg-[#c8921f] max-[480px]:px-4 max-[480px]:py-3 max-[480px]:text-[0.8125rem]"
-              onClick={() => setShowInvoice(true)}
-            >
-              <i className="fa-solid fa-file-invoice shrink-0 text-[0.85rem]" />
-              View Invoice
-            </button>
-          )}
+          <button
+            type="button"
+            className="inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border-0 bg-gold px-1.5 py-[11px] text-center font-[inherit] text-[0.72rem] font-bold leading-tight text-deepGreen transition hover:bg-[#c8921f] max-[480px]:px-4 max-[480px]:py-3 max-[480px]:text-[0.8125rem]"
+            onClick={() => setShowInvoice(true)}
+          >
+            <i className="fa-solid fa-file-invoice shrink-0 text-[0.85rem]" />
+            View Invoice
+          </button>
         </div>
       </div>
     </div>

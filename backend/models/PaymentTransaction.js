@@ -8,7 +8,7 @@ const paymentTransactionSchema = new mongoose.Schema(
     amount: { type: Number, required: true },
     status: {
       type: String,
-      enum: ['pending', 'success', 'failed'],
+      enum: ['pending', 'success', 'failed', 'refunded'],
       default: 'pending',
     },
     phone: { type: String, default: '' },

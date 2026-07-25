@@ -34,6 +34,10 @@ const cmsSchema = new mongoose.Schema(
         discountAmount: { type: Number, default: 0 },
         discountPercent: { type: Number, default: 0 },
         active: { type: Boolean, default: true },
+        applicableCategory: { type: String, default: '' },
+        applicableProduct: { type: String, default: '' },
+        durationDays: { type: Number, default: 0 },
+        expiresAt: { type: Date, default: null },
       },
     ],
     faqs: [
@@ -50,6 +54,18 @@ const cmsSchema = new mongoose.Schema(
         fee: { type: Number, default: 0.01 },
       },
     ],
+    storeSettings: {
+      isOpen: { type: Boolean, default: true },
+      maintenanceMessage: {
+        type: String,
+        default: 'We are temporarily closed for maintenance. Please check back soon.',
+      },
+      lowStockThreshold: { type: Number, default: 5 },
+      supportPhone: { type: String, default: '+252 61 000 0000' },
+      supportEmail: { type: String, default: 'support@mogadishumodernfurniture.com' },
+      storeDisplayName: { type: String, default: 'Mogadishu Modern Furniture' },
+      minOrderAmount: { type: Number, default: 0 },
+    },
   },
   { timestamps: true, versionKey: false }
 );

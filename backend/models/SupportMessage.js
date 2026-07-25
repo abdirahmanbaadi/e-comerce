@@ -24,7 +24,13 @@ const supportMessageSchema = new mongoose.Schema(
     },
     messageText: {
       type: String,
-      required: true,
+      default: '',
+      trim: true,
+    },
+    imageUrl: {
+      type: String,
+      default: '',
+      trim: true,
     },
   },
   {
@@ -44,6 +50,15 @@ const supportMessageSchema = new mongoose.Schema(
     },
   }
 );
+
+supportMessageSchema.pre('validate', function requireContent(next) {
+  const hasText = Boolean(this.messageText && this.messageText.trim());
+  const hasImage = Boolean(this.imageUrl && this.imageUrl.trim());
+  if (!hasText && !hasImage) {
+    this.invalidate('messageText', 'Message must include text or an image.');
+  }
+  next();
+});
 
 supportMessageSchema.pre('save', async function assignMessageId(next) {
   if (!this.isNew || this.id != null) {

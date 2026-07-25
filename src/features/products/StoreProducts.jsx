@@ -1,7 +1,7 @@
 /**
  * STORE PRODUCTS — ProductCard + ProductModal (Tailwind only)
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { apiUrl } from '../../utils/data';
@@ -9,6 +9,7 @@ import { formatMoney, productImage } from '../../utils/format';
 import { getMaterialLabel } from '../../utils/productFilters';
 import { renderRatingStars } from '../../utils/rating';
 import { showTopFloatNotification } from '../../utils/notifications';
+import { ProductModalGallery, ProductModalHeroRow, ProductModalSpecsTable, PRODUCT_MODAL_BODY_CLASS, PRODUCT_MODAL_DETAILS_COL_CLASS } from './ProductModalGallery';
 
 /* ═══════════════════════════════════════════════════
    PRODUCT CARD
@@ -139,71 +140,32 @@ export default function ProductModal({ isOpen, product, onClose }) {
   const { addToCart } = useCart();
   const { isWishlisted, toggleWishlist } = useWishlist();
 
-  const [activeSlide, setActiveSlide] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const [reviewRating, setReviewRating] = useState(0);
-  const [reviewComment, setReviewComment] = useState('');
   const [approvedReviews, setApprovedReviews] = useState([]);
+  const [reviewStats, setReviewStats] = useState({ avgRating: 0, count: 0 });
   const [reviewsLoading, setReviewsLoading] = useState(false);
-  const [reviewSubmitted, setReviewSubmitted] = useState(false);
-  const [reviewBlocked, setReviewBlocked] = useState('');
 
-  const images = [...new Set((product?.images || []).filter(Boolean))];
   const inStock = product?.stock !== 'out-of-stock';
   const wishlisted = product ? isWishlisted(product.title) : false;
-  const swipeRef = useRef({ startX: 0, dragging: false });
-  const SWIPE_THRESHOLD = 48;
-
-  const goToSlide = (direction) => {
-    if (images.length <= 1) return;
-    setActiveSlide((current) => {
-      if (direction < 0) return current > 0 ? current - 1 : images.length - 1;
-      return current < images.length - 1 ? current + 1 : 0;
-    });
-  };
-
-  const handleSwipeStart = (event) => {
-    if (images.length <= 1) return;
-    swipeRef.current = { startX: event.clientX, dragging: true };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const handleSwipeEnd = (event) => {
-    if (!swipeRef.current.dragging || images.length <= 1) return;
-    const delta = event.clientX - swipeRef.current.startX;
-    swipeRef.current.dragging = false;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    if (Math.abs(delta) < SWIPE_THRESHOLD) return;
-    goToSlide(delta > 0 ? -1 : 1);
-  };
-
-  const handleSwipeCancel = (event) => {
-    swipeRef.current.dragging = false;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  };
 
   useEffect(() => {
     if (!isOpen || !product) return undefined;
 
-    setActiveSlide(0);
     setQuantity(1);
-    setReviewRating(0);
-    setReviewComment('');
     setApprovedReviews([]);
-    setReviewSubmitted(false);
-    setReviewBlocked('');
+    setReviewStats({ avgRating: 0, count: 0 });
 
     let cancelled = false;
     setReviewsLoading(true);
 
     fetch(apiUrl(`/api/reviews/product/${product.id}`))
       .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled && data.success) setApprovedReviews(data.reviews || []);
+      .then((reviewsData) => {
+        if (cancelled) return;
+        if (reviewsData?.success) {
+          setApprovedReviews(reviewsData.reviews || []);
+          setReviewStats(reviewsData.stats || { avgRating: 0, count: reviewsData.reviews?.length || 0 });
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -225,6 +187,8 @@ export default function ProductModal({ isOpen, product, onClose }) {
 
   if (!isOpen || !product) return null;
 
+  const displayRating =
+    reviewStats.count > 0 ? reviewStats.avgRating : Number(product.rating) || 0;
   const totalPrice = product.price * quantity;
   const showTotal = quantity >= 2;
 
@@ -243,47 +207,6 @@ export default function ProductModal({ isOpen, product, onClose }) {
     showTopFloatNotification(
       wasWishlisted ? 'Product removed from wishlist!' : 'Product saved to wishlist!'
     );
-  };
-
-  const handleSubmitReview = async () => {
-    if (reviewRating === 0) {
-      showTopFloatNotification('Fadlan dooro rating (xiddigo)!', 'danger');
-      return;
-    }
-
-    const token = localStorage.getItem('token');
-    if (!token) {
-      showTopFloatNotification('Please login to submit a review.', 'danger');
-      return;
-    }
-
-    try {
-      const response = await fetch(apiUrl('/api/reviews'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          productId: product.id,
-          productTitle: product.title,
-          rating: reviewRating,
-          comment: reviewComment.trim(),
-        }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        setReviewSubmitted(true);
-        setReviewRating(0);
-        setReviewComment('');
-        showTopFloatNotification('Review submitted! It will appear after admin approval.');
-      } else {
-        if (data.message?.includes('already reviewed')) setReviewBlocked(data.message);
-        showTopFloatNotification(data.message || 'Failed to submit review', 'danger');
-      }
-    } catch {
-      showTopFloatNotification('Could not submit review. Check backend connection.', 'danger');
-    }
   };
 
   return (
@@ -308,93 +231,11 @@ export default function ProductModal({ isOpen, product, onClose }) {
           ×
         </button>
 
-        <div className="p-6">
-          <div className="flex flex-col gap-4 md:flex-row">
-            {/* Images */}
-            <div className="w-full md:w-1/2">
-              <div className="mb-3 h-[300px] overflow-hidden rounded-[14px] border border-black/[0.05] bg-white md:h-[390px]">
-                <div
-                  className={`relative h-full touch-pan-y select-none ${images.length > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                  onPointerDown={handleSwipeStart}
-                  onPointerUp={handleSwipeEnd}
-                  onPointerCancel={handleSwipeCancel}
-                  role={images.length > 1 ? 'region' : undefined}
-                  aria-label={images.length > 1 ? 'Product images. Swipe or drag to change image.' : undefined}
-                >
-                  {images.map((img, index) => (
-                    <div
-                      key={`${img}-${index}`}
-                      className={`absolute inset-0 transition-opacity duration-200 ${
-                        index === activeSlide ? 'z-[1] opacity-100' : 'z-0 opacity-0 pointer-events-none'
-                      }`}
-                    >
-                      <img
-                        src={productImage(img)}
-                        alt={`${product.title} — image ${index + 1}`}
-                        className="block h-full w-full object-cover"
-                        draggable={false}
-                        loading={index <= 1 ? 'eager' : 'lazy'}
-                      />
-                    </div>
-                  ))}
-
-                  {images.length > 1 && (
-                    <>
-                      <button
-                        type="button"
-                        className="absolute left-3 top-1/2 z-[2] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border-0 bg-white/90 text-deepGreen shadow-md transition hover:bg-white"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          goToSlide(-1);
-                        }}
-                        aria-label="Previous image"
-                      >
-                        <i className="fa-solid fa-chevron-left" />
-                      </button>
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 z-[2] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border-0 bg-white/90 text-deepGreen shadow-md transition hover:bg-white"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          goToSlide(1);
-                        }}
-                        aria-label="Next image"
-                      >
-                        <i className="fa-solid fa-chevron-right" />
-                      </button>
-                      <div className="pointer-events-none absolute bottom-3 left-1/2 z-[2] flex -translate-x-1/2 gap-1.5">
-                        {images.map((img, index) => (
-                          <span
-                            key={`${img}-${index}`}
-                            className={`h-1.5 rounded-full transition-all ${index === activeSlide ? 'w-5 bg-white' : 'w-1.5 bg-white/55'}`}
-                          />
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2.5">
-                {images.map((img, index) => (
-                  <button
-                    key={`${img}-${index}`}
-                    type="button"
-                    className={`h-[74px] w-[74px] cursor-pointer overflow-hidden rounded-lg border-2 bg-white p-0 transition-colors ${
-                      index === activeSlide
-                        ? 'border-deepGreen'
-                        : 'border-transparent hover:border-deepGreen'
-                    }`}
-                    onClick={() => setActiveSlide(index)}
-                  >
-                    <img src={productImage(img)} alt="" className="block h-full w-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Details */}
-            <div className="w-full md:w-1/2">
+        <div className={PRODUCT_MODAL_BODY_CLASS}>
+          <ProductModalHeroRow
+            gallery={<ProductModalGallery images={product.images} title={product.title} resetKey={product.id} />}
+            details={
+            <div className={PRODUCT_MODAL_DETAILS_COL_CLASS}>
               <h2
                 id="productModalTitle"
                 className="mb-2 font-display text-[1.75rem] font-bold leading-[1.15] text-deepGreen md:text-[2.15rem]"
@@ -403,12 +244,14 @@ export default function ProductModal({ isOpen, product, onClose }) {
               </h2>
 
               <div className="mb-2 flex items-center gap-2">
-                <RatingStars rating={product.rating || 0} />
+                <RatingStars rating={displayRating} />
                 <span className="text-[0.85rem] text-[#666666]">
-                  {product.rating || 0} rating
-                  {approvedReviews.length > 0
-                    ? ` · ${approvedReviews.length} review${approvedReviews.length === 1 ? '' : 's'}`
-                    : ''}
+                  {displayRating} rating
+                  {reviewStats.count > 0
+                    ? ` · ${reviewStats.count} review${reviewStats.count === 1 ? '' : 's'}`
+                    : approvedReviews.length > 0
+                      ? ` · ${approvedReviews.length} review${approvedReviews.length === 1 ? '' : 's'}`
+                      : ''}
                 </span>
               </div>
 
@@ -421,37 +264,13 @@ export default function ProductModal({ isOpen, product, onClose }) {
                   'Crafted with premium materials and modern detail, designed to bring comfort, beauty, and long-lasting quality to your home.'}
               </p>
 
-              <table className="mb-[18px] mt-2.5 w-full border-collapse text-[0.88rem]">
-                <tbody>
-                  {[
-                    { icon: 'fa-couch', label: 'Material', value: product.material },
-                    { icon: 'fa-palette', label: 'Color', value: product.color },
-                    product.dimensions
-                      ? { icon: 'fa-ruler-combined', label: 'Dimensions', value: product.dimensions }
-                      : null,
-                    {
-                      icon: 'fa-circle-check',
-                      label: 'Availability',
-                      value: product.availability,
-                      stockClass: inStock
-                        ? 'font-extrabold text-[#087443]'
-                        : 'font-extrabold text-[#b42318]',
-                    },
-                  ]
-                    .filter(Boolean)
-                    .map((row) => (
-                      <tr key={row.label}>
-                        <td className="w-[125px] py-1.5 align-middle font-extrabold text-[#111111]">
-                          <i className={`fa-solid ${row.icon} mr-1.5 w-4 text-deepGreen`} />
-                          {row.label}
-                        </td>
-                        <td className={`py-1.5 align-middle text-[#444444] ${row.stockClass || ''}`}>
-                          {row.value}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+              <ProductModalSpecsTable
+                material={product.material}
+                color={product.color}
+                dimensions={product.dimensions}
+                availability={product.availability}
+                inStock={inStock}
+              />
 
               <div className="mb-3 flex items-center gap-3">
                 <div className="flex h-[39px] items-center overflow-hidden rounded-[7px] border border-black/15 bg-white">
@@ -537,46 +356,15 @@ export default function ProductModal({ isOpen, product, onClose }) {
                   </div>
                 )}
 
-                <div className="mb-1.5 text-[0.85rem] font-extrabold text-[#111]">Rate this product</div>
-
-                {reviewSubmitted && (
-                  <p className="mb-2 text-sm text-green-600">
-                    Thank you! Your review is pending admin approval.
-                  </p>
-                )}
-                {reviewBlocked && <p className="mb-2 text-sm text-gray-500">{reviewBlocked}</p>}
-
-                {!reviewSubmitted && !reviewBlocked && (
-                  <>
-                    <RatingStars
-                      rating={reviewRating}
-                      interactive
-                      onSelect={setReviewRating}
-                      className="mb-3"
-                    />
-
-                    <div className="mb-1.5 text-[0.85rem] font-extrabold text-[#111]">
-                      Add a comment (optional)
-                    </div>
-                    <textarea
-                      className="mb-0 h-[72px] w-full resize-none rounded-lg border border-black/15 p-2.5 font-sans text-[0.88rem] transition-all duration-300 focus:border-deepGreen focus:outline-none focus:shadow-[0_0_0_3px_rgba(10,54,34,0.1)]"
-                      placeholder="Share your experience with this product..."
-                      value={reviewComment}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                    />
-
-                    <button
-                      type="button"
-                      className="mt-2.5 cursor-pointer rounded-[7px] border-0 bg-deepGreen px-4 py-2 text-[0.85rem] font-extrabold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#0e4c30] hover:shadow-[0_6px_15px_rgba(10,54,34,0.3)] active:scale-[0.96]"
-                      onClick={handleSubmitReview}
-                    >
-                      Submit Review
-                    </button>
-                  </>
-                )}
+                <p className="mb-0 mt-3 rounded-lg border border-deepGreen/15 bg-deepGreen/5 p-3 text-[0.82rem] leading-relaxed text-gray-600">
+                  <i className="fa-solid fa-circle-info me-1.5 text-deepGreen" />
+                  Review-ga waxaad bixin kartaa marka alaabta lagu keeno. Waxaad heli doontaa
+                  reminder, ama Profile → Orders ka review garee.
+                </p>
               </div>
             </div>
-          </div>
+            }
+          />
         </div>
       </div>
     </div>
