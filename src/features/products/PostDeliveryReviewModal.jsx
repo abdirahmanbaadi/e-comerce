@@ -81,7 +81,7 @@ export default function PostDeliveryReviewModal({ open, prompt, onClose, onPromp
     const token = localStorage.getItem('token');
     if (!token) return undefined;
 
-    fetch(apiUrl(`/api/reviews/prompt/${prompt.orderId}/seen`), {
+    fetch(apiUrl(`/api/reviews/prompt/${encodeURIComponent(prompt.orderId)}/seen`), {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -169,7 +169,7 @@ export default function PostDeliveryReviewModal({ open, prompt, onClose, onPromp
 
     setSubmitting(true);
     try {
-      const res = await fetch(apiUrl(`/api/reviews/delivery/${localPrompt.orderId}`), {
+      const res = await fetch(apiUrl(`/api/reviews/delivery/${encodeURIComponent(localPrompt.orderId)}`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -197,6 +197,7 @@ function UsersFilterToolbar({
           { id: 'all', label: 'All' },
           { id: 'user', label: 'Customer' },
           { id: 'delivery', label: 'Driver' },
+          { id: 'admin', label: 'Admin' },
         ].map((pill) => (
           <FilterPill key={pill.id} active={filterRole === pill.id} onClick={() => onRoleChange(pill.id)}>
             {pill.label}
@@ -392,10 +393,15 @@ function EditUserModal({ open, form, saving, onChange, onClose, onSubmit }) {
                 value={form.role}
                 onChange={(e) => onChange('role', e.target.value)}
               >
+                {form.role === 'admin' ? <option value="admin">Admin</option> : null}
                 <option value="user">Customer</option>
                 <option value="delivery">Driver</option>
-                <option value="admin">Admin</option>
               </select>
+              {form.role !== 'admin' ? (
+                <p className="mt-1.5 text-[0.72rem] text-gray-500 [.admin-dark_&]:text-gray-400">
+                  To make this user an admin, close Edit and use <strong>Promote to Admin</strong> (password required).
+                </p>
+              ) : null}
             </div>
             <div>
               <label className={ADM_LABEL} htmlFor="admUserStatus">
@@ -427,6 +433,80 @@ function EditUserModal({ open, form, saving, onChange, onClose, onSubmit }) {
             </>
           ) : (
             'Save changes'
+          )}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function PromoteAdminModal({
+  open,
+  user,
+  password,
+  configured,
+  saving,
+  onPasswordChange,
+  onClose,
+  onConfirm,
+}) {
+  const name = user ? fullName(user) : 'User';
+
+  return (
+    <ModalShell open={open} onClose={onClose} zClass="z-[10001]" labelledBy="promoteAdminTitle" lockScroll={false}>
+      <div className="border-b border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
+        <h3 id="promoteAdminTitle" className="font-display text-xl font-bold text-deepGreen [.admin-dark_&]:text-[#e8f0ed]">
+          Promote to Admin
+        </h3>
+        <p className="mb-0 mt-1 text-[0.84rem] text-gray-500 [.admin-dark_&]:text-gray-400">
+          {name} ({user?.email || '—'})
+        </p>
+      </div>
+
+      <div className="space-y-4 p-5">
+        {!configured ? (
+          <div className="rounded-xl border border-amber-500/25 bg-amber-50/90 px-3 py-3 text-[0.82rem] text-amber-900 [.admin-dark_&]:border-amber-500/20 [.admin-dark_&]:bg-amber-500/10 [.admin-dark_&]:text-amber-100">
+            Admin promotion password is not set. Go to <strong>Settings</strong> and set it before promoting anyone.
+          </div>
+        ) : (
+          <>
+            <p className="mb-0 text-[0.82rem] leading-relaxed text-gray-600 [.admin-dark_&]:text-gray-300">
+              Geli admin promotion password-ka si aad u sameyso admin cusub. Waa inaad gacanta ku qortaa mar kasta.
+            </p>
+            <div>
+              <label className={ADM_LABEL} htmlFor="promoteAdminPassword">
+                Admin promotion password
+              </label>
+              <input
+                id="promoteAdminPassword"
+                type="password"
+                autoComplete="off"
+                className={ADM_INPUT}
+                value={password}
+                onChange={(e) => onPasswordChange(e.target.value)}
+                placeholder="Enter promotion password"
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
+        <button type="button" className={BTN_GHOST} onClick={onClose} disabled={saving}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={BTN_PRIMARY}
+          disabled={saving || !configured || !password.trim()}
+          onClick={onConfirm}
+        >
+          {saving ? (
+            <>
+              <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" /> Promoting…
+            </>
+          ) : (
+            'Confirm promotion'
           )}
         </button>
       </div>
@@ -780,6 +860,8 @@ function ViewUserModal({
   onEdit,
   onToggleActive,
   onDelete,
+  onPromote,
+  promotionConfigured,
 }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
 
@@ -794,6 +876,7 @@ function ViewUserModal({
   };
   const activities = data?.activities || [];
   const recentOrders = data?.recentOrders || [];
+  const driverRating = data?.driverRating || null;
   const name = user ? fullName(user) : '';
   const isActive = user?.isActive !== false;
   const spentLabel = formatAdminPrice(stats.totalSpent || 0);
@@ -866,6 +949,16 @@ function ViewUserModal({
                   <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Total spent</p>
                   <p className="mb-0 text-[0.88rem] font-semibold text-emerald-700 [.admin-dark_&]:text-emerald-400">{spentLabel}</p>
                 </div>
+                {user.role === 'delivery' && (
+                  <div>
+                    <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Driver rating</p>
+                    <p className="mb-0 text-[0.88rem] font-semibold text-amber-600 [.admin-dark_&]:text-amber-300">
+                      {(driverRating?.avg || user.driverRatingAvg || 0) > 0
+                        ? `${driverRating?.avg || user.driverRatingAvg} ★ (${driverRating?.count || user.driverRatingCount || 0} reviews)`
+                        : 'No ratings yet'}
+                    </p>
+                  </div>
+                )}
                 <div>
                   <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Joined</p>
                   <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">{user.joinedDate || '—'}</p>
@@ -880,6 +973,40 @@ function ViewUserModal({
                     <p className="mb-0 break-all font-mono text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">{user.id}</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {user?.role === 'delivery' && driverRating?.recentRatings?.length > 0 && (
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Customer delivery ratings</p>
+                  <span className="text-[0.68rem] font-semibold text-gray-400">
+                    {driverRating.recentRatings.length} recent
+                  </span>
+                </div>
+                <div className="max-h-[200px] space-y-2 overflow-y-auto rounded-[12px] border border-black/[0.06] p-3 [scrollbar-width:thin] [.admin-dark_&]:border-white/10">
+                  {driverRating.recentRatings.map((entry) => (
+                    <div
+                      key={entry.orderId}
+                      className="rounded-[10px] border border-black/[0.05] bg-white px-3 py-2.5 [.admin-dark_&]:border-white/[0.07] [.admin-dark_&]:bg-white/[0.02]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-[0.76rem] font-bold text-deepGreen [.admin-dark_&]:text-emerald-400">
+                          {entry.orderId}
+                        </span>
+                        <span className="text-[0.82rem] font-bold text-amber-500">{entry.rating} ★</span>
+                      </div>
+                      {entry.comment && (
+                        <p className="mb-0 mt-1 text-[0.76rem] text-gray-600 [.admin-dark_&]:text-gray-300">
+                          {entry.comment}
+                        </p>
+                      )}
+                      {entry.customer && (
+                        <p className="mb-0 mt-1 text-[0.7rem] text-gray-400">— {entry.customer}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1015,15 +1142,29 @@ function ViewUserModal({
 
         {user && (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[0.8rem] font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50 [.admin-dark_&]:hover:bg-red-500/10"
-              disabled={acting}
-              onClick={() => onDelete?.(user)}
-            >
-              <i className="fa-regular fa-trash-can text-[0.75rem]" />
-              Delete
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[0.8rem] font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50 [.admin-dark_&]:hover:bg-red-500/10"
+                disabled={acting}
+                onClick={() => onDelete?.(user)}
+              >
+                <i className="fa-regular fa-trash-can text-[0.75rem]" />
+                Delete
+              </button>
+              {user.role !== 'admin' && (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-[10px] border border-deepGreen/20 bg-deepGreen/[0.06] px-3 py-2 text-[0.8rem] font-bold text-deepGreen transition hover:bg-deepGreen/10 disabled:opacity-50 [.admin-dark_&]:border-emerald-500/25 [.admin-dark_&]:bg-emerald-500/10 [.admin-dark_&]:text-emerald-300"
+                  disabled={acting || !promotionConfigured}
+                  title={promotionConfigured ? 'Promote to admin' : 'Set promotion password in Settings first'}
+                  onClick={() => onPromote?.(user)}
+                >
+                  <i className="fa-solid fa-user-shield text-[0.75rem]" />
+                  Promote to Admin
+                </button>
+              )}
+            </div>
             <button type="button" className={BTN_PRIMARY} disabled={acting} onClick={() => onEdit?.(user)}>
               <i className="fa-regular fa-pen-to-square" />
               Edit
@@ -1055,6 +1196,12 @@ export default function AdminUsersTab({ headerSearch = '' }) {
   const [viewError, setViewError] = useState('');
   const [viewData, setViewData] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+
+  const [promotionConfigured, setPromotionConfigured] = useState(false);
+  const [promoteOpen, setPromoteOpen] = useState(false);
+  const [promoteTarget, setPromoteTarget] = useState(null);
+  const [promotePassword, setPromotePassword] = useState('');
+  const [promoteSaving, setPromoteSaving] = useState(false);
 
   const searchQuery = headerSearch.toLowerCase().trim();
 
@@ -1093,6 +1240,27 @@ export default function AdminUsersTab({ headerSearch = '' }) {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  const loadPromotionStatus = useCallback(async () => {
+    try {
+      const res = await fetchWithTimeout(
+        apiUrl('/api/auth/admin-promotion-password/status'),
+        { headers: authHeaders(false) },
+        ADMIN_FETCH_TIMEOUT
+      );
+      const data = await res.json();
+      if (data.success) setPromotionConfigured(Boolean(data.configured));
+    } catch {
+      setPromotionConfigured(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPromotionStatus();
+    const onUpdated = () => loadPromotionStatus();
+    window.addEventListener('admin-promotion-password-updated', onUpdated);
+    return () => window.removeEventListener('admin-promotion-password-updated', onUpdated);
+  }, [loadPromotionStatus]);
 
   useEffect(() => {
     const onInvalidate = () => loadUsers({ quiet: true });
@@ -1217,6 +1385,50 @@ export default function AdminUsersTab({ headerSearch = '' }) {
       isActive: customer.isActive !== false,
     });
     setEditOpen(true);
+  };
+
+  const openPromote = (customer) => {
+    if (!promotionConfigured) {
+      showTopFloatNotification('Set the admin promotion password in Settings first.', 'warning');
+      return;
+    }
+    setPromoteTarget(customer);
+    setPromotePassword('');
+    setPromoteOpen(true);
+  };
+
+  const closePromote = () => {
+    setPromoteOpen(false);
+    setPromoteTarget(null);
+    setPromotePassword('');
+  };
+
+  const handlePromoteConfirm = async () => {
+    if (!promoteTarget?.id || !promotePassword.trim()) return;
+
+    setPromoteSaving(true);
+    try {
+      const res = await fetch(apiUrl(`/api/auth/users/${promoteTarget.id}/promote-admin`), {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ adminPromotionPassword: promotePassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showTopFloatNotification(data.message || 'User promoted to admin.');
+        closePromote();
+        closeView();
+        loadUsers({ quiet: true });
+        window.dispatchEvent(new CustomEvent('admin-users-invalidate'));
+      } else {
+        showTopFloatNotification(data.message || 'Promotion failed.', 'danger');
+      }
+    } catch {
+      showTopFloatNotification('Could not connect to the server. Try again.', 'danger');
+    } finally {
+      setPromoteSaving(false);
+      setPromotePassword('');
+    }
   };
 
   const handleEditChange = (field, value) => {
@@ -1481,10 +1693,23 @@ export default function AdminUsersTab({ headerSearch = '' }) {
         data={viewData}
         listCustomer={selectedCustomer}
         acting={Boolean(actingId && selectedCustomer && actingId === selectedCustomer.id)}
+        promotionConfigured={promotionConfigured}
         onClose={closeView}
         onEdit={openEdit}
+        onPromote={openPromote}
         onToggleActive={toggleActive}
         onDelete={handleDelete}
+      />
+
+      <PromoteAdminModal
+        open={promoteOpen}
+        user={promoteTarget}
+        password={promotePassword}
+        configured={promotionConfigured}
+        saving={promoteSaving}
+        onPasswordChange={setPromotePassword}
+        onClose={closePromote}
+        onConfirm={handlePromoteConfirm}
       />
     </div>
   );

@@ -71,8 +71,8 @@ const { canCustomerCancelOrder } = require('../utils/orderCancelUtils');
 const { attemptOrderRefund, isOrderPaid, isOrderRefunded } = require('../services/refundService');
 const {
   scheduleOrderRefund,
-  REFUND_PROCESSING_DELAY_MS,
 } = require('../services/refundSchedulerService');
+const { formatRefundProcessingDelay } = require('../config/timingConfig');
 
 async function resolveOrderItemPrices(items = []) {
   const resolved = [];
@@ -465,7 +465,7 @@ exports.cancelOrder = async (req, res) => {
         attempted: false,
         success: false,
         scheduled: true,
-        message: `Refund scheduled — EVC Plus credit within ${Math.round(REFUND_PROCESSING_DELAY_MS / (60 * 60 * 1000))} hour(s).`,
+        message: `Refund scheduled — EVC Plus credit within ${formatRefundProcessingDelay()}.`,
       };
     } else if (isOrderPaid(order) && isOrderRefunded(order)) {
       refund = { attempted: false, success: true, scheduled: false, message: 'Already refunded.' };
@@ -513,7 +513,7 @@ exports.cancelOrder = async (req, res) => {
 
     let responseMessage = 'Your order has been cancelled successfully.';
     if (refund.scheduled) {
-      responseMessage = `Order cancelled. Your refund will be sent to your EVC Plus wallet within ${Math.round(REFUND_PROCESSING_DELAY_MS / (60 * 60 * 1000))} hour(s).`;
+      responseMessage = `Order cancelled. Your refund will be sent to your EVC Plus wallet within ${formatRefundProcessingDelay()}.`;
     } else if (refund.attempted && refund.success) {
       responseMessage = 'Order cancelled. Your payment has been refunded to your EVC Plus wallet.';
     } else if (refund.attempted && !refund.success) {
@@ -809,6 +809,17 @@ exports.updateOrder = async (req, res) => {
         else if (step >= 4) order.status = 'shipped';
         else order.status = 'processing';
       }
+    }
+
+    const nextStepBeforeSave =
+      typeof order.currentStep === 'number' ? order.currentStep : prevStep;
+    const nextStatusBeforeSave = resolveOrderStatus(order);
+    const becameCancelled =
+      (nextStatusBeforeSave === 'cancelled' || nextStepBeforeSave === 0) &&
+      prevStatus !== 'cancelled' &&
+      prevStep !== 0;
+    if (becameCancelled) {
+      scheduleOrderRefund(order);
     }
 
     stampDeliveredAt(order, prevStep);

@@ -2,6 +2,7 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { sendSms } = require('./smsService');
 const { findUserByPhone } = require('../utils/phoneUtils');
+const { formatRefundProcessingDelay } = require('../config/timingConfig');
 
 function generateNotificationId() {
   return `NTF-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`;
@@ -250,7 +251,7 @@ async function onOrderUpdated(order, changes = {}) {
     if (changes.refundCompleted) {
       message = `Your order ${orderId} was cancelled and your payment was refunded to your EVC Plus wallet.`;
     } else if (changes.refundScheduled) {
-      message = `Your order ${orderId} was cancelled. ${changes.refundMessage || 'Refund will be sent to your EVC Plus wallet within 1 hour.'}`;
+      message = `Your order ${orderId} was cancelled. ${changes.refundMessage || `Refund will be sent to your EVC Plus wallet within ${formatRefundProcessingDelay()}.`}`;
     } else if (changes.refundAttempted && !changes.refundCompleted) {
       message = `Your order ${orderId} was cancelled. ${changes.refundMessage || 'Contact support to receive your refund.'}`;
     }

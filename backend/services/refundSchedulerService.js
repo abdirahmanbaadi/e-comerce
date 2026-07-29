@@ -14,7 +14,10 @@ function scheduleOrderRefund(order) {
   if (!order || !isOrderPaid(order) || isOrderRefunded(order)) {
     return false;
   }
-  if (order.refundStatus === 'scheduled' || order.refundStatus === 'completed') {
+  if (order.refundStatus === 'completed') {
+    return false;
+  }
+  if (order.refundStatus === 'scheduled' && order.refundDueAt) {
     return false;
   }
 
@@ -23,11 +26,37 @@ function scheduleOrderRefund(order) {
   return true;
 }
 
+/** Paid orders cancelled without a refund job (e.g. admin cancel) — schedule on startup. */
+async function reconcileMissedRefunds() {
+  if (mongoose.connection.readyState !== 1) return 0;
+
+  const missed = await Order.find({
+    status: 'cancelled',
+    $or: [{ paymentType: 'paid' }, { payment: { $regex: /^paid$/i } }],
+    refundStatus: { $in: ['none', 'failed', null, ''] },
+  });
+
+  let scheduled = 0;
+  for (const order of missed) {
+    if (isOrderRefunded(order)) continue;
+    if (scheduleOrderRefund(order)) {
+      await order.save();
+      scheduled += 1;
+    }
+  }
+
+  if (scheduled > 0) {
+    console.log(`Scheduled ${scheduled} missed refund(s) for cancelled paid orders.`);
+  }
+
+  return scheduled;
+}
+
 async function processDueRefunds() {
   if (mongoose.connection.readyState !== 1) return 0;
 
   const dueOrders = await Order.find({
-    refundStatus: 'scheduled',
+    refundStatus: { $in: ['scheduled', 'failed'] },
     refundDueAt: { $lte: new Date() },
     status: 'cancelled',
   });
@@ -35,9 +64,17 @@ async function processDueRefunds() {
   let processed = 0;
 
   for (const order of dueOrders) {
+    if (isOrderRefunded(order)) {
+      order.refundStatus = 'completed';
+      await order.save();
+      continue;
+    }
+
     const refund = await attemptOrderRefund(order);
-    order.refundStatus = refund.success ? 'completed' : 'failed';
-    if (!refund.success) {
+    if (refund.success) {
+      order.refundStatus = 'completed';
+    } else {
+      order.refundStatus = 'failed';
       order.refundDueAt = new Date(Date.now() + REFUND_JOB_INTERVAL_MS);
     }
     await order.save();
@@ -71,7 +108,9 @@ async function processDueRefunds() {
 
 function startRefundSchedulerJob() {
   const firstRunTimer = setTimeout(() => {
-    processDueRefunds().catch((err) => console.error('Refund scheduler failed:', err.message));
+    reconcileMissedRefunds()
+      .then(() => processDueRefunds())
+      .catch((err) => console.error('Refund scheduler failed:', err.message));
   }, FIRST_RUN_DELAY_MS);
 
   const intervalId = setInterval(() => {
@@ -86,6 +125,7 @@ function startRefundSchedulerJob() {
 
 module.exports = {
   scheduleOrderRefund,
+  reconcileMissedRefunds,
   processDueRefunds,
   startRefundSchedulerJob,
   REFUND_PROCESSING_DELAY_MS,

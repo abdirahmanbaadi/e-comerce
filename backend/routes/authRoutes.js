@@ -22,7 +22,10 @@ router.put('/change-password', protect, authController.changePassword);
 router.get('/users', protect, authorize('admin'), authController.getUsers);
 router.get('/users/:id/details', protect, authorize('admin'), authController.getUserDetails);
 router.put('/users/:id', protect, authorize('admin'), authController.updateUser);
+router.post('/users/:id/promote-admin', protect, authorize('admin'), authController.promoteUserToAdmin);
 router.delete('/users/:id', protect, authorize('admin'), authController.deleteUser);
+router.get('/admin-promotion-password/status', protect, authorize('admin'), authController.getAdminPromotionPasswordStatus);
+router.put('/admin-promotion-password', protect, authorize('admin'), authController.setAdminPromotionPassword);
 
 module.exports = router;
 

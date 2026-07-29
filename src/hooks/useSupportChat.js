@@ -87,7 +87,8 @@ export function useSupportChat(enabled, { onAdminReply } = {}) {
   }, [activeTicketId]);
 
   const createConversation = useCallback(
-    async (subject, messageText, imageUrl = '') => {
+    async (subject, messageText, imageUrl = '', options = {}) => {
+      const { openAfterCreate = true } = options;
       const token = localStorage.getItem('token');
       if (!token) {
         showTopFloatNotification('❌ Fadlan marka hore soo gal!', 'danger');
@@ -119,7 +120,7 @@ export function useSupportChat(enabled, { onAdminReply } = {}) {
         if (data.success) {
           showTopFloatNotification('✅ Fariintaada kowaad waa la diray!');
           loadChats();
-          if (data.ticket?.id) {
+          if (openAfterCreate && data.ticket?.id) {
             await openTicket(data.ticket.id);
           }
           return true;

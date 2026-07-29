@@ -65,6 +65,7 @@ const cmsSchema = new mongoose.Schema(
       supportEmail: { type: String, default: 'support@mogadishumodernfurniture.com' },
       storeDisplayName: { type: String, default: 'Mogadishu Modern Furniture' },
       minOrderAmount: { type: Number, default: 0 },
+      adminPromotionPasswordHash: { type: String, default: '' },
     },
   },
   { timestamps: true, versionKey: false }

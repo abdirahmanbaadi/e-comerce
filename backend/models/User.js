@@ -103,6 +103,17 @@ const userSchema = new mongoose.Schema(
       enum: ['available', 'busy', 'offline'],
       default: 'available',
     },
+    driverRatingAvg: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+    driverRatingCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     notificationPreferences: {
       emailAlerts: { type: Boolean, default: true },
       smsAlerts: { type: Boolean, default: false },

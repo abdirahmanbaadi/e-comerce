@@ -3,6 +3,7 @@ const { logUserActivity } = require('../services/activityService');
 const { onPromotionActivated, onBannerActivated } = require('../services/notificationService');
 const { validateCmsUpdate } = require('../utils/cmsValidation');
 const { FIXED_COUPON_DISCOUNT, discountLabel } = require('../utils/pricing');
+const { stripPromotionPasswordFromStoreSettings } = require('../utils/cmsSecurityUtils');
 
 function normalizeCmsAssetPath(path) {
   if (!path) return path;
@@ -35,6 +36,10 @@ function normalizeCmsPayload(cms) {
       ...banner,
       image: banner.image ? normalizeCmsAssetPath(banner.image) : banner.image,
     }));
+  }
+
+  if (data.storeSettings) {
+    data.storeSettings = stripPromotionPasswordFromStoreSettings(data.storeSettings);
   }
 
   return data;

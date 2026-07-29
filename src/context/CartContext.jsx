@@ -125,6 +125,8 @@ export function CartProvider({ children }) {
           title: product.title,
           category: (product.label || product.category) + ' / ' + (product.materialLabel || product.materialType),
           categorySlug: product.category || '',
+          categoryLabel: product.label || '',
+          materialType: product.materialType || '',
           price: product.price,
           quantity,
           image: product.images[0],

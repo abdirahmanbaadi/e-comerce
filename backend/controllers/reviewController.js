@@ -2,7 +2,9 @@ const Review = require('../models/Review');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
 const { notifyUser } = require('../services/notificationService');
-const { normalizePhone, buildUserOrdersQuery } = require('../utils/phoneUtils');
+const { buildUserOrdersQuery } = require('../utils/phoneUtils');
+const { normalizeOrderId } = require('../utils/orderIdUtils');
+const { recalculateDriverRating } = require('../services/driverRatingService');
 const {
   findDuePromptForUser,
   getOrderPromptState,
@@ -328,7 +330,10 @@ exports.getReviewPrompt = async (req, res) => {
 
 exports.markReviewPromptSeen = async (req, res) => {
   try {
-    const { orderId } = req.params;
+    const orderId = normalizeOrderId(req.params.orderId);
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: 'Order ID is required.' });
+    }
     const order = await markPromptShown(orderId, req.user);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found.' });
@@ -343,19 +348,19 @@ exports.markReviewPromptSeen = async (req, res) => {
 
 exports.rateDelivery = async (req, res) => {
   try {
-    const { orderId } = req.params;
+    const orderId = normalizeOrderId(req.params.orderId);
     const { rating, comment } = req.body;
     const numericRating = Number(rating);
+
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: 'Order ID is required.' });
+    }
 
     if (!numericRating || numericRating < 1 || numericRating > 5) {
       return res.status(400).json({ success: false, message: 'Rating must be between 1 and 5.' });
     }
 
-    const query = req.user.id
-      ? { $or: [{ userId: req.user.id }, { phone: normalizePhone(req.user.phone) }] }
-      : { phone: normalizePhone(req.user.phone) };
-
-    const order = await Order.findOne({ id: orderId, ...query });
+    const order = await Order.findOne({ id: orderId, ...buildUserOrdersQuery(req.user) });
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found.' });
     }
@@ -374,6 +379,10 @@ exports.rateDelivery = async (req, res) => {
     order.deliveryRatedAt = new Date();
     if (!order.deliveredAt) order.deliveredAt = new Date();
     await order.save();
+
+    if (order.assignedDriverId) {
+      await recalculateDriverRating(order.assignedDriverId);
+    }
 
     const state = await getOrderPromptState(req.user, order.toObject());
     return res.status(200).json({

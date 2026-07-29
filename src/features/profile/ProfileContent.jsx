@@ -13,7 +13,7 @@ import { showTopFloatNotification } from '../../utils/notifications';
 import RetryPaymentModal from '../checkout/RetryPaymentModal';
 import WriteReviewModal from '../products/WriteReviewModal';
 import { AppSearchField } from '../nav/StoreNavbar';
-import ProfileSupportChat from './ProfileSupportChat';
+import ProfileSupportForm from './ProfileSupportForm';
 import { OrderItemsList } from '../admin/AdminOrdersTab.jsx';
 import {
   ADMIN_MODAL_CLOSE_BTN,
@@ -966,51 +966,51 @@ const FALLBACK_FAQS = [
 ];
 
 function FaqAccordion({ items }) {
-  const [openIndex, setOpenIndex] = useState(0);
+  const [openIndex, setOpenIndex] = useState(-1);
   const faqItems = items?.length ? items : FALLBACK_FAQS;
 
   return (
-    <div className="flex flex-grow flex-col gap-3 overflow-y-auto pr-1">
-      {faqItems.map((item, index) => {
-        const isOpen = openIndex === index;
-        const title = item.question || item.title;
-        const body = item.answer || item.body;
-        return (
-          <div
-            key={title}
-            className={`shrink-0 overflow-hidden rounded-xl border-[1.5px] bg-white transition-all duration-300 ${
-              isOpen ? 'border-deepGreen shadow-[0_4px_15px_rgba(7,61,53,0.04)]' : 'border-black/[0.06]'
-            }`}
-          >
-            <button
-              type="button"
-              className={`flex w-full items-center justify-between border-0 px-5 py-4 text-left transition-colors duration-300 ${
-                isOpen ? 'bg-[#f4f7f5]' : 'bg-white hover:bg-[#fbfaf8]'
-              }`}
-              onClick={() => setOpenIndex(isOpen ? -1 : index)}
+    <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
+      <div className="flex flex-col gap-3">
+        {faqItems.map((item, index) => {
+          const isOpen = openIndex === index;
+          const title = item.question || item.title;
+          const body = item.answer || item.body;
+          return (
+            <div
+              key={item.id || `${title}-${index}`}
+              className="overflow-hidden rounded-xl border-[1.5px] border-black/[0.06] bg-white"
             >
-              <div className="flex items-center gap-4">
-                <span className="flex h-6 w-6 items-center justify-center text-[1.15rem] text-deepGreen">
-                  <i className={item.icon || 'fa-solid fa-circle-question'} />
-                </span>
-                <span className="text-[0.88rem] font-semibold text-[#1c3022]">{title}</span>
-              </div>
-              <i className={`fa-solid ${isOpen ? 'fa-chevron-up' : 'fa-chevron-down'} text-[0.85rem] text-gray-500`} />
-            </button>
-            {isOpen && (
-              <div className="border-t-[1.5px] border-black/[0.06] bg-white px-5 py-4 text-[0.84rem] leading-relaxed text-gray-600">
-                {body}
-              </div>
-            )}
-          </div>
-        );
-      })}
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 border-0 bg-white px-4 py-4 text-left transition hover:bg-[#fafaf8]"
+                onClick={() => setOpenIndex(isOpen ? -1 : index)}
+                aria-expanded={isOpen}
+              >
+                <div className="flex min-w-0 items-center gap-3.5">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[1.05rem] text-deepGreen">
+                    <i className={item.icon || 'fa-solid fa-circle-question'} />
+                  </span>
+                  <span className="text-[0.88rem] font-semibold text-[#1c3022]">{title}</span>
+                </div>
+                <i
+                  className={`fa-solid shrink-0 text-[0.8rem] text-gray-400 ${
+                    isOpen ? 'fa-chevron-down' : 'fa-chevron-right'
+                  }`}
+                />
+              </button>
+              {isOpen && (
+                <div className="border-t border-black/[0.05] px-4 py-3.5 pl-[3.1rem] text-[0.84rem] leading-relaxed text-gray-600">
+                  {body}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
-
-const faqCardClass =
-  'flex h-[560px] flex-col rounded-2xl border border-black/[0.06] bg-white p-[30px] shadow-[0_4px_20px_rgba(0,0,0,0.015)]';
 
 export function ProfileHelpTab({ supportChat }) {
   const [faqItems, setFaqItems] = useState(FALLBACK_FAQS);
@@ -1028,22 +1028,33 @@ export function ProfileHelpTab({ supportChat }) {
 
   return (
     <div>
-      <h1 className="mb-1.5 font-display text-[2.2rem] font-extrabold text-deepGreen">Help & Support</h1>
-      <p className="mb-6 text-[0.88rem] font-medium text-gray-500">
-        <Link to="/" className="font-semibold text-deepGreen no-underline hover:underline">
-          Home
-        </Link>
-        <span className="mx-2 text-gray-400">&gt;</span>
-        <span>Help & Support</span>
-      </p>
+      <header className="mb-4">
+        <h1 className="mb-1 font-display text-[1.75rem] font-extrabold text-deepGreen sm:text-[2rem]">
+          Help & Support
+        </h1>
+        <p className="text-[0.85rem] font-medium text-gray-500">
+          <Link to="/" className="font-semibold text-deepGreen no-underline hover:underline">
+            Home
+          </Link>
+          <span className="mx-2 text-gray-400">&gt;</span>
+          <span>Help & Support</span>
+        </p>
+      </header>
 
-      <div className="mb-3 grid gap-3 lg:grid-cols-[1.4fr_1fr]">
-        <ProfileSupportChat supportChat={supportChat} />
+      <div className="grid gap-5 lg:grid-cols-[1.35fr_1fr] lg:items-stretch">
+        <ProfileSupportForm supportChat={supportChat} />
 
-        <div className={faqCardClass}>
-          <h3 className="mb-6 text-[1.25rem] font-bold text-deepGreen">Quick Help / FAQ</h3>
+        <aside className="flex min-h-[480px] flex-col rounded-2xl border border-black/[0.06] bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] sm:p-7">
+          <h3 className="mb-5 shrink-0 text-[1.2rem] font-bold text-deepGreen">Quick Help / FAQ</h3>
           <FaqAccordion items={faqItems} />
-        </div>
+          <Link
+            to="/contact"
+            className="mt-4 inline-flex shrink-0 items-center gap-1.5 text-[0.86rem] font-semibold text-deepGreen no-underline hover:underline"
+          >
+            View all FAQs
+            <i className="fa-solid fa-chevron-right text-[0.72rem]" />
+          </Link>
+        </aside>
       </div>
     </div>
   );

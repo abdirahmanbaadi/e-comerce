@@ -166,8 +166,26 @@ export function AdminSettingsTab() {
   const [compactTables, setCompactTables] = useState(
     () => readLocalPref(ADMIN_SETTINGS_KEYS.compactTables, 'false') === 'true'
   );
+  const [promotionConfigured, setPromotionConfigured] = useState(false);
+  const [promotionNew, setPromotionNew] = useState('');
+  const [promotionConfirm, setPromotionConfirm] = useState('');
+  const [promotionSaving, setPromotionSaving] = useState(false);
 
   const markDirty = useCallback(() => setDirty(true), []);
+
+  const loadPromotionPasswordStatus = useCallback(async () => {
+    try {
+      const res = await fetchWithTimeout(
+        apiUrl('/api/auth/admin-promotion-password/status'),
+        { headers: authHeaders(false) },
+        ADMIN_FETCH_TIMEOUT
+      );
+      const data = await res.json();
+      if (data.success) setPromotionConfigured(Boolean(data.configured));
+    } catch {
+      setPromotionConfigured(false);
+    }
+  }, []);
 
   const loadSettings = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true);
@@ -217,7 +235,8 @@ export function AdminSettingsTab() {
 
   useEffect(() => {
     loadSettings();
-  }, [loadSettings]);
+    loadPromotionPasswordStatus();
+  }, [loadSettings, loadPromotionPasswordStatus]);
 
   useEffect(() => {
     const onInvalidate = () => loadSettings({ quiet: true });
@@ -238,6 +257,43 @@ export function AdminSettingsTab() {
   const updateNotif = (key, value) => {
     setNotifPrefs((prev) => ({ ...prev, [key]: value }));
     markDirty();
+  };
+
+  const savePromotionPassword = async () => {
+    if (!promotionNew || !promotionConfirm) {
+      showTopFloatNotification('Enter and confirm the admin promotion password.', 'warning');
+      return;
+    }
+    if (promotionNew !== promotionConfirm) {
+      showTopFloatNotification('Passwords do not match.', 'danger');
+      return;
+    }
+
+    setPromotionSaving(true);
+    try {
+      const res = await fetch(apiUrl('/api/auth/admin-promotion-password'), {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          newPassword: promotionNew,
+          confirmPassword: promotionConfirm,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showTopFloatNotification(data.message || 'Admin promotion password saved.');
+        setPromotionConfigured(true);
+        setPromotionNew('');
+        setPromotionConfirm('');
+        window.dispatchEvent(new CustomEvent('admin-promotion-password-updated'));
+      } else {
+        showTopFloatNotification(data.message || 'Could not save password.', 'danger');
+      }
+    } catch {
+      showTopFloatNotification('Could not connect to the server.', 'danger');
+    } finally {
+      setPromotionSaving(false);
+    }
   };
 
   const saveSettings = async () => {
@@ -642,6 +698,78 @@ export function AdminSettingsTab() {
               checked={notifPrefs.lowStockAlerts}
               onChange={(v) => updateNotif('lowStockAlerts', v)}
             />
+          </div>
+        </SettingsSection>
+
+        <SettingsSection
+          icon="fa-shield-halved"
+          title="Admin promotion password"
+          description="Required each time you promote a customer or driver to admin. Typed manually — never stored in the browser."
+        >
+          <div
+            className={`mb-4 rounded-xl border px-3 py-2.5 text-[0.78rem] ${
+              promotionConfigured
+                ? 'border-emerald-500/25 bg-emerald-50/80 text-emerald-800 [.admin-dark_&]:border-emerald-500/20 [.admin-dark_&]:bg-emerald-500/10 [.admin-dark_&]:text-emerald-200'
+                : 'border-amber-500/25 bg-amber-50/80 text-amber-900 [.admin-dark_&]:border-amber-500/20 [.admin-dark_&]:bg-amber-500/10 [.admin-dark_&]:text-amber-100'
+            }`}
+          >
+            <i className={`fa-solid ${promotionConfigured ? 'fa-circle-check' : 'fa-triangle-exclamation'} me-2`} />
+            {promotionConfigured
+              ? 'Promotion password is set. You will be asked for it on every Promote to Admin action.'
+              : 'Not set yet — promoting users to admin is blocked until you save a password here.'}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className={ADM_LABEL} htmlFor="promotionPasswordNew">
+                New password
+              </label>
+              <input
+                id="promotionPasswordNew"
+                type="password"
+                autoComplete="new-password"
+                className={ADM_INPUT}
+                value={promotionNew}
+                onChange={(e) => setPromotionNew(e.target.value)}
+                placeholder="At least 6 characters"
+              />
+            </div>
+            <div>
+              <label className={ADM_LABEL} htmlFor="promotionPasswordConfirm">
+                Confirm password
+              </label>
+              <input
+                id="promotionPasswordConfirm"
+                type="password"
+                autoComplete="new-password"
+                className={ADM_INPUT}
+                value={promotionConfirm}
+                onChange={(e) => setPromotionConfirm(e.target.value)}
+                placeholder="Repeat password"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={BTN_PRIMARY}
+              disabled={promotionSaving}
+              onClick={savePromotionPassword}
+            >
+              {promotionSaving ? (
+                <>
+                  <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" /> Saving…
+                </>
+              ) : promotionConfigured ? (
+                'Update promotion password'
+              ) : (
+                'Set promotion password'
+              )}
+            </button>
+            <p className="mb-0 text-[0.72rem] text-gray-500 [.admin-dark_&]:text-gray-400">
+              Any admin can update this password. Share it only with trusted staff.
+            </p>
           </div>
         </SettingsSection>
 

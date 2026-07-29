@@ -2,6 +2,7 @@ const Order = require('../models/Order');
 const Review = require('../models/Review');
 const Product = require('../models/Product');
 const { normalizePhone, buildUserOrdersQuery } = require('../utils/phoneUtils');
+const { normalizeOrderId } = require('../utils/orderIdUtils');
 
 const {
   REVIEW_FIRST_PROMPT_DELAY_MS,
@@ -161,10 +162,11 @@ async function findDuePromptForUser(user) {
 }
 
 async function markPromptShown(orderId, user) {
+  const normalizedId = normalizeOrderId(orderId);
   const baseQuery = buildUserOrderQuery(user);
-  if (!baseQuery) return null;
+  if (!baseQuery || !normalizedId) return null;
 
-  const order = await Order.findOne({ id: orderId, ...baseQuery });
+  const order = await Order.findOne({ id: normalizedId, ...baseQuery });
   if (!order) return null;
 
   order.reviewPromptCount = (Number(order.reviewPromptCount) || 0) + 1;

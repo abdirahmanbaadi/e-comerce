@@ -15,6 +15,12 @@ const {
 } = require('../utils/phoneUtils');
 const { sendWelcomeEmail, sendPasswordResetCode, isEmailConfigured } = require('../services/emailService');
 const { logUserActivity } = require('../services/activityService');
+const { getDriverRatingSummary } = require('../services/driverRatingService');
+const {
+  isAdminPromotionPasswordConfigured,
+  verifyAdminPromotionPassword,
+  setAdminPromotionPassword,
+} = require('../services/adminPromotionPasswordService');
 const {
   hashOtp,
   validatePassword,
@@ -757,6 +763,11 @@ exports.getUserDetails = async (req, res) => {
 
     const totalSpent = spentAgg[0]?.total || 0;
 
+    let driverRating = null;
+    if (user.role === 'delivery') {
+      driverRating = await getDriverRatingSummary(user.id);
+    }
+
     return res.status(200).json({
       success: true,
       user: {
@@ -770,6 +781,8 @@ exports.getUserDetails = async (req, res) => {
         avatar: user.avatar,
         isActive: user.isActive !== false,
         lastLoginAt: user.lastLoginAt || null,
+        driverRatingAvg: user.driverRatingAvg || 0,
+        driverRatingCount: user.driverRatingCount || 0,
         joinedDate: user.createdAt
           ? new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
           : '',
@@ -777,7 +790,14 @@ exports.getUserDetails = async (req, res) => {
       stats: {
         totalOrders,
         totalSpent,
+        ...(driverRating
+          ? {
+              driverRatingAvg: driverRating.avg,
+              driverRatingCount: driverRating.count,
+            }
+          : {}),
       },
+      driverRating,
       activities: activities.map((a) => ({
         id: a.id,
         action: a.action,
@@ -854,6 +874,13 @@ exports.updateUser = async (req, res) => {
       if (user.email.toLowerCase() === 'admin@gmail.com' && role !== 'admin') {
         return res.status(400).json({ success: false, message: 'The main admin account role cannot be changed!' });
       }
+      if (role === 'admin' && prevRole !== 'admin') {
+        return res.status(400).json({
+          success: false,
+          code: 'USE_PROMOTE_ENDPOINT',
+          message: 'Use Promote to Admin and enter the admin promotion password.',
+        });
+      }
       user.role = role;
     }
 
@@ -901,6 +928,103 @@ exports.updateUser = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to update user account.' });
+  }
+};
+
+exports.getAdminPromotionPasswordStatus = async (_req, res) => {
+  try {
+    const configured = await isAdminPromotionPasswordConfigured();
+    return res.status(200).json({ success: true, configured });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to load admin promotion password status.' });
+  }
+};
+
+exports.setAdminPromotionPassword = async (req, res) => {
+  try {
+    const { newPassword, confirmPassword } = req.body || {};
+    const next = String(newPassword || '');
+    const confirm = String(confirmPassword || '');
+
+    if (!next || !confirm) {
+      return res.status(400).json({ success: false, message: 'Enter and confirm the admin promotion password.' });
+    }
+    if (next !== confirm) {
+      return res.status(400).json({ success: false, message: 'Passwords do not match.' });
+    }
+
+    const result = await setAdminPromotionPassword(next);
+    if (!result.ok) {
+      return res.status(400).json({ success: false, message: result.message });
+    }
+
+    await logUserActivity({
+      userId: req.user?.id,
+      action: 'admin_promotion_password_updated',
+      description: 'Admin promotion password was set or updated.',
+      metadata: { byAdmin: req.user?.id },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Admin promotion password saved. Use it when promoting a user to admin.',
+      configured: true,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to save admin promotion password.' });
+  }
+};
+
+exports.promoteUserToAdmin = async (req, res) => {
+  try {
+    const user = await User.findOne({ id: req.params.id });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found!' });
+    }
+
+    if (user.role === 'admin') {
+      return res.status(400).json({ success: false, message: 'This user is already an admin.' });
+    }
+
+    const verified = await verifyAdminPromotionPassword(req.body?.adminPromotionPassword);
+    if (!verified.ok) {
+      const status = verified.code === 'NOT_CONFIGURED' ? 400 : 403;
+      return res.status(status).json({
+        success: false,
+        code: verified.code,
+        message: verified.message,
+      });
+    }
+
+    const prevRole = user.role;
+    user.role = 'admin';
+    await user.save();
+
+    await logUserActivity({
+      userId: user.id,
+      action: 'role_changed',
+      description: `Role changed from ${prevRole} to admin via promotion password.`,
+      metadata: { from: prevRole, to: 'admin', byAdmin: req.user?.id },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `${user.firstName || 'User'} is now an admin.`,
+      user: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isActive: user.isActive !== false,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to promote user to admin.' });
   }
 };
 

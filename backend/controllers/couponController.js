@@ -1,11 +1,60 @@
 const CmsContent = require('../models/CmsContent');
+const Product = require('../models/Product');
 const { getDefaultCms } = require('./cmsController');
 const { FIXED_COUPON_DISCOUNT, discountLabel } = require('../utils/pricing');
-const { itemMatchesCategory } = require('../utils/categoryUtils');
+const {
+  itemEligibleForPromo,
+  getCategoryDisplayName,
+} = require('../utils/categoryUtils');
 
 const BUILTIN_COUPONS = {
   MMF10: { discount: FIXED_COUPON_DISCOUNT, label: discountLabel(FIXED_COUPON_DISCOUNT) },
 };
+
+async function enrichCartItems(items = []) {
+  const enriched = [];
+  for (const item of items) {
+    if (!item?.id) {
+      enriched.push(item);
+      continue;
+    }
+    const product = await Product.findOne({ id: Number(item.id) }).lean();
+    if (!product) {
+      enriched.push(item);
+      continue;
+    }
+    enriched.push({
+      ...item,
+      title: item.title || product.title,
+      categorySlug: product.category || '',
+      categoryLabel: product.label || '',
+      label: product.label || '',
+      materialType: product.materialType || '',
+      materialLabel: product.materialLabel || '',
+    });
+  }
+  return enriched;
+}
+
+function calculatePromoDiscount(promo, applicableSubtotal) {
+  const fixed = Number(promo.discountAmount) || 0;
+  const percent = Number(promo.discountPercent) || 0;
+  let discount = 0;
+
+  if (percent > 0 && applicableSubtotal > 0) {
+    discount = Math.round(applicableSubtotal * (percent / 100) * 100) / 100;
+  }
+  if (fixed > 0) {
+    discount = Math.max(discount, fixed);
+  }
+
+  // Demo catalog uses $0.01 items — percent-only coupons must still apply something.
+  if (discount <= 0 && applicableSubtotal > 0 && (fixed > 0 || percent > 0)) {
+    discount = Math.min(FIXED_COUPON_DISCOUNT, applicableSubtotal);
+  }
+
+  return discount;
+}
 
 async function resolveCoupon(code, subtotal, items) {
   const normalized = String(code || '').trim().toUpperCase();
@@ -43,31 +92,27 @@ async function resolveCoupon(code, subtotal, items) {
   }
 
   let applicableSubtotal = Number(subtotal) || 0;
+  const cartItems = Array.isArray(items) && items.length > 0 ? await enrichCartItems(items) : [];
 
   if (promo.applicableCategory || promo.applicableProduct) {
-    if (!items || !Array.isArray(items) || items.length === 0) {
+    if (cartItems.length === 0) {
       return {
         ok: false,
         message: 'Kuuboonkan wuxuu u shaqeeyaa alaabo gaar ah. Fadlan marka hore alaabta ku shub cart-ka.',
       };
     }
 
-    const matchingItems = items.filter((item) => {
-      const matchCat = itemMatchesCategory(item, promo.applicableCategory);
-      const matchProd =
-        !promo.applicableProduct ||
-        String(item.id || '').toLowerCase() === String(promo.applicableProduct).toLowerCase() ||
-        String(item.title || '').toLowerCase().includes(String(promo.applicableProduct).toLowerCase());
-      return matchCat && matchProd;
-    });
+    const matchingItems = cartItems.filter((item) => itemEligibleForPromo(item, promo));
 
     if (matchingItems.length === 0) {
-      const catMsg = promo.applicableCategory ? `qaybta "${promo.applicableCategory}"` : '';
+      const catMsg = promo.applicableCategory
+        ? `qaybta "${getCategoryDisplayName(promo.applicableCategory)}"`
+        : '';
       const prodMsg = promo.applicableProduct ? `alaabta "${promo.applicableProduct}"` : '';
       const msg = [catMsg, prodMsg].filter(Boolean).join(' ama ');
       return {
         ok: false,
-        message: `Kuuboonkan wuxuu u shaqeeyaa oo kaliya ${msg}.`,
+        message: `Kuuboonkan wuxuu u shaqeeyaa oo kaliya ${msg}. Ku dar alaab ka tirsan qaybtaas cart-kaaga.`,
       };
     }
 
@@ -77,11 +122,7 @@ async function resolveCoupon(code, subtotal, items) {
     );
   }
 
-  let discount = Number(promo.discountAmount) || 0;
-  const percent = Number(promo.discountPercent) || 0;
-  if (percent > 0) {
-    discount = Math.round(applicableSubtotal * (percent / 100) * 100) / 100;
-  }
+  let discount = calculatePromoDiscount(promo, applicableSubtotal);
 
   if (discount <= 0) {
     return { ok: false, message: 'Kuuboonkan kuma habboona dalabkaaga hadda.' };

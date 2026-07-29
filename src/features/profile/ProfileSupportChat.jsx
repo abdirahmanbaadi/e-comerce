@@ -270,7 +270,7 @@ function NewConversationPanel({ onCreate, sending, onUploadImage }) {
   );
 }
 
-export default function ProfileSupportChat({ supportChat }) {
+export default function ProfileSupportChat({ supportChat, className = '' }) {
   const {
     tickets,
     activeTicket,
@@ -348,16 +348,18 @@ export default function ProfileSupportChat({ supportChat }) {
   const showMobileChat = Boolean(activeTicketId || composeNew);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-      <div className="flex h-[min(72vh,620px)] min-h-[520px]">
+    <div
+      className={`overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] ${className}`}
+    >
+      <div className="flex h-full min-h-0">
         <aside
-          className={`flex w-full flex-col border-r border-black/[0.06] bg-white md:w-[38%] md:min-w-[280px] md:max-w-[360px] ${
+          className={`flex w-full flex-col border-r border-black/[0.06] bg-white md:w-[34%] md:min-w-[260px] md:max-w-[320px] ${
             showMobileChat ? 'hidden md:flex' : 'flex'
           }`}
         >
-          <div className="border-b border-black/[0.06] bg-[#f0f2f1] px-4 py-3">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="mb-0 text-[1rem] font-extrabold text-deepGreen">Chats</h3>
+          <div className="shrink-0 border-b border-black/[0.06] bg-[#f7f8f7] px-4 py-3">
+            <div className="mb-2.5 flex items-center justify-between gap-2">
+              <h3 className="text-[0.95rem] font-extrabold text-deepGreen">Chats</h3>
               <button
                 type="button"
                 onClick={handleStartNew}
@@ -401,7 +403,9 @@ export default function ProfileSupportChat({ supportChat }) {
           </div>
         </aside>
 
-        <section className={`min-w-0 flex-1 flex-col bg-[#efeae2] ${showMobileChat ? 'flex' : 'hidden md:flex'}`}>
+        <section
+          className={`min-w-0 flex-1 flex-col bg-[#efeae2] ${showMobileChat ? 'flex' : 'hidden md:flex'}`}
+        >
           {composeNew ? (
             <NewConversationPanel
               onCreate={handleCreate}
@@ -409,18 +413,18 @@ export default function ProfileSupportChat({ supportChat }) {
               onUploadImage={uploadSupportImage}
             />
           ) : !activeTicket ? (
-            <div className="flex flex-1 flex-col items-center justify-center px-6 text-center text-gray-500">
-              <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-deepGreen/10 text-deepGreen">
-                <i className="fa-brands fa-whatsapp text-4xl" />
+            <div className="flex flex-1 flex-col items-center justify-center px-6 py-8 text-center text-gray-500">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-deepGreen/10 text-deepGreen">
+                <i className="fa-solid fa-headset text-3xl" />
               </div>
-              <h4 className="mb-2 text-lg font-bold text-gray-800">Help & Support</h4>
-              <p className="mb-4 max-w-xs text-[0.86rem]">
+              <h4 className="mb-2 text-base font-bold text-gray-800">Help & Support</h4>
+              <p className="mb-5 max-w-[280px] text-[0.84rem] leading-relaxed">
                 Dooro wadahadal bidix ka mid ah ama samee mid cusub si aad ula hadasho kooxda taageerada.
               </p>
               <button
                 type="button"
                 onClick={handleStartNew}
-                className="rounded-full bg-deepGreen px-5 py-2.5 text-[0.85rem] font-bold text-white"
+                className="rounded-full bg-deepGreen px-5 py-2.5 text-[0.84rem] font-bold text-white transition hover:bg-[#0b5e52]"
               >
                 Start new chat
               </button>

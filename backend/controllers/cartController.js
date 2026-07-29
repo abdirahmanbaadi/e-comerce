@@ -89,9 +89,10 @@ exports.validateCart = async (req, res) => {
       validatedItems.push({
         id: product.id,
         title: product.title,
-        category:
-          item.category || `${product.label} / ${product.materialLabel || product.materialType}`,
-        categorySlug: product.category || item.categorySlug || '',
+        categorySlug: product.category || '',
+        categoryLabel: product.label || '',
+        materialType: product.materialType || '',
+        materialLabel: product.materialLabel || '',
         price: currentPrice,
         quantity: safeQty || quantity,
         image: product.images?.[0] || item.image,
