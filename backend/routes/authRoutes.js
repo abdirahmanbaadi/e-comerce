@@ -7,6 +7,7 @@ const { authLimiter, otpSendLimiter, otpVerifyLimiter } = require('../middleware
 // Public Auth Endpoints
 router.post('/register', authLimiter, authController.register);
 router.post('/login', authLimiter, authController.login);
+router.post('/google', authLimiter, authController.loginWithGoogle);
 router.post('/send-reset-otp', otpSendLimiter, authController.sendResetOtp);
 router.post('/verify-phone', otpSendLimiter, authController.verifyPhone);
 router.post('/verify-otp', otpVerifyLimiter, authController.verifyOtp);

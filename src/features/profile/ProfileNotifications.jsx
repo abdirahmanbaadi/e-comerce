@@ -219,6 +219,46 @@ function SuccessCircle({ children, className = 'bg-[#e2ece9]', compact = false }
   );
 }
 
+function DeliveryQrReadyModal({ item, onClose, navigate }) {
+  const orderId = item?.orderId || item?.metadata?.orderId || item?.relatedId || '';
+
+  const goTrack = () => {
+    onClose();
+    if (orderId) {
+      navigate(`/profile?tab=track&orderId=${encodeURIComponent(orderId)}&qr=1`);
+    } else {
+      navigate('/profile?tab=track');
+    }
+  };
+
+  return (
+    <ModalBackdrop onClose={onClose} maxWidth="max-w-[460px]">
+      <div className={premiumCardClass}>
+        <CloseAbsoluteBtn onClose={onClose} />
+        <PremiumDeco>
+          <SuccessCircle className="bg-emerald-100">
+            <i className="fa-solid fa-qrcode text-[2rem] text-emerald-700" />
+          </SuccessCircle>
+        </PremiumDeco>
+        <h2 className="mb-2 font-display text-[2rem] font-bold text-[#2b3a30]">Show your delivery QR</h2>
+        <GoldStarSeparator />
+        <p className="mx-auto mb-5 max-w-[340px] text-[0.92rem] leading-relaxed text-[#666666]">
+          Order-kaagu wuu baxay (out for delivery). Fur Track Order oo tus QR-ka ama 6-digit code-ka driver-ka.
+        </p>
+        {orderId ? (
+          <InfoBox>
+            <InfoRow icon="fa-regular fa-file-lines" label="Order ID" value={orderId} />
+          </InfoBox>
+        ) : null}
+        <div className="mt-6 flex gap-3">
+          <BtnPrimary onClick={goTrack}>Open Track Order</BtnPrimary>
+          <BtnSecondary onClick={onClose}>Close</BtnSecondary>
+        </div>
+      </div>
+    </ModalBackdrop>
+  );
+}
+
 function OrderPlacedModal({ onClose, onViewDetails, order: orderProp }) {
   const order = orderProp || getLastOrderDetails();
 
@@ -1124,7 +1164,9 @@ export function NotificationDetailModal({
     let cancelled = false;
     const type = String(item?.type || '');
     const isSupportRelated = type.startsWith('support_') || type === 'new_support_ticket';
-    const isOrderRelated = !isSupportRelated && (type.includes('order') || type.includes('payment'));
+    const isOrderRelated =
+      !isSupportRelated &&
+      (type.includes('order') || type.includes('payment') || type === 'delivery_qr_ready');
 
     if (!item || !orderId || !isOrderRelated) {
       setOrder(getLastOrderDetails());
@@ -1206,6 +1248,8 @@ export function NotificationDetailModal({
       return <CouponNotificationModal item={item} navigate={navigate} onClose={onClose} />;
     case 'delivery-assigned':
       return <DeliveryAssignedModal item={item} onClose={onClose} />;
+    case 'delivery-qr-ready':
+      return <DeliveryQrReadyModal item={item} onClose={onClose} navigate={navigate} />;
     case 'review-moderated':
       return <GenericNotificationModal item={item} onClose={onClose} />;
     default:
@@ -1264,6 +1308,8 @@ function NotificationIcon({ type }) {
       return <i className="fa-solid fa-tag" />;
     case 'delivery-assigned':
       return <i className="fa-solid fa-truck" />;
+    case 'delivery-qr-ready':
+      return <i className="fa-solid fa-qrcode" />;
     case 'review-moderated':
       return <i className="fa-solid fa-star" />;
     default:

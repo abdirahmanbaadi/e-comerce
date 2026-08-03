@@ -13,6 +13,9 @@ const {
   buildDriverEarningsMatch,
   sumDriverDeliveryFees,
 } = require('../utils/driverRevenueUtils');
+const { verifyDeliveryQr, verifyDeliveryPin, clearDeliveryQr, publicDeliveryQrState } = require('../utils/deliveryQrUtils');
+const { onOrderUpdated } = require('../services/notificationService');
+const { stampDeliveredAt } = require('../services/reviewPromptService');
 
 function formatDriverApplication(app) {
   if (!app) return { status: 'none' };
@@ -372,11 +375,17 @@ exports.getMyStatus = async (req, res) => {
 function withResolvedStatus(order) {
   const plain = order.toObject ? order.toObject() : { ...order };
   const step = typeof plain.currentStep === 'number' ? plain.currentStep : 1;
-  if (plain.status) return plain;
-  if (step === 0) plain.status = 'cancelled';
-  else if (step >= 5) plain.status = 'delivered';
-  else if (step >= 4) plain.status = 'shipped';
-  else plain.status = 'processing';
+  if (!plain.status) {
+    if (step === 0) plain.status = 'cancelled';
+    else if (step >= 5) plain.status = 'delivered';
+    else if (step >= 4) plain.status = 'shipped';
+    else plain.status = 'processing';
+  }
+  delete plain.deliveryConfirmTokenHash;
+  delete plain.deliveryConfirmPayload;
+  delete plain.deliveryConfirmPin;
+  delete plain.deliveryConfirmPinHash;
+  Object.assign(plain, publicDeliveryQrState(order));
   return plain;
 }
 
@@ -454,6 +463,7 @@ exports.rejectAssignment = async (req, res) => {
     order.assignedDriverId = '';
     order.driver = 'Not assigned yet';
     order.driverArrivedAt = null;
+    clearDeliveryQr(order);
     order.estimate = 'Driver declined — assign another driver';
     await order.save();
 
@@ -481,5 +491,86 @@ exports.rejectAssignment = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to decline delivery.' });
+  }
+};
+
+/** Driver scans customer QR or enters 6-digit code → marks delivered */
+exports.confirmDeliveryByQr = async (req, res) => {
+  try {
+    const orderId = String(req.params.orderId || '').trim();
+    const { payload, pin } = req.body || {};
+    const order = await Order.findOne({ id: orderId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found!' });
+    }
+
+    if (order.assignedDriverId !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'This order is not assigned to you.' });
+    }
+    if ((order.assignmentStatus || 'none') !== 'accepted') {
+      return res.status(400).json({
+        success: false,
+        message: 'Accept the assignment before confirming delivery.',
+      });
+    }
+    if ((order.currentStep || 0) < 4 || !order.driverArrivedAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Confirm arrival at the customer before scanning their QR or entering the code.',
+      });
+    }
+
+    const verified = pin
+      ? verifyDeliveryPin(order, pin)
+      : verifyDeliveryQr(order, payload);
+    if (!verified.ok) {
+      return res.status(400).json({ success: false, message: verified.message });
+    }
+
+    const prevStep = typeof order.currentStep === 'number' ? order.currentStep : 1;
+    const confirmedAt = new Date();
+    clearDeliveryQr(order);
+    order.deliveryConfirmStatus = 'confirmed';
+    order.deliveryConfirmedAt = confirmedAt;
+    order.currentStep = 5;
+    order.status = 'delivered';
+    order.estimate =
+      verified.method === 'pin'
+        ? 'Delivered successfully — confirmed by 6-digit code'
+        : 'Delivered successfully — confirmed by customer QR';
+    stampDeliveredAt(order, prevStep);
+    await order.save();
+
+    await syncDriverStatus(req.user.id);
+    await onOrderUpdated(order, {
+      currentStep: 5,
+      currentStepChanged: prevStep !== 5,
+      status: 'delivered',
+      statusChanged: true,
+    });
+
+    await logOrderActivity({
+      orderId: order.id,
+      action: verified.method === 'pin' ? 'delivery_pin_confirmed' : 'delivery_qr_confirmed',
+      description:
+        verified.method === 'pin'
+          ? 'Delivery confirmed with customer 6-digit code.'
+          : 'Delivery confirmed by scanning customer QR code.',
+      actorId: req.user.id,
+      actorRole: 'delivery',
+      metadata: { confirmedAt, method: verified.method },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        verified.method === 'pin'
+          ? 'Delivery confirmed with 6-digit code.'
+          : 'Delivery confirmed with customer QR.',
+      order: withResolvedStatus(order),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to confirm delivery QR.' });
   }
 };

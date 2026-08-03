@@ -9,8 +9,8 @@ router.post('/delivery/:orderId', protect, reviewController.rateDelivery);
 router.get('/product/:productId', reviewController.getProductReviews);
 router.get('/status/:productId', protect, reviewController.getReviewStatus);
 router.post('/', protect, reviewController.createReview);
-router.get('/', protect, authorize('admin'), reviewController.getAllReviews);
-router.patch('/:id/status', protect, authorize('admin'), reviewController.moderateReview);
-router.delete('/:id', protect, authorize('admin'), reviewController.deleteReview);
+router.get('/', protect, authorize('admin', 'staff'), reviewController.getAllReviews);
+router.patch('/:id/status', protect, authorize('admin', 'staff'), reviewController.moderateReview);
+router.delete('/:id', protect, authorize('admin', 'staff'), reviewController.deleteReview);
 
 module.exports = router;

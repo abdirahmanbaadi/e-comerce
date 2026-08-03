@@ -186,7 +186,7 @@ exports.getProductDetails = async (req, res) => {
     const avgRating =
       approvedReviews.length > 0
         ? approvedReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / approvedReviews.length
-        : product.rating || 0;
+        : 0;
 
     const totalOrders = await Order.countDocuments({
       $or: [{ 'items.id': productId }, { product: product.title }],
@@ -341,7 +341,7 @@ exports.createProduct = async (req, res) => {
       price: parsedPrice,
       oldPrice: parseOptionalOldPrice(oldPrice),
       discount: discount || '',
-      rating: parseFloat(rating) || 4.0,
+      rating: parseFloat(rating) || 0,
       popularity: parseInt(popularity) || 50,
       isNewest: isNewest === 'true' || isNewest === true,
       stock: parseInt(stockVal) > 0 ? 'in-stock' : 'out-of-stock',

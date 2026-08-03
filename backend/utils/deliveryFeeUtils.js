@@ -1,23 +1,29 @@
 const CmsContent = require('../models/CmsContent');
+const {
+  buildDefaultDeliveryFees,
+  mergeBanadirDeliveryFees,
+  feeForDistrictName,
+} = require('./banadirDelivery');
 
-const FALLBACK_FEES = [
-  { district: 'Hodan', fee: 0.01 },
-  { district: 'Wadajir', fee: 0.01 },
-  { district: 'Karaan', fee: 0.02 },
-  { district: 'Hamarweyne', fee: 0.01 },
-  { district: 'Dayniile', fee: 0.02 },
-  { district: 'Yaqshid', fee: 0.01 },
-];
+const FALLBACK_FEES = buildDefaultDeliveryFees().map(({ district, fee }) => ({ district, fee }));
 
 function parseDistrictFromAddress(address) {
   if (!address) return '';
   const match = String(address).match(/,\s*([^,]+?)\s+District/i);
-  return match ? match[1].trim() : '';
+  if (match) return match[1].trim();
+  // "Hodan, Mogadishu" or "Shibis"
+  const first = String(address).split(',')[0]?.trim();
+  return first || '';
 }
 
 async function getDeliveryFees() {
   const cms = await CmsContent.findOne({ id: 'main' });
-  if (cms?.deliveryFees?.length) return cms.deliveryFees;
+  if (cms?.deliveryFees?.length) {
+    return mergeBanadirDeliveryFees(cms.deliveryFees).map(({ district, fee }) => ({
+      district,
+      fee,
+    }));
+  }
   return FALLBACK_FEES;
 }
 
@@ -34,18 +40,24 @@ async function resolveDistrictDeliveryFee({ district, address }) {
       districtName.toLowerCase().includes(row.district.toLowerCase())
   );
 
-  if (!entry) {
+  if (entry) {
     return {
-      ok: false,
-      message: `Delivery to "${districtName}" is not available. Please select a supported district.`,
-      district: districtName,
+      ok: true,
+      fee: Number(entry.fee) || 0,
+      district: entry.district,
     };
   }
 
+  // Fallback: compute from Hodan distance if district is known Banadir
+  const computed = feeForDistrictName(districtName);
+  if (computed != null) {
+    return { ok: true, fee: computed, district: districtName };
+  }
+
   return {
-    ok: true,
-    fee: Number(entry.fee) || 0,
-    district: entry.district,
+    ok: false,
+    message: `Delivery to "${districtName}" is not available. Please select a supported Banadir district.`,
+    district: districtName,
   };
 }
 

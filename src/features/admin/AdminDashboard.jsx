@@ -1054,7 +1054,7 @@ function RecentOrdersPanel({ loading, orders, filterLabel, linkBtn, onViewAll, o
   );
 }
 
-export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
+export default function DashboardAdminTab({ headerSearch = '', onTabChange, userRole = 'admin' }) {
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
   const [tickets, setTickets] = useState([]);
@@ -1383,21 +1383,21 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange }) {
         <StatCard
           label="Users"
           value={loading ? '…' : (stats?.totalUsers ?? 0).toLocaleString()}
-          trend={stats?.trends?.users}
-          trendEnabled={isTrendReliable('users', stats)}
+          trend={userRole === 'staff' ? null : stats?.trends?.users}
+          trendEnabled={userRole !== 'staff' && isTrendReliable('users', stats)}
           icon="fa-user-group"
           iconWrapClass="bg-blue-500/10 text-blue-600"
-          onClick={() => onTabChange?.('users')}
+          onClick={userRole === 'staff' ? undefined : () => onTabChange?.('users')}
         />
         <StatCard
           label="Revenue"
           value={periodRevenueDisplay}
           hint={`${salesRangeLabel} · Total ${revenueDisplay}`}
-          trend={stats?.trends?.revenue}
-          trendEnabled={isTrendReliable('revenue', stats)}
+          trend={userRole === 'staff' ? null : stats?.trends?.revenue}
+          trendEnabled={userRole !== 'staff' && isTrendReliable('revenue', stats)}
           icon="fa-dollar-sign"
           iconWrapClass="bg-gold/15 text-gold"
-          onClick={() => onTabChange?.('payments')}
+          onClick={userRole === 'staff' ? undefined : () => onTabChange?.('payments')}
         />
         <StatCard
           label="Products"

@@ -81,7 +81,7 @@ function ReviewModal({ review, acting, onClose, onApprove, onReject, onDelete })
         role="presentation"
       >
         <div
-          className="animate-productModalIn relative w-full max-w-lg overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]"
+          className="animate-productModalIn relative w-full max-w-lg overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] dark:bg-[#243029] dark:border-white/14 [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:border-white/14"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"

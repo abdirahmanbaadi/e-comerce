@@ -64,6 +64,7 @@ const NOTIF_TYPE_ICON = {
   payment_failed: { icon: 'fa-circle-xmark', color: '#ef4444' },
   order_processing: { icon: 'fa-box', color: '#f59e0b' },
   order_shipped: { icon: 'fa-truck', color: '#f59e0b' },
+  delivery_qr_ready: { icon: 'fa-qrcode', color: '#10b981' },
   order_delivered: { icon: 'fa-check-double', color: '#10b981' },
   order_cancelled: { icon: 'fa-ban', color: '#ef4444' },
   driver_assigned: { icon: 'fa-user-check', color: '#10b981' },
@@ -298,11 +299,15 @@ function WishlistDropdown({ onClose }) {
 function ProfileDropdown({ user, onClose, onLogout }) {
   const navigate = useNavigate();
   const isAdmin = user?.role === 'admin';
+  const isStaff = user?.role === 'staff';
+  const isDashboard = isAdmin || isStaff;
 
-  const menuItems = isAdmin
+  const menuItems = isDashboard
     ? [
         { key: 'dashboard', label: 'Dashboard', icon: 'fa-solid fa-table-columns', to: '/admin' },
-        { key: 'settings', label: 'Settings', icon: 'fa-solid fa-gear', to: '/admin' },
+        ...(isAdmin
+          ? [{ key: 'settings', label: 'Settings', icon: 'fa-solid fa-gear', to: '/admin' }]
+          : []),
       ]
     : [
         { key: 'profile', label: 'Profile', icon: 'fa-regular fa-circle-user', to: '/profile' },

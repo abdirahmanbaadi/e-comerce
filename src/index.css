@@ -29,6 +29,20 @@
     min-height: 100vh;
     width: 100%;
   }
+
+  /* Mobile app shell — hide browser chrome feel when installed */
+  html:has(.mmf-mobile-app) {
+    overscroll-behavior-y: none;
+  }
+
+  .mmf-mobile-app {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mmf-mobile-app button,
+  .mmf-mobile-app a {
+    -webkit-touch-callout: none;
+  }
 }
 
 @layer components {
@@ -142,7 +156,8 @@
 
   /* Admin dark mode — existing palette (#0b1412 page, #1a2421 surfaces) */
   [data-admin-theme='dark'] .admin-page,
-  .admin-dark.admin-page {
+  .admin-dark.admin-page,
+  html.admin-dark .admin-page {
     color-scheme: dark;
   }
 
@@ -151,55 +166,181 @@
   [data-admin-theme='dark'] .admin-page button.rounded-xl.bg-white,
   .admin-dark.admin-page .rounded-xl.bg-white,
   .admin-dark.admin-page .rounded-2xl.bg-white,
-  .admin-dark.admin-page button.rounded-xl.bg-white {
+  .admin-dark.admin-page button.rounded-xl.bg-white,
+  html.admin-dark .admin-page .rounded-xl.bg-white,
+  html.admin-dark .admin-page .rounded-2xl.bg-white {
     background-color: #1a2421 !important;
     border-color: rgba(255, 255, 255, 0.1) !important;
   }
 
+  /* Sticky table headers + th cells (white bar fix) */
+  [data-admin-theme='dark'] .admin-page thead,
+  [data-admin-theme='dark'] .admin-page thead th,
+  [data-admin-theme='dark'] .admin-page .sticky.bg-white,
+  [data-admin-theme='dark'] .admin-page thead.bg-white,
+  [data-admin-theme='dark'] .admin-page thead.bg-gray-50,
+  .admin-dark.admin-page thead,
+  .admin-dark.admin-page thead th,
+  .admin-dark.admin-page .sticky.bg-white,
+  .admin-dark.admin-page thead.bg-white,
+  .admin-dark.admin-page thead.bg-gray-50,
+  html.admin-dark .admin-page thead,
+  html.admin-dark .admin-page thead th {
+    background-color: #1a2421 !important;
+    color: #9ca3af !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  /* Header icon buttons (moon, bell, mail, settings) */
+  [data-admin-theme='dark'] .admin-page header button.rounded-full.bg-white,
+  .admin-dark.admin-page header button.rounded-full.bg-white,
+  html.admin-dark .admin-page header button.rounded-full.bg-white {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    color: #d7e2de !important;
+  }
+
+  [data-admin-theme='dark'] .admin-page header button.rounded-full.bg-white:hover,
+  .admin-dark.admin-page header button.rounded-full.bg-white:hover,
+  html.admin-dark .admin-page header button.rounded-full.bg-white:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #e8f0ed !important;
+  }
+
+  /* Labels, muted text, filter chips */
+  [data-admin-theme='dark'] .admin-page label,
+  [data-admin-theme='dark'] .admin-page .text-gray-800,
+  .admin-dark.admin-page label,
+  .admin-dark.admin-page .text-gray-800,
+  html.admin-dark .admin-page label {
+    color: #e5e7eb !important;
+  }
+
   [data-admin-theme='dark'] .admin-page main .text-deepGreen,
-  .admin-dark.admin-page main .text-deepGreen {
+  .admin-dark.admin-page main .text-deepGreen,
+  html.admin-dark .admin-page main .text-deepGreen {
     color: #e8f0ed !important;
   }
 
   [data-admin-theme='dark'] .admin-page main .text-gray-900,
-  .admin-dark.admin-page main .text-gray-900 {
+  .admin-dark.admin-page main .text-gray-900,
+  html.admin-dark .admin-page main .text-gray-900 {
     color: #f3f4f6 !important;
   }
 
   [data-admin-theme='dark'] .admin-page main .text-gray-600,
-  .admin-dark.admin-page main .text-gray-600 {
+  .admin-dark.admin-page main .text-gray-600,
+  html.admin-dark .admin-page main .text-gray-600 {
     color: #d1d5db !important;
   }
 
   [data-admin-theme='dark'] .admin-page main .text-gray-400,
   [data-admin-theme='dark'] .admin-page main .text-gray-500,
   .admin-dark.admin-page main .text-gray-400,
-  .admin-dark.admin-page main .text-gray-500 {
+  .admin-dark.admin-page main .text-gray-500,
+  html.admin-dark .admin-page main .text-gray-400,
+  html.admin-dark .admin-page main .text-gray-500 {
     color: #9ca3af !important;
   }
 
   [data-admin-theme='dark'] .admin-page main .border-gray-100,
   [data-admin-theme='dark'] .admin-page main .border-gray-50,
   .admin-dark.admin-page main .border-gray-100,
-  .admin-dark.admin-page main .border-gray-50 {
+  .admin-dark.admin-page main .border-gray-50,
+  html.admin-dark .admin-page main .border-gray-100,
+  html.admin-dark .admin-page main .border-gray-50 {
     border-color: rgba(255, 255, 255, 0.08) !important;
   }
 
   [data-admin-theme='dark'] .admin-page main .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
-  .admin-dark.admin-page main .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+  .admin-dark.admin-page main .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+  html.admin-dark .admin-page main .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
     border-color: rgba(255, 255, 255, 0.1) !important;
   }
 
   [data-admin-theme='dark'] .admin-page main .bg-gray-100,
-  .admin-dark.admin-page main .bg-gray-100 {
-    background-color: rgba(255, 255, 255, 0.1) !important;
+  [data-admin-theme='dark'] .admin-page main .bg-gray-50,
+  .admin-dark.admin-page main .bg-gray-100,
+  .admin-dark.admin-page main .bg-gray-50,
+  html.admin-dark .admin-page main .bg-gray-100,
+  html.admin-dark .admin-page main .bg-gray-50 {
+    background-color: rgba(255, 255, 255, 0.08) !important;
   }
 
   [data-admin-theme='dark'] .admin-page main select.bg-white,
-  .admin-dark.admin-page main select.bg-white {
+  [data-admin-theme='dark'] .admin-page main input.bg-white,
+  [data-admin-theme='dark'] .admin-page main textarea.bg-white,
+  .admin-dark.admin-page main select.bg-white,
+  .admin-dark.admin-page main input.bg-white,
+  .admin-dark.admin-page main textarea.bg-white,
+  html.admin-dark .admin-page main select.bg-white,
+  html.admin-dark .admin-page main input.bg-white,
+  html.admin-dark .admin-page main textarea.bg-white {
     background-color: #101814 !important;
     border-color: rgba(255, 255, 255, 0.1) !important;
-    color: #d1d5db !important;
+    color: #e5e7eb !important;
+  }
+
+  /* Portaled modals — slightly elevated vs page (#0b1412) & cards (#1a2421) */
+  html.admin-dark .admin-dark [class*='animate-productModalIn'],
+  html[data-admin-theme='dark'] .admin-dark [class*='animate-productModalIn'] {
+    background-color: #243029 !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+    box-shadow:
+      0 28px 70px rgba(0, 0, 0, 0.55),
+      0 0 0 1px rgba(216, 161, 40, 0.1) !important;
+    color: #e8eeec;
+  }
+
+  /* Nested white panels inside modals — one step darker than modal shell */
+  html.admin-dark .admin-dark [class*='animate-productModalIn'] .bg-white,
+  html[data-admin-theme='dark'] .admin-dark [class*='animate-productModalIn'] .bg-white {
+    background-color: #1a2421 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  html.admin-dark .admin-dark label,
+  html[data-admin-theme='dark'] .admin-dark label,
+  html.admin-dark .admin-dark .text-deepGreen,
+  html[data-admin-theme='dark'] .admin-dark .text-deepGreen,
+  html.admin-dark .admin-dark .text-gray-900,
+  html[data-admin-theme='dark'] .admin-dark .text-gray-900,
+  html.admin-dark .admin-dark .text-gray-800,
+  html[data-admin-theme='dark'] .admin-dark .text-gray-800 {
+    color: #e8f0ed !important;
+  }
+
+  html.admin-dark .admin-dark input,
+  html.admin-dark .admin-dark select,
+  html.admin-dark .admin-dark textarea,
+  html[data-admin-theme='dark'] .admin-dark input,
+  html[data-admin-theme='dark'] .admin-dark select,
+  html[data-admin-theme='dark'] .admin-dark textarea {
+    background-color: #151e1b !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    color: #e5e7eb !important;
+  }
+
+  html.admin-dark .admin-dark thead,
+  html.admin-dark .admin-dark thead th,
+  html[data-admin-theme='dark'] .admin-dark thead,
+  html[data-admin-theme='dark'] .admin-dark thead th {
+    background-color: #1c2824 !important;
+    color: #9ca3af !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  /* Soft cream / light panels inside CMS & cards */
+  [data-admin-theme='dark'] .admin-page .bg-\[\#faf9f7\],
+  [data-admin-theme='dark'] .admin-page .bg-\[\#fdfbf8\],
+  [data-admin-theme='dark'] .admin-page .bg-\[\#FDFBF8\],
+  .admin-dark.admin-page .bg-\[\#faf9f7\],
+  .admin-dark.admin-page .bg-\[\#fdfbf8\],
+  .admin-dark.admin-page .bg-\[\#FDFBF8\],
+  html.admin-dark .admin-page [class*='bg-[#faf9f7]'],
+  html.admin-dark .admin-page [class*='bg-[#fdfbf8]'] {
+    background-color: rgba(255, 255, 255, 0.03) !important;
   }
 
   /* Global top toast — used by showTopFloatNotification */

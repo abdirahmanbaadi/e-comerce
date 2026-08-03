@@ -58,7 +58,8 @@ export function ProductCard({
           <div className="mb-2 flex items-center justify-between">
             <div className="mb-0 text-[0.76rem] capitalize text-[#999999]">{categoryText}</div>
             <span className="text-[0.78rem] font-bold text-[#555555]">
-              <i className="fa-solid fa-star text-starGold" /> {product.rating}
+              <i className="fa-solid fa-star text-starGold" />{' '}
+              {Number(product.rating) > 0 ? product.rating : 'New'}
             </span>
           </div>
 
@@ -187,8 +188,7 @@ export default function ProductModal({ isOpen, product, onClose }) {
 
   if (!isOpen || !product) return null;
 
-  const displayRating =
-    reviewStats.count > 0 ? reviewStats.avgRating : Number(product.rating) || 0;
+  const displayRating = reviewStats.count > 0 ? reviewStats.avgRating : 0;
   const totalPrice = product.price * quantity;
   const showTotal = quantity >= 2;
 
@@ -246,12 +246,9 @@ export default function ProductModal({ isOpen, product, onClose }) {
               <div className="mb-2 flex items-center gap-2">
                 <RatingStars rating={displayRating} />
                 <span className="text-[0.85rem] text-[#666666]">
-                  {displayRating} rating
                   {reviewStats.count > 0
-                    ? ` · ${reviewStats.count} review${reviewStats.count === 1 ? '' : 's'}`
-                    : approvedReviews.length > 0
-                      ? ` · ${approvedReviews.length} review${approvedReviews.length === 1 ? '' : 's'}`
-                      : ''}
+                    ? `${displayRating} rating · ${reviewStats.count} review${reviewStats.count === 1 ? '' : 's'}`
+                    : 'No customer ratings yet'}
                 </span>
               </div>
 

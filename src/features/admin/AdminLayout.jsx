@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppSearchField } from '../nav/StoreNavbar';
+import { useAdminTheme } from '../../hooks/useAdminTheme';
+import { STAFF_ALLOWED_TABS } from '../../utils/roleAccess';
 
 // =============================================================================
 // AdminSidebar
@@ -90,7 +92,11 @@ export function AdminSidebar({
   mobileOpen,
   onCloseMobile,
   badgeCounts = {},
+  userRole = 'admin',
 }) {
+  const visibleItems =
+    userRole === 'staff' ? MENU_ITEMS.filter((item) => STAFF_ALLOWED_TABS.has(item.id)) : MENU_ITEMS;
+
   return (
     <>
       {mobileOpen && (
@@ -112,12 +118,12 @@ export function AdminSidebar({
         ].join(' ')}
       >
         <Link
-          to="/"
+          to={userRole === 'staff' ? '/admin' : '/'}
           className={[
             'group mb-4 flex shrink-0 items-center gap-2.5 px-1 no-underline transition-transform duration-300 hover:scale-[1.02]',
             collapsed ? 'justify-center px-0' : '',
           ].join(' ')}
-          title="Back to store"
+          title={userRole === 'staff' ? 'Dashboard' : 'Back to store'}
         >
           <div className="relative flex h-11 w-11 shrink-0 items-center justify-center transition-transform duration-500 group-hover:rotate-3">
             <span className="absolute inset-0 rotate-45 rounded-[9px] border-2 border-gold transition-colors duration-300 group-hover:border-gold/80" />
@@ -145,7 +151,7 @@ export function AdminSidebar({
           aria-label="Admin navigation"
         >
           <ul className="m-0 flex list-none flex-col gap-1 p-0">
-            {MENU_ITEMS.map((item, index) => (
+            {visibleItems.map((item, index) => (
               <li key={item.id} style={staggerStyle(index)}>
                 <SidebarMenuButton
                   active={activeTab === item.id}
@@ -221,12 +227,16 @@ export function AdminHeader({
   onHeaderSearchChange,
   notifications = [],
   onMarkNotificationRead,
+  onMarkAllNotificationsRead,
   onRefreshNotifications,
   compact = false,
+  showSettings = true,
+  showViewStore = true,
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [msgOpen, setMsgOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const { isDark, toggleTheme } = useAdminTheme();
 
   const notifRef = useRef(null);
   const msgRef = useRef(null);
@@ -234,6 +244,7 @@ export function AdminHeader({
 
   const items = notifications;
   const markRead = onMarkNotificationRead || (async () => false);
+  const markAllRead = onMarkAllNotificationsRead || (async () => false);
   const refresh = onRefreshNotifications || (() => {});
 
   useClickOutside(notifRef, () => setNotifOpen(false));
@@ -286,10 +297,10 @@ export function AdminHeader({
     [
       'relative inline-flex h-[38px] w-[38px] cursor-pointer items-center justify-center rounded-full border border-deepGreen/[0.08] bg-white text-base text-gray-600 transition-all duration-300',
       open
-        ? '-translate-y-px border-deepGreen/[0.18] bg-deepGreen/[0.04] text-deepGreen'
-        : 'hover:-translate-y-px hover:border-deepGreen/[0.18] hover:bg-deepGreen/[0.04] hover:text-deepGreen',
-      'dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-[#d7e2de]',
-      '[.admin-dark_&]:border-white/[0.08] [.admin-dark_&]:bg-white/[0.04] [.admin-dark_&]:text-[#d7e2de]',
+        ? '-translate-y-px border-deepGreen/[0.18] bg-deepGreen/[0.04] text-deepGreen dark:border-white/20 dark:bg-white/10 dark:text-[#e8f0ed] [.admin-dark_&]:border-white/20 [.admin-dark_&]:bg-white/10 [.admin-dark_&]:text-[#e8f0ed]'
+        : 'hover:-translate-y-px hover:border-deepGreen/[0.18] hover:bg-deepGreen/[0.04] hover:text-deepGreen dark:hover:border-white/20 dark:hover:bg-white/10 dark:hover:text-[#e8f0ed]',
+      'dark:border-white/[0.12] dark:bg-white/[0.06] dark:text-[#d7e2de]',
+      '[.admin-dark_&]:border-white/[0.12] [.admin-dark_&]:bg-white/[0.06] [.admin-dark_&]:text-[#d7e2de]',
     ].join(' ');
 
   return (
@@ -302,7 +313,7 @@ export function AdminHeader({
       <div className="flex min-w-0 items-center gap-2.5">
         <button
           type="button"
-          className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-[10px] border border-deepGreen/10 bg-white text-deepGreen md:hidden"
+          className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-[10px] border border-deepGreen/10 bg-white text-deepGreen md:hidden dark:border-white/10 dark:bg-white/[0.06] dark:text-[#e8f0ed] [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-white/[0.06] [.admin-dark_&]:text-[#e8f0ed]"
           onClick={onToggleSidebar}
           aria-label="Open menu"
         >
@@ -325,6 +336,21 @@ export function AdminHeader({
           />
         </div>
 
+        <button
+          type="button"
+          className={iconBtnClass(false)}
+          onClick={() => {
+            toggleTheme();
+            setNotifOpen(false);
+            setMsgOpen(false);
+            setProfileOpen(false);
+          }}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={isDark ? 'Light mode' : 'Dark mode'}
+        >
+          <i className={`fa-solid ${isDark ? 'fa-sun' : 'fa-moon'}`} />
+        </button>
+
         <div className="relative" ref={notifRef}>
           <button
             type="button"
@@ -345,9 +371,24 @@ export function AdminHeader({
           </button>
           {notifOpen && (
             <div className="absolute right-0 top-[calc(100%+10px)] z-[100] w-80 animate-adminDropIn overflow-hidden rounded-2xl border border-deepGreen/[0.08] bg-white shadow-[0_20px_40px_rgba(7,61,53,0.14)] [.admin-dark_&]:border-white/[0.08] [.admin-dark_&]:bg-[#141f1b]">
-              <div className="flex items-center justify-between border-b border-deepGreen/[0.06] bg-deepGreen/[0.02] px-4 py-3.5 [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-white/[0.03]">
-                <strong>Notifications</strong>
-                <span className="text-[0.72rem] font-bold text-emerald-500">{generalUnread} unread</span>
+              <div className="flex items-center justify-between gap-2 border-b border-deepGreen/[0.06] bg-deepGreen/[0.02] px-4 py-3 [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-white/[0.03]">
+                <div className="min-w-0">
+                  <strong className="block text-[0.88rem]">Notifications</strong>
+                  <span className="text-[0.7rem] font-bold text-emerald-500">{generalUnread} unread</span>
+                </div>
+                {generalUnread > 0 ? (
+                  <button
+                    type="button"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-deepGreen/15 bg-white px-2 py-1 text-[0.68rem] font-bold text-deepGreen transition hover:bg-deepGreen/[0.05] [.admin-dark_&]:border-white/15 [.admin-dark_&]:bg-white/[0.04] [.admin-dark_&]:text-emerald-300"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await markAllRead();
+                    }}
+                  >
+                    <i className="fa-regular fa-circle-check text-[0.72rem]" />
+                    Mark all read
+                  </button>
+                ) : null}
               </div>
               <ul className="m-0 max-h-[280px] list-none overflow-y-auto p-2">
                 {generalNotifications.length === 0 ? (
@@ -363,7 +404,9 @@ export function AdminHeader({
                       <li key={n.id}>
                         <button
                           type="button"
-                          className="flex w-full cursor-pointer items-start gap-3 rounded-xl border-0 bg-transparent p-2.5 text-left transition-all duration-300 hover:bg-deepGreen/[0.04] [.admin-dark_&]:hover:bg-white/[0.04]"
+                          className={`flex w-full cursor-pointer items-start gap-3 rounded-xl border-0 p-2.5 text-left transition-all duration-300 hover:bg-deepGreen/[0.04] [.admin-dark_&]:hover:bg-white/[0.04] ${
+                            n.unread ? 'bg-deepGreen/[0.03] [.admin-dark_&]:bg-white/[0.03]' : 'bg-transparent'
+                          }`}
                           onClick={() => handleNotifClick(n)}
                         >
                           <span
@@ -372,7 +415,7 @@ export function AdminHeader({
                           >
                             <i className={`fa-solid ${meta.icon}`} />
                           </span>
-                          <span>
+                          <span className="min-w-0 flex-1">
                             <strong className="block text-[0.84rem] text-gray-800 [.admin-dark_&]:text-[#f3f7f5]">
                               {n.title}
                             </strong>
@@ -380,6 +423,9 @@ export function AdminHeader({
                               {n.desc}
                             </small>
                           </span>
+                          {n.unread ? (
+                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-label="Unread" />
+                          ) : null}
                         </button>
                       </li>
                     );
@@ -410,9 +456,24 @@ export function AdminHeader({
           </button>
           {msgOpen && (
             <div className="absolute right-0 top-[calc(100%+10px)] z-[100] w-80 animate-adminDropIn overflow-hidden rounded-2xl border border-deepGreen/[0.08] bg-white shadow-[0_20px_40px_rgba(7,61,53,0.14)] [.admin-dark_&]:border-white/[0.08] [.admin-dark_&]:bg-[#141f1b]">
-              <div className="flex items-center justify-between border-b border-deepGreen/[0.06] bg-deepGreen/[0.02] px-4 py-3.5 [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-white/[0.03]">
-                <strong>Support Messages</strong>
-                <span className="text-[0.72rem] font-bold text-emerald-500">{supportUnread} unread</span>
+              <div className="flex items-center justify-between gap-2 border-b border-deepGreen/[0.06] bg-deepGreen/[0.02] px-4 py-3 [.admin-dark_&]:border-white/[0.06] [.admin-dark_&]:bg-white/[0.03]">
+                <div className="min-w-0">
+                  <strong className="block text-[0.88rem]">Support Messages</strong>
+                  <span className="text-[0.7rem] font-bold text-emerald-500">{supportUnread} unread</span>
+                </div>
+                {supportUnread > 0 ? (
+                  <button
+                    type="button"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-deepGreen/15 bg-white px-2 py-1 text-[0.68rem] font-bold text-deepGreen transition hover:bg-deepGreen/[0.05] [.admin-dark_&]:border-white/15 [.admin-dark_&]:bg-white/[0.04] [.admin-dark_&]:text-emerald-300"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await markAllRead();
+                    }}
+                  >
+                    <i className="fa-regular fa-circle-check text-[0.72rem]" />
+                    Mark all read
+                  </button>
+                ) : null}
               </div>
               <ul className="m-0 max-h-[280px] list-none overflow-y-auto p-2">
                 {supportMessages.length === 0 ? (
@@ -426,13 +487,15 @@ export function AdminHeader({
                     <li key={n.id}>
                       <button
                         type="button"
-                        className="flex w-full cursor-pointer items-start gap-3 rounded-xl border-0 bg-transparent p-2.5 text-left transition-all duration-300 hover:bg-deepGreen/[0.04] [.admin-dark_&]:hover:bg-white/[0.04]"
+                        className={`flex w-full cursor-pointer items-start gap-3 rounded-xl border-0 p-2.5 text-left transition-all duration-300 hover:bg-deepGreen/[0.04] [.admin-dark_&]:hover:bg-white/[0.04] ${
+                          n.unread ? 'bg-deepGreen/[0.03] [.admin-dark_&]:bg-white/[0.03]' : 'bg-transparent'
+                        }`}
                         onClick={() => handleNotifClick(n)}
                       >
                         <span className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-500">
                           <i className="fa-solid fa-envelope" />
                         </span>
-                        <span>
+                        <span className="min-w-0 flex-1">
                           <strong className="block text-[0.84rem] text-gray-800 [.admin-dark_&]:text-[#f3f7f5]">
                             {n.title}
                           </strong>
@@ -440,6 +503,9 @@ export function AdminHeader({
                             {n.desc}
                           </small>
                         </span>
+                        {n.unread ? (
+                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-label="Unread" />
+                        ) : null}
                       </button>
                     </li>
                   ))
@@ -484,23 +550,27 @@ export function AdminHeader({
                   <small className="text-[0.74rem] text-gray-500">{adminEmail || '—'}</small>
                 </div>
               </div>
-              <button
-                type="button"
-                className="mx-2 mb-1 mt-1 flex w-[calc(100%-16px)] cursor-pointer items-center gap-2.5 rounded-[10px] border-0 bg-transparent px-3 py-2.5 text-left text-[0.84rem] font-bold text-gray-700 no-underline transition-all duration-300 hover:bg-deepGreen/[0.05] hover:text-deepGreen [.admin-dark_&]:text-[#d7e2de] [.admin-dark_&]:hover:bg-white/[0.05]"
-                onClick={() => {
-                  onTabChange('settings');
-                  closeAllDropdowns();
-                }}
-              >
-                <i className="fa-solid fa-gear" /> Settings
-              </button>
-              <Link
-                to="/"
-                className="mx-2 flex w-[calc(100%-16px)] items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[0.84rem] font-bold text-gray-700 no-underline transition-all duration-300 hover:bg-deepGreen/[0.05] hover:text-deepGreen [.admin-dark_&]:text-[#d7e2de] [.admin-dark_&]:hover:bg-white/[0.05]"
-                onClick={closeAllDropdowns}
-              >
-                <i className="fa-solid fa-store" /> View Store
-              </Link>
+              {showSettings ? (
+                <button
+                  type="button"
+                  className="mx-2 mb-1 mt-1 flex w-[calc(100%-16px)] cursor-pointer items-center gap-2.5 rounded-[10px] border-0 bg-transparent px-3 py-2.5 text-left text-[0.84rem] font-bold text-gray-700 no-underline transition-all duration-300 hover:bg-deepGreen/[0.05] hover:text-deepGreen [.admin-dark_&]:text-[#d7e2de] [.admin-dark_&]:hover:bg-white/[0.05]"
+                  onClick={() => {
+                    onTabChange('settings');
+                    closeAllDropdowns();
+                  }}
+                >
+                  <i className="fa-solid fa-gear" /> Settings
+                </button>
+              ) : null}
+              {showViewStore ? (
+                <Link
+                  to="/"
+                  className="mx-2 flex w-[calc(100%-16px)] items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[0.84rem] font-bold text-gray-700 no-underline transition-all duration-300 hover:bg-deepGreen/[0.05] hover:text-deepGreen [.admin-dark_&]:text-[#d7e2de] [.admin-dark_&]:hover:bg-white/[0.05]"
+                  onClick={closeAllDropdowns}
+                >
+                  <i className="fa-solid fa-store" /> View Store
+                </Link>
+              ) : null}
               <button
                 type="button"
                 className="mx-2 flex w-[calc(100%-16px)] cursor-pointer items-center gap-2.5 rounded-[10px] border-0 bg-transparent px-3 py-2.5 text-left text-[0.84rem] font-bold text-red-500 transition-all duration-300 hover:bg-red-500/[0.08] hover:text-red-600"
@@ -527,8 +597,8 @@ export function AdminAccessDenied() {
         <i className="fa-solid fa-shield-halved mb-5 text-[4.5rem] text-gold" />
         <h2 className="mb-3 font-display text-[2.5rem] font-bold">Access Denied!</h2>
         <p className="mb-6 text-[0.95rem] leading-relaxed text-white/80">
-          Waan ka xunnahay, boggan waxaa geli kara oo kaliya maamulaha (Admin-ka). Fadlan gal
-          koontada admin-ka si aad u gasho dashboard-ka.
+          Waan ka xunnahay, boggan waxaa geli kara oo kaliya Admin ama Staff. Fadlan gal
+          koontada saxda ah si aad u gasho dashboard-ka.
         </p>
         <Link
           to="/"

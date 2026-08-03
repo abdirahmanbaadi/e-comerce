@@ -23,6 +23,7 @@ import {
 } from '../features/admin/AdminManageTabs';
 import AdminReviewsTab from '../features/admin/AdminReviewsTab';
 import { showTopFloatNotification } from '../utils/notifications';
+import { canAccessAdminTab, isDashboardUser } from '../utils/roleAccess';
 
 const ADMIN_PAGE_BG =
   'min-h-screen overflow-x-hidden bg-[#FDFBF8] font-sans text-gray-900 dark:bg-[#0b1412] dark:text-[#e8eeec] [.admin-dark_&]:bg-[#0b1412] [.admin-dark_&]:text-[#e8eeec]';
@@ -110,12 +111,23 @@ export default function Admin() {
     return () => window.removeEventListener('admin-tab-changed', onTabChanged);
   }, []);
 
-  const isAdmin = user?.isLoggedIn && user?.role === 'admin';
+  const canAccessDashboard = isDashboardUser(user);
 
-  const { items: adminNotifications, markRead, refresh: refreshNotifications } = useNotifications({
-    enabled: isAdmin,
+  const { items: adminNotificationsRaw, markRead, markAllRead, refresh: refreshNotifications } = useNotifications({
+    enabled: canAccessDashboard,
     pollMs: 30000,
   });
+
+  const adminNotifications = useMemo(() => {
+    if (user?.role !== 'staff') return adminNotificationsRaw;
+    const blocked = new Set([
+      'driver_application',
+      'driver_rejected',
+      'delivery_accepted',
+      'delivery_unassigned',
+    ]);
+    return adminNotificationsRaw.filter((n) => !blocked.has(n.type));
+  }, [adminNotificationsRaw, user?.role]);
 
   const badgeCounts = useMemo(
     () => ({
@@ -145,10 +157,20 @@ export default function Admin() {
 
   const adminEmail = user?.email || localStorage.getItem('userEmail') || '';
 
-  const handleTabChange = useCallback((tab) => {
-    setSidebarMobile(false);
-    setActiveTab(tab);
-  }, []);
+  const handleTabChange = useCallback(
+    (tab) => {
+      if (!canAccessAdminTab(user, tab)) return;
+      setSidebarMobile(false);
+      setActiveTab(tab);
+    },
+    [user]
+  );
+
+  useEffect(() => {
+    if (!canAccessAdminTab(user, activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [user, activeTab]);
 
   const handleToggleSidebar = useCallback(() => {
     if (window.innerWidth <= 768) {
@@ -158,7 +180,7 @@ export default function Admin() {
     }
   }, []);
 
-  if (!isAdmin) {
+  if (!canAccessDashboard) {
     return <AdminAccessDenied />;
   }
 
@@ -176,6 +198,7 @@ export default function Admin() {
           mobileOpen={sidebarMobile}
           onCloseMobile={() => setSidebarMobile(false)}
           badgeCounts={badgeCounts}
+          userRole={user?.role}
         />
 
         <main
@@ -216,8 +239,11 @@ export default function Admin() {
               onHeaderSearchChange={handleHeaderSearchChange}
               notifications={adminNotifications}
               onMarkNotificationRead={markRead}
+              onMarkAllNotificationsRead={markAllRead}
               onRefreshNotifications={refreshNotifications}
               compact={activeTab === 'dashboard' || activeTab === 'orders' || activeTab === 'payments'}
+              showSettings={user?.role === 'admin'}
+              showViewStore={user?.role === 'admin'}
             />
           )}
 
@@ -237,6 +263,7 @@ export default function Admin() {
             <DashboardAdminTab
               headerSearch={headerSearch}
               onTabChange={handleTabChange}
+              userRole={user?.role}
             />
           )}
           {activeTab === 'orders' && <AdminOrdersTab headerSearch={headerSearch} />}

@@ -5,6 +5,8 @@ import {
   isAdminUser,
   isDriverAllowedPath,
   isDriverUser,
+  isStaffAllowedPath,
+  isStaffUser,
 } from '../utils/roleAccess';
 
 export default function StaffRouteGuard({ children }) {
@@ -13,7 +15,12 @@ export default function StaffRouteGuard({ children }) {
   const path = location.pathname;
 
   if (isDriverUser(user) && !isDriverAllowedPath(path)) {
-    return <Navigate to="/delivery" replace />;
+    return <Navigate to="/app/driver" replace />;
+  }
+
+  // Staff: dashboard only — never customer storefront pages
+  if (isStaffUser(user) && !isStaffAllowedPath(path)) {
+    return <Navigate to="/admin" replace />;
   }
 
   if (isAdminUser(user)) {

@@ -10,6 +10,12 @@ const { resolveCoupon } = require('./couponController');
 const { logPaymentTransaction } = require('../services/paymentService');
 const { logOrderActivity } = require('../services/orderActivityService');
 const { resolveDistrictDeliveryFee } = require('../utils/deliveryFeeUtils');
+const {
+  issueDeliveryQr,
+  clearDeliveryQr,
+  isDeliveryQrPending,
+  publicDeliveryQrState,
+} = require('../utils/deliveryQrUtils');
 const { normalizePhone, findUserByPhone, buildUserOrdersQuery, parseSomaliPhoneInput, phonesMatch } = require('../utils/phoneUtils');
 const { normalizeOrderId } = require('../utils/orderIdUtils');
 const {
@@ -27,6 +33,7 @@ const {
   invalidateDashboardCache,
   topProductsEligibilityChanged,
 } = require('../utils/revenueUtils');
+const { isDashboardRole, isAdminRole } = require('../utils/roleUtils');
 
 function resolveOrderStatus(order) {
   if (order.status) return order.status;
@@ -41,6 +48,12 @@ function resolveOrderStatus(order) {
 function withResolvedStatus(order) {
   const plain = order.toObject ? order.toObject() : { ...order };
   plain.status = resolveOrderStatus(plain);
+  delete plain.deliveryConfirmTokenHash;
+  delete plain.deliveryConfirmPayload;
+  delete plain.deliveryConfirmPin;
+  delete plain.deliveryConfirmPinHash;
+  const qrState = publicDeliveryQrState(order);
+  Object.assign(plain, qrState);
   return plain;
 }
 
@@ -140,7 +153,7 @@ function parseMoneyValue(value) {
 
 async function userCanAccessOrder(user, order) {
   if (!user) return false;
-  if (user.role === 'admin') return true;
+  if (isDashboardRole(user.role)) return true;
   if (user.role === 'delivery') return deliveryCanAccessOrder(user, order);
   if (order.userId && order.userId === user.id) return true;
   if (user.phone && phonesMatch(user.phone, order.phone)) return true;
@@ -151,7 +164,7 @@ function userCanCancelOrder(order, req) {
   const user = req.user;
   const verifyPhone = req.body?.phone;
 
-  if (user?.role === 'admin') return true;
+  if (isDashboardRole(user?.role)) return true;
   if (user && (order.userId === user.id || phonesMatch(user.phone, order.phone))) {
     return true;
   }
@@ -533,7 +546,7 @@ exports.cancelOrder = async (req, res) => {
 };
 
 const ORDER_LIST_FIELDS =
-  'id customer amount address phone product date payment paymentType status currentStep estimate driver assignedDriverId assignmentStatus assignmentRejectReason driverArrivedAt userId items subtotal deliveryFee discount paymentMethod deliveryDate deliveryTime refundStatus refundDueAt createdAt updatedAt';
+  'id customer amount address phone product date payment paymentType status currentStep estimate driver assignedDriverId assignmentStatus assignmentRejectReason driverArrivedAt userId items subtotal deliveryFee discount paymentMethod deliveryDate deliveryTime refundStatus refundDueAt deliveryConfirmStatus deliveryConfirmTokenHash deliveryConfirmPayload deliveryConfirmExpiresAt deliveryConfirmedAt createdAt updatedAt';
 
 function parseLimit(value, fallback = 0) {
   const n = Number(value);
@@ -547,7 +560,7 @@ exports.getOrders = async (req, res) => {
     const limit = parseLimit(req.query.limit, 0);
     let orders;
 
-    if (role === 'admin') {
+    if (isDashboardRole(role)) {
       let query = Order.find()
         .select(ORDER_LIST_FIELDS)
         .sort({ createdAt: -1 })
@@ -605,6 +618,16 @@ exports.assignDriver = async (req, res) => {
 
     const step = typeof order.currentStep === 'number' ? order.currentStep : 1;
     const isDelivered = step >= 5 || String(order.status || '').toLowerCase() === 'delivered';
+
+    if (step >= 4 && !isDelivered) {
+      return res.status(400).json({
+        success: false,
+        code: 'OUT_FOR_DELIVERY_LOCKED',
+        message:
+          'Order is already out for delivery. Driver cannot be changed after goods leave for the customer.',
+      });
+    }
+
     if (order.assignmentStatus === 'accepted' && order.assignedDriverId && !isDelivered) {
       return res.status(400).json({
         success: false,
@@ -660,6 +683,7 @@ exports.assignDriver = async (req, res) => {
     order.assignmentStatus = 'pending';
     order.assignmentRejectReason = '';
     order.driverArrivedAt = null;
+    clearDeliveryQr(order);
     order.estimate = 'Awaiting driver acceptance';
 
     await order.save();
@@ -698,7 +722,17 @@ exports.assignDriver = async (req, res) => {
 exports.updateOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    const { currentStep, estimate, driver, payment, paymentType, status, driverArrived } = req.body;
+    const {
+      currentStep,
+      estimate,
+      driver,
+      payment,
+      paymentType,
+      status,
+      driverArrived,
+      forceDeliver,
+      forceDeliverReason,
+    } = req.body;
     const order = await Order.findOne({ id });
 
     if (!order) {
@@ -710,6 +744,7 @@ exports.updateOrder = async (req, res) => {
     const prevPayment = order.payment;
     const prevEstimate = order.estimate;
     const prevStep = typeof order.currentStep === 'number' ? order.currentStep : 1;
+    let adminForceDeliver = null;
 
     if (req.user.role === 'delivery') {
       const allowed = await deliveryCanAccessOrder(req.user, order);
@@ -739,7 +774,7 @@ exports.updateOrder = async (req, res) => {
         }
         order.driverArrivedAt = order.driverArrivedAt || new Date();
         if (!estimate) {
-          order.estimate = 'Driver arrived — handing over order';
+          order.estimate = 'Driver arrived — scan customer QR or enter 6-digit code';
         }
       }
 
@@ -748,11 +783,12 @@ exports.updateOrder = async (req, res) => {
         if (Number.isNaN(nextStep)) {
           return res.status(400).json({ success: false, message: 'Invalid delivery step.' });
         }
-        if (nextStep >= 5 && !order.driverArrivedAt) {
+        if (nextStep >= 5) {
           return res.status(400).json({
             success: false,
-            code: 'ARRIVAL_REQUIRED',
-            message: 'Confirm you have arrived at the customer before marking this order delivered.',
+            code: 'QR_CONFIRM_REQUIRED',
+            message:
+              'Scan the customer delivery QR or enter the 6-digit code to complete this order.',
           });
         }
         // Cancel (0) allowed; otherwise progress can only move forward
@@ -764,6 +800,10 @@ exports.updateOrder = async (req, res) => {
         }
         if (nextStep === 4 && prevStep < 4) {
           order.driverArrivedAt = null;
+          issueDeliveryQr(order);
+          if (!estimate) {
+            order.estimate = 'Out for delivery — customer QR ready';
+          }
         }
         order.currentStep = nextStep;
       }
@@ -778,7 +818,7 @@ exports.updateOrder = async (req, res) => {
       if (step >= 5) order.status = 'delivered';
       else if (step >= 4) order.status = 'shipped';
       else order.status = 'processing';
-    } else if (req.user.role === 'admin') {
+    } else if (isDashboardRole(req.user.role)) {
       if (currentStep !== undefined) {
         const nextStep = parseInt(currentStep, 10);
         if (Number.isNaN(nextStep)) {
@@ -790,16 +830,51 @@ exports.updateOrder = async (req, res) => {
             message: 'Delivery progress cannot move backwards.',
           });
         }
+
+        // Admin/staff marking Delivered bypasses customer QR — reason required
+        if (nextStep >= 5 && prevStep < 5) {
+          if (!isAdminRole(req.user.role)) {
+            return res.status(403).json({
+              success: false,
+              code: 'ADMIN_OVERRIDE_REQUIRED',
+              message:
+                'Only admin can mark an order delivered without customer QR confirmation.',
+            });
+          }
+          const reason = String(forceDeliverReason || '').trim();
+          if (forceDeliver !== true || reason.length < 5) {
+            return res.status(400).json({
+              success: false,
+              code: 'FORCE_DELIVER_REQUIRED',
+              message:
+                'To mark delivered without scanning the customer QR, confirm admin override and enter a reason (at least 5 characters).',
+            });
+          }
+          adminForceDeliver = { reason };
+          clearDeliveryQr(order);
+          order.deliveryConfirmStatus = 'confirmed';
+          order.deliveryConfirmedAt = new Date();
+          order.driverArrivedAt = order.driverArrivedAt || new Date();
+          if (!estimate) {
+            order.estimate = `Delivered by admin override — ${reason.slice(0, 100)}`;
+          }
+        } else if (nextStep === 4 && prevStep < 4) {
+          issueDeliveryQr(order);
+        }
         order.currentStep = nextStep;
       }
       if (estimate !== undefined) order.estimate = estimate;
       if (driver !== undefined) order.driver = driver;
-      if (payment !== undefined) order.payment = payment;
       if (status !== undefined) order.status = status;
-      if (paymentType !== undefined) {
-        order.paymentType = paymentType;
-        if (paymentType === 'paid') order.payment = 'Paid';
-        else if (paymentType === 'failed') order.payment = 'Failed';
+
+      // Payment / refunds — admin only
+      if (isAdminRole(req.user.role)) {
+        if (payment !== undefined) order.payment = payment;
+        if (paymentType !== undefined) {
+          order.paymentType = paymentType;
+          if (paymentType === 'paid') order.payment = 'Paid';
+          else if (paymentType === 'failed') order.payment = 'Failed';
+        }
       }
 
       if (status === undefined && currentStep !== undefined) {
@@ -850,6 +925,8 @@ exports.updateOrder = async (req, res) => {
       statusChanged: prevStatus !== nextStatus,
       paymentType: order.paymentType !== prevPaymentType ? order.paymentType : undefined,
       payment: order.payment !== prevPayment ? order.payment : undefined,
+      deliveryQrIssued:
+        prevStep < 4 && order.currentStep === 4 && isDeliveryQrPending(order),
     });
 
     if (prevStatus !== nextStatus) {
@@ -860,6 +937,21 @@ exports.updateOrder = async (req, res) => {
         actorId: req.user?.id || '',
         actorRole: req.user?.role || 'system',
         metadata: { from: prevStatus, to: nextStatus, currentStep: order.currentStep },
+      });
+    }
+
+    if (adminForceDeliver) {
+      await logOrderActivity({
+        orderId: order.id,
+        action: 'delivery_admin_override',
+        description: `Admin force-marked delivered without customer QR: ${adminForceDeliver.reason}`,
+        actorId: req.user?.id || '',
+        actorRole: req.user?.role || 'admin',
+        metadata: {
+          reason: adminForceDeliver.reason,
+          previousStep: prevStep,
+          confirmedAt: order.deliveryConfirmedAt,
+        },
       });
     }
 
@@ -993,5 +1085,50 @@ exports.getOrderDetails = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to fetch order details.' });
+  }
+};
+
+/** Customer (or phone-verified guest) fetches scannable delivery QR payload */
+exports.getDeliveryQr = async (req, res) => {
+  try {
+    const orderId = normalizeOrderId(req.params.orderId);
+    const order = await Order.findOne({ id: orderId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found!' });
+    }
+
+    const verifyPhone = req.query.phone || req.body?.phone;
+    const authed = req.user ? await userCanAccessOrder(req.user, order) : false;
+    const phoneOk = verifyPhone && phonesMatch(verifyPhone, order.phone);
+    if (!authed && !phoneOk) {
+      return res.status(403).json({
+        success: false,
+        message: 'Verify with your order phone number to view the delivery QR.',
+      });
+    }
+
+    if (Number(order.currentStep) >= 5 || order.status === 'delivered') {
+      return res.status(400).json({ success: false, message: 'This order is already delivered.' });
+    }
+
+    if (!isDeliveryQrPending(order)) {
+      return res.status(400).json({
+        success: false,
+        code: 'QR_NOT_READY',
+        message: 'Delivery QR is not ready yet. It appears when the order is out for delivery.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      orderId: order.id,
+      payload: order.deliveryConfirmPayload,
+      pin: order.deliveryConfirmPin || '',
+      expiresAt: null,
+      message: 'Show this QR or 6-digit code to your driver to confirm delivery.',
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to load delivery QR.' });
   }
 };

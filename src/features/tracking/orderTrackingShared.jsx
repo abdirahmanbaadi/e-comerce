@@ -4,6 +4,7 @@ import { apiUrl, normalizeOrderId } from '../../utils/data';
 import { formatMoney, productImage } from '../../utils/format';
 import { showTopFloatNotification } from '../../utils/notifications';
 import { canCustomerCancelOrder } from '../../utils/orderCancel';
+import { DeliveryQrModal } from './DeliveryQrPanel';
 
 const PROGRESS_STEPS = [
   { key: 'placed', label: 'Order Placed', icon: 'fa-bag-shopping' },
@@ -198,63 +199,68 @@ export function OrderItemsModal({ items, totalLabel, onClose }) {
   if (typeof document === 'undefined' || !document.body) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[1060] overflow-y-auto bg-black/45" role="presentation">
-      <div className="flex min-h-full items-center justify-center p-4" onClick={onClose}>
-        <div
-          className="my-auto w-full max-h-[min(90dvh,560px)] max-w-[520px] overflow-y-auto rounded-2xl bg-white shadow-[0_20px_50px_rgba(0,0,0,0.15)]"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="allOrderItemsTitle"
-        >
-          <div className="flex items-center justify-between border-b border-black/[0.06] px-5 py-4">
-            <h3 id="allOrderItemsTitle" className="m-0 text-[1rem] font-bold text-[#222222]">
-              All Order Items
+    <div
+      className="fixed inset-0 z-[1060] flex items-end justify-center bg-deepGreen/55 p-0 backdrop-blur-[4px] sm:items-center sm:p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="animate-sheetUp my-0 flex max-h-[min(92dvh,640px)] w-full max-w-[520px] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_-20px_50px_rgba(0,0,0,0.22)] sm:rounded-[28px]"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="allOrderItemsTitle"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-black/[0.05] px-5 pb-4 pt-3">
+          <div className="min-w-0 flex-1">
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-black/12 sm:hidden" />
+            <h3 id="allOrderItemsTitle" className="m-0 font-display text-[1.35rem] font-bold text-deepGreen">
+              All order items
             </h3>
-            <button
-              type="button"
-              onClick={onClose}
-              className="border-0 bg-transparent p-1 text-[1.1rem] text-[#888888] hover:text-[#333333]"
-              aria-label="Close"
-            >
-              <i className="fa-solid fa-xmark" />
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-[#F4EFE6] text-[#555]"
+            aria-label="Close"
+          >
+            <i className="fa-solid fa-xmark" />
+          </button>
+        </div>
 
-          <div className="divide-y divide-black/[0.05] px-5">
-            {items.map((item, idx) => (
-              <div key={`${item.title}-${idx}`} className="flex items-center gap-3 py-4">
-                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-black/[0.06] bg-[#FAF8F5]">
-                  {item.image ? (
-                    <img
-                      src={productImage(item.image)}
-                      alt={item.title}
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = productImage('product-images/hero1.jpeg');
-                      }}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[#BBBBBB]">
-                      <i className="fa-solid fa-couch" />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="m-0 truncate text-[0.92rem] font-bold text-[#222222]">{item.title}</p>
-                  <p className="m-0 mt-1 text-[0.8rem] text-[#888888]">Qty: {item.quantity || 1}</p>
-                </div>
-                <span className="shrink-0 text-[0.92rem] font-bold text-[#222222]">
-                  {formatMoney((Number(item.price) || 0) * (item.quantity || 1))}
-                </span>
+        <div className="min-h-0 flex-1 divide-y divide-black/[0.05] overflow-y-auto px-5">
+          {items.map((item, idx) => (
+            <div key={`${item.title}-${idx}`} className="flex items-center gap-3 py-4">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-black/[0.06] bg-[#FAF8F5]">
+                {item.image ? (
+                  <img
+                    src={productImage(item.image)}
+                    alt={item.title}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = productImage('product-images/hero1.jpeg');
+                    }}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[#BBBBBB]">
+                    <i className="fa-solid fa-couch" />
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+              <div className="min-w-0 flex-1">
+                <p className="m-0 truncate text-[0.92rem] font-bold text-[#222222]">{item.title}</p>
+                <p className="m-0 mt-1 text-[0.8rem] text-[#888888]">Qty: {item.quantity || 1}</p>
+              </div>
+              <span className="shrink-0 text-[0.92rem] font-bold text-deepGreen">
+                {formatMoney((Number(item.price) || 0) * (item.quantity || 1))}
+              </span>
+            </div>
+          ))}
+        </div>
 
-          <div className="flex items-center justify-between border-t border-black/[0.06] px-5 py-4">
-            <span className="text-[0.88rem] font-bold text-[#666666]">Total</span>
-            <span className="text-[1rem] font-extrabold text-[#222222]">{totalLabel}</span>
-          </div>
+        <div className="flex items-center justify-between border-t border-black/[0.05] px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <span className="text-[0.88rem] font-bold text-[#666666]">Total</span>
+          <span className="text-[1.05rem] font-extrabold text-deepGreen">{totalLabel}</span>
         </div>
       </div>
     </div>,
@@ -338,6 +344,7 @@ export function OrderTrackingResults({
   itemsModalOpen,
   onItemsModalOpen,
   onItemsModalClose,
+  initialQrOpen = false,
 }) {
   const status = resolveTrackStatus(order);
   const canCancel = canCustomerCancelOrder(order) && typeof onCancel === 'function';
@@ -347,6 +354,15 @@ export function OrderTrackingResults({
     ? order.amount
     : formatMoney(itemsSubtotal(items) || parseTrackAmount(order?.amount));
   const estimatedDelivery = order?.deliveryDate || order?.estimate || '—';
+  const qrReady =
+    Boolean(order?.deliveryQrPending) ||
+    order?.deliveryConfirmStatus === 'pending' ||
+    Boolean(order?.deliveryConfirmPayload);
+  const [qrModalOpen, setQrModalOpen] = useState(Boolean(initialQrOpen && qrReady));
+
+  useEffect(() => {
+    if (initialQrOpen && qrReady) setQrModalOpen(true);
+  }, [initialQrOpen, qrReady, order?.id]);
 
   return (
     <div className="animate-cardRise space-y-4">
@@ -362,14 +378,26 @@ export function OrderTrackingResults({
       <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_6px_20px_rgba(0,0,0,0.05)]">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/[0.05] px-5 py-3">
           <h2 className="m-0 text-[1.05rem] font-bold text-[#222222]">Order Tracking</h2>
-          <button
-            type="button"
-            onClick={onReset}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-deepGreen/15 bg-deepGreen/[0.06] px-3 py-1.5 text-[0.78rem] font-semibold text-deepGreen transition hover:bg-deepGreen/[0.1]"
-          >
-            <i className="fa-solid fa-magnifying-glass text-[0.75rem]" />
-            {resetLabel}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {qrReady && (
+              <button
+                type="button"
+                onClick={() => setQrModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border-0 bg-emerald-600 px-3 py-1.5 text-[0.78rem] font-bold text-white shadow-sm transition hover:bg-emerald-700"
+              >
+                <i className="fa-solid fa-qrcode text-[0.85rem]" />
+                QR code
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onReset}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-deepGreen/15 bg-deepGreen/[0.06] px-3 py-1.5 text-[0.78rem] font-semibold text-deepGreen transition hover:bg-deepGreen/[0.1]"
+            >
+              <i className="fa-solid fa-magnifying-glass text-[0.75rem]" />
+              {resetLabel}
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-4 px-5 py-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -499,6 +527,14 @@ export function OrderTrackingResults({
       {itemsModalOpen && items.length > 0 && (
         <OrderItemsModal items={items} totalLabel={totalLabel} onClose={onItemsModalClose} />
       )}
+
+      <DeliveryQrModal
+        open={qrModalOpen && qrReady}
+        onClose={() => setQrModalOpen(false)}
+        orderId={order.id}
+        phone={order.phone || ''}
+        initialPayload={order.deliveryConfirmPayload || ''}
+      />
     </div>
   );
 }

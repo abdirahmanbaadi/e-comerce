@@ -372,12 +372,12 @@ function ProductFormModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[1060] flex items-center justify-center bg-deepGreen/45 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[10050] flex items-center justify-center bg-deepGreen/45 p-4 backdrop-blur-sm"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="animate-productModalIn flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]"
+        className="animate-productModalIn flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] dark:bg-[#243029] dark:border-white/14 [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:border-white/14"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -639,7 +639,7 @@ function ProductStatSubModal({ open, title, onClose, children, maxWidth = 'max-w
       role="presentation"
     >
       <div
-        className={`animate-productModalIn w-full ${maxWidth} overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_20px_50px_rgba(0,0,0,0.2)] [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#1a2421]`}
+        className={`animate-productModalIn w-full ${maxWidth} overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_20px_50px_rgba(0,0,0,0.2)] [.admin-dark_&]:border-white/10 dark:bg-[#243029] dark:border-white/14 [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:border-white/14`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -827,7 +827,7 @@ function ProductDetailsModal({
         role="presentation"
       >
         <div
-          className="animate-productModalIn relative flex max-h-[92vh] w-full max-w-[930px] flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]"
+          className="animate-productModalIn relative flex max-h-[92vh] w-full max-w-[930px] flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] dark:bg-[#243029] dark:border-white/14 [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:border-white/14"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -1120,7 +1120,7 @@ function ProductsStatCard({ label, value, icon, iconWrapClass, active, onClick }
       ? 'border-deepGreen/20 bg-deepGreen/[0.04] shadow-[0_6px_20px_rgba(7,61,53,0.08)]'
       : 'border-deepGreen/[0.06] bg-white hover:-translate-y-px hover:border-deepGreen/12 hover:shadow-[0_6px_20px_rgba(7,61,53,0.07)]',
     'cursor-pointer active:scale-[0.99]',
-    '[.admin-dark_&]:border-white/[0.08] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)]',
+    '[.admin-dark_&]:border-white/[0.08] dark:bg-[#1a2421] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)]',
     active ? '[.admin-dark_&]:border-emerald-500/25 [.admin-dark_&]:bg-emerald-500/10' : '',
   ].join(' ');
 
@@ -1158,7 +1158,7 @@ function ProductsFilterToolbar({
     'inline-flex items-center gap-2 rounded-lg border border-deepGreen/[0.08] bg-[#fdfbf8] px-3 py-1.5 text-[0.76rem] font-semibold text-deepGreen transition hover:border-deepGreen/15 hover:bg-white hover:shadow-[0_2px_8px_rgba(7,61,53,0.06)] [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-white/[0.04] [.admin-dark_&]:text-[#e8f0ed]';
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-deepGreen/[0.06] bg-white px-3 py-2 shadow-[0_2px_10px_rgba(0,0,0,0.03)] [.admin-dark_&]:border-white/[0.08] [.admin-dark_&]:bg-[#1a2421]">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-deepGreen/[0.06] bg-white px-3 py-2 shadow-[0_2px_10px_rgba(0,0,0,0.03)] [.admin-dark_&]:border-white/[0.08] dark:bg-[#1a2421] [.admin-dark_&]:bg-[#1a2421]">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="me-1 text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">Quick</span>
         <button type="button" onClick={onAddProduct} className={quickBtnClass}>
@@ -1678,7 +1678,7 @@ export default function AdminProductsTab({ headerSearch = '' }) {
           style={{ maxHeight: PRODUCTS_TABLE_MAX_HEIGHT }}
         >
           <table className={`${ADM_TABLE} [&_tbody_tr]:cursor-pointer [&_tbody_tr]:transition-colors`}>
-            <thead className="sticky top-0 z-[5] bg-white [.admin-dark_&]:bg-[#1a2421]">
+            <thead className="sticky top-0 z-[5] bg-white dark:bg-[#1a2421] [.admin-dark_&]:bg-[#1a2421]">
               <tr>
                 <th>Product</th>
                 <th>Category</th>

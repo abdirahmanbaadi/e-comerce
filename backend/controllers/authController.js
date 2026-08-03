@@ -27,6 +27,12 @@ const {
   allowSeedPasswordUpgrade,
   MAX_OTP_ATTEMPTS,
 } = require('../utils/securityUtils');
+const {
+  verifyGoogleIdToken,
+  verifyGoogleAccessToken,
+  buildGooglePlaceholderPhone,
+  buildGoogleUsername,
+} = require('../services/googleAuthService');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -292,6 +298,132 @@ exports.login = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'A server error occurred during login.' });
+  }
+};
+
+async function ensureUniqueGoogleUsername(email, googleId) {
+  let base = buildGoogleUsername(email, googleId);
+  let candidate = base;
+  let n = 0;
+  while (await User.findOne({ username: candidate })) {
+    n += 1;
+    candidate = `${base.slice(0, 24)}${n}`;
+  }
+  return candidate;
+}
+
+async function ensureUniqueGooglePhone(googleId) {
+  let phone = buildGooglePlaceholderPhone(googleId);
+  let n = 0;
+  while (await findUserByPhone(User, phone)) {
+    n += 1;
+    const suffix = String(n).padStart(2, '0');
+    phone = `${buildGooglePlaceholderPhone(googleId).slice(0, -2)}${suffix}`;
+  }
+  return phone;
+}
+
+// Google Sign-In / Sign-Up (credential = GIS ID token)
+exports.loginWithGoogle = async (req, res) => {
+  try {
+    const { credential, accessToken } = req.body || {};
+    let verified;
+    if (credential) {
+      verified = await verifyGoogleIdToken(credential);
+    } else if (accessToken) {
+      verified = await verifyGoogleAccessToken(accessToken);
+    } else {
+      return res.status(400).json({ success: false, message: 'Missing Google credential.' });
+    }
+
+    if (!verified.ok) {
+      return res.status(400).json({ success: false, message: verified.message });
+    }
+
+    const { googleId, email, firstName, lastName, avatar } = verified.profile;
+
+    let user = await User.findOne({ googleId });
+    if (!user) {
+      user = await User.findOne({ email });
+    }
+
+    if (user) {
+      if (user.isActive === false) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account has been deactivated. Contact support.',
+        });
+      }
+      if (!user.googleId) {
+        user.googleId = googleId;
+        user.authProvider = user.authProvider || 'google';
+      }
+      if (avatar && (!user.avatar || String(user.avatar).includes('ui-avatars.com'))) {
+        user.avatar = avatar;
+      }
+      user.lastLoginAt = new Date();
+      await user.save();
+    } else {
+      const salt = await bcrypt.genSalt(10);
+      const randomPassword = await bcrypt.hash(
+        `google_${googleId}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        salt
+      );
+      const username = await ensureUniqueGoogleUsername(email, googleId);
+      const phone = await ensureUniqueGooglePhone(googleId);
+      const userId = `USR-${Math.floor(Math.random() * 90000) + 10000}`;
+
+      user = await User.create({
+        id: userId,
+        firstName: firstName || 'Google',
+        lastName: lastName || '',
+        username,
+        email,
+        phone,
+        googleId,
+        authProvider: 'google',
+        password: randomPassword,
+        role: 'user',
+        passwordChangedAt: new Date(),
+        lastLoginAt: new Date(),
+        avatar:
+          avatar ||
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(`${firstName || 'G'} ${lastName || ''}`)}&background=073D35&color=ffffff&bold=true&size=128`,
+      });
+
+      sendWelcomeEmail(user).catch((err) => console.error('Welcome email failed:', err.message));
+      logUserActivity({
+        userId: user.id,
+        action: 'register',
+        description: 'New customer account via Google.',
+        metadata: { email: user.email, provider: 'google' },
+      }).catch((err) => console.error('Activity log failed:', err.message));
+    }
+
+    linkGuestOrdersToUser(user).catch((err) => console.error('Link guest orders failed:', err.message));
+
+    await logUserActivity({
+      userId: user.id,
+      action: 'login',
+      description: `Signed in with Google as ${user.role}.`,
+      metadata: { role: user.role, provider: 'google' },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Google sign-in successful!',
+      token: generateToken(user.id),
+      user: formatPublicUser(user),
+    });
+  } catch (error) {
+    console.error(error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'This Google account could not be linked. Try again or use email login.',
+      });
+    }
+    return res.status(500).json({ success: false, message: 'A server error occurred during Google sign-in.' });
   }
 };
 
@@ -824,7 +956,7 @@ exports.getUserDetails = async (req, res) => {
   }
 };
 
-// Update User (Admin Only)
+// Update User (Admin Only) — role/status only; identity fields are not editable by admin
 exports.updateUser = async (req, res) => {
   try {
     const user = await User.findOne({ id: req.params.id });
@@ -832,62 +964,48 @@ exports.updateUser = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User account not found!' });
     }
 
-    if (user.email.toLowerCase() === 'admin@gmail.com' && req.body.role && req.body.role !== 'admin') {
-      return res.status(400).json({ success: false, message: 'The main admin account role cannot be changed!' });
+    if (user.email.toLowerCase() === 'admin@gmail.com') {
+      return res.status(400).json({
+        success: false,
+        message: 'The main admin account cannot be edited here.',
+      });
     }
 
     const prevRole = user.role;
     const prevActive = user.isActive !== false;
-
-    const { firstName, lastName, email, phone, role, isActive } = req.body;
-
-    if (firstName !== undefined) user.firstName = String(firstName).trim();
-    if (lastName !== undefined) user.lastName = String(lastName).trim();
-
-    if (email !== undefined) {
-      const normalizedEmail = String(email).trim().toLowerCase();
-      const emailExists = await User.findOne({ email: normalizedEmail });
-      if (emailExists && emailExists.id !== user.id) {
-        return res.status(400).json({ success: false, message: 'This email is already registered to another account!' });
-      }
-      user.email = normalizedEmail;
-    }
-
-    if (phone !== undefined) {
-      const phoneParsed = parsePhoneForStorage(phone);
-      if (!phoneParsed.ok) {
-        return res.status(400).json({ success: false, message: phoneParsed.message });
-      }
-
-      const taken = await phoneTakenByOtherUser(User, phoneParsed.e164, user.id);
-      if (taken) {
-        return res.status(400).json({ success: false, message: 'This phone number is already registered to another account!' });
-      }
-      user.phone = phoneParsed.e164;
-    }
+    const { role, isActive, adminPromotionPassword } = req.body;
 
     if (role !== undefined) {
-      const allowedRoles = ['user', 'admin', 'delivery'];
+      const allowedRoles = ['user', 'staff', 'delivery'];
       if (!allowedRoles.includes(role)) {
-        return res.status(400).json({ success: false, message: 'Invalid role specified!' });
-      }
-      if (user.email.toLowerCase() === 'admin@gmail.com' && role !== 'admin') {
-        return res.status(400).json({ success: false, message: 'The main admin account role cannot be changed!' });
-      }
-      if (role === 'admin' && prevRole !== 'admin') {
         return res.status(400).json({
           success: false,
-          code: 'USE_PROMOTE_ENDPOINT',
-          message: 'Use Promote to Admin and enter the admin promotion password.',
+          message: 'Invalid role. Only Customer, Staff, or Driver can be assigned. There is only one Admin.',
         });
       }
-      user.role = role;
+
+      if (role !== prevRole) {
+        const configured = await isAdminPromotionPasswordConfigured();
+        if (!configured) {
+          return res.status(400).json({
+            success: false,
+            code: 'PROMOTION_PASSWORD_NOT_SET',
+            message: 'Set the role-change password in Settings before changing user roles.',
+          });
+        }
+        const verified = await verifyAdminPromotionPassword(adminPromotionPassword);
+        if (!verified.ok) {
+          return res.status(400).json({
+            success: false,
+            code: verified.code,
+            message: verified.message,
+          });
+        }
+        user.role = role;
+      }
     }
 
     if (isActive !== undefined) {
-      if (user.email.toLowerCase() === 'admin@gmail.com' && isActive === false) {
-        return res.status(400).json({ success: false, message: 'The main admin account cannot be deactivated!' });
-      }
       user.isActive = Boolean(isActive);
     }
 
@@ -977,55 +1095,11 @@ exports.setAdminPromotionPassword = async (req, res) => {
   }
 };
 
-exports.promoteUserToAdmin = async (req, res) => {
-  try {
-    const user = await User.findOne({ id: req.params.id });
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User account not found!' });
-    }
-
-    if (user.role === 'admin') {
-      return res.status(400).json({ success: false, message: 'This user is already an admin.' });
-    }
-
-    const verified = await verifyAdminPromotionPassword(req.body?.adminPromotionPassword);
-    if (!verified.ok) {
-      const status = verified.code === 'NOT_CONFIGURED' ? 400 : 403;
-      return res.status(status).json({
-        success: false,
-        code: verified.code,
-        message: verified.message,
-      });
-    }
-
-    const prevRole = user.role;
-    user.role = 'admin';
-    await user.save();
-
-    await logUserActivity({
-      userId: user.id,
-      action: 'role_changed',
-      description: `Role changed from ${prevRole} to admin via promotion password.`,
-      metadata: { from: prevRole, to: 'admin', byAdmin: req.user?.id },
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: `${user.firstName || 'User'} is now an admin.`,
-      user: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        isActive: user.isActive !== false,
-      },
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ success: false, message: 'Failed to promote user to admin.' });
-  }
+exports.promoteUserToAdmin = async (_req, res) => {
+  return res.status(403).json({
+    success: false,
+    message: 'Creating another admin is not allowed. The system has only one Admin. Assign Customer, Staff, or Driver instead.',
+  });
 };
 
 // Delete User (Admin Only)

@@ -7,6 +7,7 @@ import { useIntervalWhenVisible } from '../../hooks/useIntervalWhenVisible';
 import { apiUrl, clearDeliveryDistrictsCache, fetchWithTimeout } from '../../utils/data';
 import { productImage } from '../../utils/format';
 import { showTopFloatNotification } from '../../utils/notifications';
+import ForceDeliverModal from './ForceDeliverModal';
 import {
   ProductModalGallery,
   ProductModalHeroRow,
@@ -317,7 +318,7 @@ function StockSubModal({ open, title, onClose, children, maxWidth = 'max-w-lg', 
       role="presentation"
     >
       <div
-        className={`animate-productModalIn w-full ${maxWidth} overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_20px_50px_rgba(0,0,0,0.2)] [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#1a2421]`}
+        className={`animate-productModalIn w-full ${maxWidth} overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_20px_50px_rgba(0,0,0,0.2)] [.admin-dark_&]:border-white/10 dark:bg-[#243029] dark:border-white/14 [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:border-white/14`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -627,7 +628,7 @@ function StockStatCard({ label, value, icon, iconWrapClass, active, onClick }) {
       ? 'border-deepGreen/20 bg-deepGreen/[0.04] shadow-[0_6px_20px_rgba(7,61,53,0.08)]'
       : 'border-deepGreen/[0.06] bg-white hover:-translate-y-px hover:border-deepGreen/12 hover:shadow-[0_6px_20px_rgba(7,61,53,0.07)]',
     'cursor-pointer active:scale-[0.99]',
-    '[.admin-dark_&]:border-white/[0.08] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)]',
+    '[.admin-dark_&]:border-white/[0.08] dark:bg-[#1a2421] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)]',
     active ? '[.admin-dark_&]:border-emerald-500/25 [.admin-dark_&]:bg-emerald-500/10' : '',
   ].join(' ');
 
@@ -654,7 +655,7 @@ function StockStatCard({ label, value, icon, iconWrapClass, active, onClick }) {
 
 function StockFilterToolbar({ filterCategory, categoryOptions, onCategoryChange, onExport }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-deepGreen/[0.06] bg-white px-3 py-2 shadow-[0_2px_10px_rgba(0,0,0,0.03)] [.admin-dark_&]:border-white/[0.08] [.admin-dark_&]:bg-[#1a2421]">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-deepGreen/[0.06] bg-white px-3 py-2 shadow-[0_2px_10px_rgba(0,0,0,0.03)] [.admin-dark_&]:border-white/[0.08] dark:bg-[#1a2421] [.admin-dark_&]:bg-[#1a2421]">
       <div className="flex items-center gap-1.5">
         <span className="text-[0.62rem] font-bold uppercase tracking-wide text-gray-400">Category</span>
         <select
@@ -702,7 +703,7 @@ function PaymentsStatCard({ label, value, icon, iconWrapClass, active, onClick, 
       ? 'border-deepGreen/20 bg-deepGreen/[0.04] shadow-[0_6px_20px_rgba(7,61,53,0.08)]'
       : 'border-deepGreen/[0.06] bg-white hover:-translate-y-px hover:border-deepGreen/12 hover:shadow-[0_6px_20px_rgba(7,61,53,0.07)]',
     interactive ? 'cursor-pointer active:scale-[0.99]' : '',
-    '[.admin-dark_&]:border-white/[0.08] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)]',
+    '[.admin-dark_&]:border-white/[0.08] dark:bg-[#1a2421] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:hover:shadow-[0_6px_20px_rgba(0,0,0,0.2)]',
     active ? '[.admin-dark_&]:border-emerald-500/25 [.admin-dark_&]:bg-emerald-500/10' : '',
   ].join(' ');
 
@@ -991,7 +992,7 @@ function StockDetailsModal({ open, product, saving, historyRefreshKey, onClose, 
         role="presentation"
       >
         <div
-          className="animate-productModalIn relative flex max-h-[92vh] w-full max-w-[930px] flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]"
+          className="animate-productModalIn relative flex max-h-[92vh] w-full max-w-[930px] flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] dark:bg-[#243029] dark:border-white/14 [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:border-white/14"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -1343,7 +1344,7 @@ export function AdminStockTab({ headerSearch = '' }) {
           style={{ maxHeight: STOCK_TABLE_MAX_HEIGHT }}
         >
           <table className={`${ADM_TABLE} [&_tbody_tr]:cursor-pointer [&_tbody_tr]:transition-colors`}>
-            <thead className="sticky top-0 z-[5] bg-white [.admin-dark_&]:bg-[#1a2421]">
+            <thead className="sticky top-0 z-[5] bg-white dark:bg-[#1a2421] [.admin-dark_&]:bg-[#1a2421]">
               <tr>
                 <th>Product</th>
                 <th>Category</th>
@@ -1655,7 +1656,7 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
           <table
             className={`${ADM_TABLE} [&_tbody_tr]:cursor-pointer [&_tbody_tr]:transition-colors [&_td]:py-2 [&_th]:py-2.5`}
           >
-            <thead className="sticky top-0 z-[2] bg-white shadow-[0_1px_0_rgba(0,0,0,0.06)] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:shadow-[0_1px_0_rgba(255,255,255,0.06)]">
+            <thead className="sticky top-0 z-[2] bg-white shadow-[0_1px_0_rgba(0,0,0,0.06)] dark:bg-[#1a2421] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:shadow-[0_1px_0_rgba(255,255,255,0.06)]">
               <tr>
                 <th>Customer</th>
                 <th>Order ID</th>
@@ -2015,6 +2016,7 @@ export function AdminDeliveryTab({ headerSearch = '' }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [forceModalOpen, setForceModalOpen] = useState(false);
   const [form, setForm] = useState({
     assignedDriverId: '',
     estimate: '',
@@ -2142,16 +2144,23 @@ export function AdminDeliveryTab({ headerSearch = '' }) {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const submitDeliveryUpdate = async () => {
+  const submitDeliveryUpdate = async ({ forceDeliver = false, forceDeliverReason = '' } = {}) => {
     if (!activeOrder) return;
 
     const nextDriverId = form.assignedDriverId || '';
     const driverChanged =
       nextDriverId && nextDriverId !== (activeOrder.assignedDriverId || '') && !isDriverAssignmentLocked(activeOrder);
     const needsDriver = isOrderUnassigned(activeOrder) || isDriverDeclined(activeOrder);
+    const nextStep = Math.max(2, form.currentStep);
+    const prevStep = getOrderStep(activeOrder);
 
     if (needsDriver && !nextDriverId) {
       showTopFloatNotification('Select a driver before saving dispatch.', 'danger');
+      return;
+    }
+
+    if (nextStep >= 5 && prevStep < 5 && !forceDeliver) {
+      setForceModalOpen(true);
       return;
     }
 
@@ -2174,18 +2183,29 @@ export function AdminDeliveryTab({ headerSearch = '' }) {
         window.dispatchEvent(new CustomEvent('driver-assignment-updated'));
       }
 
+      const body = {
+        estimate: form.estimate.trim() || 'Estimate pending',
+        currentStep: nextStep,
+      };
+      if (forceDeliver) {
+        body.forceDeliver = true;
+        body.forceDeliverReason = forceDeliverReason;
+      }
+
       const updateRes = await fetch(apiUrl(`/api/orders/${orderIdEncoded}`), {
         method: 'PUT',
         headers: authHeaders(),
-        body: JSON.stringify({
-          estimate: form.estimate.trim() || 'Estimate pending',
-          currentStep: Math.max(2, form.currentStep),
-        }),
+        body: JSON.stringify(body),
       });
       const updateData = await updateRes.json();
 
       if (updateData.success) {
-        showTopFloatNotification(`Dispatch updated for ${activeOrder.customer} (${activeOrder.id}).`);
+        setForceModalOpen(false);
+        showTopFloatNotification(
+          forceDeliver
+            ? `Order ${activeOrder.id} force-marked delivered (admin override).`
+            : `Dispatch updated for ${activeOrder.customer} (${activeOrder.id}).`
+        );
         setModalOpen(false);
         setActiveOrder(null);
         window.dispatchEvent(new CustomEvent('admin-delivery-invalidate'));
@@ -2264,7 +2284,7 @@ export function AdminDeliveryTab({ headerSearch = '' }) {
           style={{ maxHeight: DELIVERY_TABLE_MAX_HEIGHT }}
         >
           <table className={`${ADM_TABLE} [&_tbody_tr]:cursor-pointer [&_tbody_tr]:transition-colors`}>
-            <thead className="sticky top-0 z-[2] bg-white shadow-[0_1px_0_rgba(0,0,0,0.06)] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:shadow-[0_1px_0_rgba(255,255,255,0.06)]">
+            <thead className="sticky top-0 z-[2] bg-white shadow-[0_1px_0_rgba(0,0,0,0.06)] dark:bg-[#1a2421] [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:shadow-[0_1px_0_rgba(255,255,255,0.06)]">
               <tr>
                 <th>Customer</th>
                 <th>Order ID</th>
@@ -2346,9 +2366,21 @@ export function AdminDeliveryTab({ headerSearch = '' }) {
           if (!saving) {
             setModalOpen(false);
             setActiveOrder(null);
+            setForceModalOpen(false);
           }
         }}
-        onSubmit={submitDeliveryUpdate}
+        onSubmit={() => submitDeliveryUpdate()}
+      />
+      <ForceDeliverModal
+        open={forceModalOpen && Boolean(activeOrder)}
+        order={activeOrder}
+        busy={saving}
+        onClose={() => {
+          if (!saving) setForceModalOpen(false);
+        }}
+        onConfirm={(reason) =>
+          submitDeliveryUpdate({ forceDeliver: true, forceDeliverReason: reason })
+        }
       />
     </div>
   );

@@ -1,0 +1,26 @@
+{
+  "name": "Mogadishu Modern Furniture",
+  "short_name": "MMF",
+  "description": "Premium furniture shopping and delivery for Mogadishu.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F7F4EE",
+  "theme_color": "#073D35",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/icons/mmf-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/mmf-icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

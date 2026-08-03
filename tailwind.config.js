@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
-  darkMode: ['class', '[data-admin-theme="dark"]'],
+  darkMode: ['selector', '[data-admin-theme="dark"], .admin-dark'],
   blocklist: ['collapse'],
   theme: {
     extend: {
@@ -22,6 +22,30 @@ export default {
         display: ['Cormorant Garamond', 'serif'],
       },
       keyframes: {
+        sheetUp: {
+          from: { opacity: '0', transform: 'translateY(28px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        fadeUp: {
+          from: { opacity: '0', transform: 'translateY(18px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        fadeIn: {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
+        floatY: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-8px)' },
+        },
+        softPulse: {
+          '0%, 100%': { opacity: '0.45', transform: 'scale(1)' },
+          '50%': { opacity: '0.75', transform: 'scale(1.06)' },
+        },
+        railIn: {
+          from: { opacity: '0', transform: 'translateX(28px)' },
+          to: { opacity: '1', transform: 'translateX(0)' },
+        },
         cardRise: {
           from: { opacity: '0', transform: 'translateY(24px) scale(0.98)' },
           to: { opacity: '1', transform: 'translateY(0) scale(1)' },
@@ -72,6 +96,12 @@ export default {
         },
       },
       animation: {
+        sheetUp: 'sheetUp 0.38s cubic-bezier(0.16, 1, 0.3, 1) both',
+        fadeUp: 'fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both',
+        fadeIn: 'fadeIn 0.6s ease both',
+        floatY: 'floatY 5.5s ease-in-out infinite',
+        softPulse: 'softPulse 4.5s ease-in-out infinite',
+        railIn: 'railIn 0.65s cubic-bezier(0.16, 1, 0.3, 1) both',
         cardRise: 'cardRise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
         authAlertIn: 'authAlertIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) both',
         authAlertOut: 'authAlertOut 0.32s ease forwards',

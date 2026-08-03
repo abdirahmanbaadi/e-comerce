@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { useIntervalWhenVisible } from '../hooks/useIntervalWhenVisible';
@@ -8,6 +9,7 @@ import { showTopFloatNotification } from '../utils/notifications';
 import DriverOrderCard from '../features/driver/DriverOrderCard';
 import DriverRejectModal from '../features/driver/DriverRejectModal';
 import DeliveryCompleteModal from '../features/driver/DeliveryCompleteModal';
+import DriverQrScanModal from '../features/driver/DriverQrScanModal';
 import {
   countDriverOrdersByPhase,
   DRIVER_MAX_ACTIVE,
@@ -29,26 +31,41 @@ const FILTER_STAT_CARDS = DRIVER_TABS.map((tab) => ({
 }));
 
 function ConfirmModal({ open, title, message, confirmLabel, busy, onClose, onConfirm }) {
-  if (!open || typeof document === 'undefined') return null;
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => e.key === 'Escape' && !busy && onClose?.();
+    const prev = document.body.style.overflow;
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, busy, onClose]);
 
-  return (
+  if (!open || typeof document === 'undefined' || !document.body) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[9998] flex items-center justify-center bg-deepGreen/40 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[9998] flex items-end justify-center bg-deepGreen/55 p-0 backdrop-blur-[4px] sm:items-center sm:p-4"
       role="presentation"
-      onClick={onClose}
+      onClick={() => !busy && onClose?.()}
     >
       <div
-        className="w-full max-w-sm rounded-[18px] bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.18)]"
+        className="animate-sheetUp w-full max-w-sm overflow-hidden rounded-t-[28px] bg-white shadow-[0_-20px_50px_rgba(0,0,0,0.22)] sm:rounded-[28px]"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-2 text-[1rem] font-extrabold text-deepGreen">{title}</h3>
-        <p className="mb-4 text-[0.86rem] leading-relaxed text-gray-600">{message}</p>
-        <div className="flex gap-2">
+        <div className="px-5 pb-2 pt-3">
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-black/12 sm:hidden" />
+          <h3 className="mb-2 font-display text-[1.35rem] font-bold text-deepGreen">{title}</h3>
+          <p className="mb-0 text-[0.86rem] leading-relaxed text-[#5c564c]">{message}</p>
+        </div>
+        <div className="flex gap-2 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <button
             type="button"
-            className="min-h-[44px] flex-1 rounded-xl border border-deepGreen/15 bg-white text-[0.86rem] font-extrabold text-deepGreen"
+            className="min-h-[48px] flex-1 rounded-2xl border border-deepGreen/15 bg-white text-[0.86rem] font-extrabold text-deepGreen disabled:opacity-60"
             onClick={onClose}
             disabled={busy}
           >
@@ -56,7 +73,7 @@ function ConfirmModal({ open, title, message, confirmLabel, busy, onClose, onCon
           </button>
           <button
             type="button"
-            className="min-h-[44px] flex-1 rounded-xl border-0 bg-gradient-to-br from-deepGreen to-teal text-[0.86rem] font-extrabold text-white disabled:opacity-60"
+            className="min-h-[48px] flex-1 rounded-2xl border-0 bg-gradient-to-br from-deepGreen to-teal text-[0.86rem] font-extrabold text-white disabled:opacity-60"
             onClick={onConfirm}
             disabled={busy}
           >
@@ -64,7 +81,8 @@ function ConfirmModal({ open, title, message, confirmLabel, busy, onClose, onCon
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -82,6 +100,7 @@ export default function Delivery() {
   const [rejectOrder, setRejectOrder] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
+  const [scanOrder, setScanOrder] = useState(null);
   const [completedDelivery, setCompletedDelivery] = useState(null);
   const [postCompleteCounts, setPostCompleteCounts] = useState(null);
   const [earnings, setEarnings] = useState({
@@ -326,7 +345,7 @@ export default function Delivery() {
       });
       const data = await res.json();
       if (data.success) {
-        showTopFloatNotification('Arrival confirmed. Hand over the order, then mark delivered.');
+        showTopFloatNotification('Arrival confirmed. Ask customer to show Track Order QR, then scan it.');
         await refreshAll(true);
         setActiveTab('active');
       } else {
@@ -373,6 +392,45 @@ export default function Delivery() {
       }
     } catch {
       showTopFloatNotification('Update failed', 'danger');
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
+  const confirmDeliveryByQr = async (credentials) => {
+    if (!scanOrder?.id || (!credentials?.payload && !credentials?.pin)) return;
+    setBusyOrderId(scanOrder.id);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        apiUrl(`/api/drivers/assignments/${encodeURIComponent(scanOrder.id)}/confirm-delivery`),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(
+            credentials.pin ? { pin: credentials.pin } : { payload: credentials.payload }
+          ),
+        }
+      );
+      const data = await res.json();
+      if (data.success) {
+        const completed = scanOrder;
+        setScanOrder(null);
+        const freshOrders = await refreshAll(true);
+        window.dispatchEvent(new CustomEvent('admin-dashboard-invalidate'));
+        const counts = countDriverOrdersByPhase(freshOrders);
+        setPostCompleteCounts(counts);
+        setCompletedDelivery(completed);
+        setActiveTab(pickNextDriverTab(counts));
+        showTopFloatNotification(data.message || 'Delivery confirmed.');
+      } else {
+        showTopFloatNotification(data.message || 'Confirmation failed', 'danger');
+      }
+    } catch {
+      showTopFloatNotification('Confirmation failed', 'danger');
     } finally {
       setBusyOrderId(null);
     }
@@ -618,15 +676,7 @@ export default function Delivery() {
                     onConfirm: () => markArrived(o),
                   })
                 }
-                onMarkDelivered={(o) =>
-                  setConfirmAction({
-                    order: o,
-                    title: 'Mark as delivered?',
-                    message: `Confirm that order ${o.id} was handed to ${o.customer} successfully.`,
-                    confirmLabel: 'Yes, delivered',
-                    onConfirm: () => updateOrderStep(o, 5, 'Delivered successfully'),
-                  })
-                }
+                onMarkDelivered={(o) => setScanOrder(o)}
               />
             ))}
           </div>
@@ -644,6 +694,17 @@ export default function Delivery() {
           setRejectReason('');
         }}
         onSubmit={submitReject}
+      />
+
+      <DriverQrScanModal
+        open={Boolean(scanOrder)}
+        order={scanOrder}
+        busy={Boolean(scanOrder && busyOrderId === scanOrder.id)}
+        onClose={() => {
+          if (busyOrderId) return;
+          setScanOrder(null);
+        }}
+        onConfirm={confirmDeliveryByQr}
       />
 
       <ConfirmModal

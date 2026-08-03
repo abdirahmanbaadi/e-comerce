@@ -145,20 +145,45 @@ async function onOrderUpdated(order, changes = {}) {
     },
   };
 
+  if (changes.deliveryQrIssued) {
+    await userPayload({
+      type: 'delivery_qr_ready',
+      title: 'Show your delivery QR',
+      message: `Order ${orderId} is out for delivery. Open Track Order and show the QR code (or 6-digit code) to your driver.`,
+      metadata: { orderId, openTrack: true },
+      relatedId: orderId,
+    });
+    await maybeSendSmsAlert({
+      userId: order.userId,
+      phone: order.phone,
+      message: `MMF: Order ${orderId} is out for delivery. Open Track Order and show your QR or 6-digit code to the driver.`,
+    });
+    await notifyAdmins({
+      type: 'delivery_qr_ready',
+      title: 'Delivery QR issued',
+      message: `Order ${orderId} — out for delivery; customer QR/code ready.`,
+      relatedId: orderId,
+      metadata: { orderId, customer: order.customer },
+    });
+  }
+
   if (changes.currentStepChanged && changes.currentStep >= 3) {
     const stepPayload = DELIVERY_STEP_NOTIFY[changes.currentStep];
     if (stepPayload) {
-      await userPayload({
-        ...stepPayload,
-        metadata: { orderId, currentStep: changes.currentStep, amount: order.amount },
-      });
-
-      if (changes.currentStep === 4) {
-        await maybeSendSmsAlert({
-          userId: order.userId,
-          phone: order.phone,
-          message: `MMF: Order ${orderId} is out for delivery.`,
+      // Avoid double SMS/notif noise when QR-ready already covers step 4
+      if (!(changes.currentStep === 4 && changes.deliveryQrIssued)) {
+        await userPayload({
+          ...stepPayload,
+          metadata: { orderId, currentStep: changes.currentStep, amount: order.amount },
         });
+
+        if (changes.currentStep === 4) {
+          await maybeSendSmsAlert({
+            userId: order.userId,
+            phone: order.phone,
+            message: `MMF: Order ${orderId} is out for delivery.`,
+          });
+        }
       }
       if (changes.currentStep === 5) {
         await maybeSendSmsAlert({
@@ -174,7 +199,7 @@ async function onOrderUpdated(order, changes = {}) {
         5: `Order ${orderId} — delivered.`,
       };
       const adminMsg = adminStepMessages[changes.currentStep];
-      if (adminMsg) {
+      if (adminMsg && !(changes.currentStep === 4 && changes.deliveryQrIssued)) {
         await notifyAdmins({
           type: 'order_status_changed',
           title: 'Delivery Step Updated',

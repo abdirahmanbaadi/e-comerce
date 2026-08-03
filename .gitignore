@@ -32,5 +32,11 @@ dist/
 build/
 .netlify/
 
+# Uploaded media (local only — do not commit)
+backend/uploads/
+
+# Temp / one-off debug scripts (optional local tools)
+backend/scripts/_tmp*.js
+
 # Legacy static HTML (source for React migration)
 legacy/

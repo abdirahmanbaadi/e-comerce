@@ -40,15 +40,15 @@ const upload = multer({
 
 // Public Product Endpoints
 router.get('/', prodController.getProducts);
-router.get('/:id/details', protect, authorize('admin'), prodController.getProductDetails);
-router.get('/:id/stock-history', protect, authorize('admin'), prodController.getProductStockHistory);
-router.get('/:id/stock-inventory', protect, authorize('admin'), prodController.getProductStockInventory);
-router.get('/:id/stock-consumption', protect, authorize('admin'), prodController.getProductStockConsumption);
+router.get('/:id/details', protect, authorize('admin', 'staff'), prodController.getProductDetails);
+router.get('/:id/stock-history', protect, authorize('admin', 'staff'), prodController.getProductStockHistory);
+router.get('/:id/stock-inventory', protect, authorize('admin', 'staff'), prodController.getProductStockInventory);
+router.get('/:id/stock-consumption', protect, authorize('admin', 'staff'), prodController.getProductStockConsumption);
 router.get('/:id', prodController.getProductById);
 
 // Protected Admin-Only Product Endpoints (Uses upload.array for uploading up to 5 images)
-router.post('/', protect, authorize('admin'), upload.array('images', 5), prodController.createProduct);
-router.put('/:id', protect, authorize('admin'), upload.array('images', 5), prodController.updateProduct);
-router.delete('/:id', protect, authorize('admin'), prodController.deleteProduct);
+router.post('/', protect, authorize('admin', 'staff'), upload.array('images', 5), prodController.createProduct);
+router.put('/:id', protect, authorize('admin', 'staff'), upload.array('images', 5), prodController.updateProduct);
+router.delete('/:id', protect, authorize('admin', 'staff'), prodController.deleteProduct);
 
 module.exports = router;

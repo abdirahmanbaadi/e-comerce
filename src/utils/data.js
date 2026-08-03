@@ -1,4 +1,4 @@
-export const API_BASE = import.meta.env.VITE_API_URL || '';
+﻿export const API_BASE = import.meta.env.VITE_API_URL || '';
 
 import {
   PRODUCT_PRICES,
@@ -57,7 +57,7 @@ export const defaultProducts = [
     price: 150,
     oldPrice: 170,
     discount: "10% off",
-    rating: 3.8,
+    rating: 0,
     popularity: 82,
     isNewest: true,
     stock: "in-stock",
@@ -83,7 +83,7 @@ export const defaultProducts = [
     price: 190,
     oldPrice: null,
     discount: "",
-    rating: 4.2,
+    rating: 0,
     popularity: 72,
     isNewest: false,
     stock: "out-of-stock",
@@ -109,7 +109,7 @@ export const defaultProducts = [
     price: 850,
     oldPrice: 950,
     discount: "10% off",
-    rating: 4.8,
+    rating: 0,
     popularity: 90,
     isNewest: true,
     stock: "in-stock",
@@ -135,7 +135,7 @@ export const defaultProducts = [
     price: 340,
     oldPrice: 400,
     discount: "15% off",
-    rating: 4.5,
+    rating: 0,
     popularity: 85,
     isNewest: false,
     stock: "in-stock",
@@ -161,7 +161,7 @@ export const defaultProducts = [
     price: 820,
     oldPrice: 900,
     discount: "9% off",
-    rating: 4.6,
+    rating: 0,
     popularity: 78,
     isNewest: false,
     stock: "in-stock",
@@ -187,7 +187,7 @@ export const defaultProducts = [
     price: 760,
     oldPrice: 850,
     discount: "10% off",
-    rating: 4.7,
+    rating: 0,
     popularity: 92,
     isNewest: true,
     stock: "in-stock",
@@ -213,7 +213,7 @@ export const defaultProducts = [
     price: 1450,
     oldPrice: 1600,
     discount: "9% off",
-    rating: 4.9,
+    rating: 0,
     popularity: 95,
     isNewest: true,
     stock: "in-stock",
@@ -239,7 +239,7 @@ export const defaultProducts = [
     price: 1100,
     oldPrice: null,
     discount: "",
-    rating: 4.1,
+    rating: 0,
     popularity: 78,
     isNewest: false,
     stock: "in-stock",
@@ -265,7 +265,7 @@ export const defaultProducts = [
     price: 1600,
     oldPrice: 1800,
     discount: "11% off",
-    rating: 4.9,
+    rating: 0,
     popularity: 89,
     isNewest: false,
     stock: "in-stock",
@@ -291,7 +291,7 @@ export const defaultProducts = [
     price: 1250,
     oldPrice: 1390,
     discount: "10% off",
-    rating: 5.0,
+    rating: 0,
     popularity: 94,
     isNewest: true,
     stock: "in-stock",
@@ -339,11 +339,25 @@ export const defaultUsers = [
 
 export const DELIVERY_DISTRICTS = [
   { value: 'Hodan', fee: 0.01 },
-  { value: 'Wadajir', fee: 0.01 },
+  { value: 'Howlwadaag', fee: 0.01 },
+  { value: 'Bondhere', fee: 0.02 },
+  { value: 'Waberi', fee: 0.02 },
+  { value: 'Wadajir', fee: 0.02 },
+  { value: 'Hamarweyne', fee: 0.02 },
+  { value: 'Hamarjajab', fee: 0.02 },
+  { value: 'Shangani', fee: 0.02 },
+  { value: 'Shibis', fee: 0.02 },
+  { value: 'Abdiaziz', fee: 0.02 },
+  { value: 'Warta Nabada', fee: 0.03 },
   { value: 'Karaan', fee: 0.02 },
-  { value: 'Hamarweyne', fee: 0.01 },
-  { value: 'Dayniile', fee: 0.02 },
-  { value: 'Yaqshid', fee: 0.01 },
+  { value: 'Yaqshid', fee: 0.03 },
+  { value: 'Dharkenley', fee: 0.03 },
+  { value: 'Huriwa', fee: 0.04 },
+  { value: 'Gubta', fee: 0.04 },
+  { value: 'Dayniile', fee: 0.04 },
+  { value: 'Daru Salaam', fee: 0.04 },
+  { value: 'Kahda', fee: 0.05 },
+  { value: 'Garasbaley', fee: 0.05 },
 ];
 
 export function findDistrictByDeliveryFee(fee) {
@@ -409,7 +423,7 @@ export function normalizePhoneNumber(phone) {
   return cleaned;
 }
 
-// Re-export shared phone helpers (canonical +252, 061, 61…)
+// Re-export shared phone helpers (canonical +252, 061, 61â€¦)
 export {
   buildCheckoutPhone,
   CHECKOUT_PHONE_PREFIX,

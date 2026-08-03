@@ -4,20 +4,25 @@ import { Link } from 'react-router-dom';
 import { apiUrl, clearDeliveryDistrictsCache } from '../../utils/data';
 import { showTopFloatNotification } from '../../utils/notifications';
 import { AVAILABILITY_OPTIONS, VEHICLE_TYPES } from '../../utils/districts';
+import {
+  BANADIR_DISTRICTS,
+  buildDefaultDeliveryFees,
+  WAREHOUSE_DISTRICT,
+} from '../../utils/banadirDelivery';
 
 const ADM_CARD =
-  'rounded-2xl border border-deepGreen/8 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition hover:shadow-[0_8px_28px_rgba(0,0,0,0.08)] [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:shadow-[0_4px_20px_rgba(0,0,0,0.25)]';
+  'rounded-2xl border border-deepGreen/8 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition hover:shadow-[0_8px_28px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#1a2421] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:shadow-[0_4px_20px_rgba(0,0,0,0.25)]';
 const ADM_TITLE =
-  'font-display text-2xl font-bold text-deepGreen [.admin-dark_&]:text-[#e8f0ed]';
+  'font-display text-2xl font-bold text-deepGreen dark:text-[#e8f0ed] [.admin-dark_&]:text-[#e8f0ed]';
 const ADM_LABEL =
-  'block text-[0.82rem] font-extrabold text-gray-800 mb-1.5 [.admin-dark_&]:text-gray-200';
+  'mb-1.5 block text-[0.82rem] font-extrabold text-gray-800 dark:text-gray-200 [.admin-dark_&]:text-gray-200';
 const ADM_INPUT =
-  'w-full rounded-[10px] border-[1.5px] border-black/8 bg-white px-3.5 py-2.5 text-[0.88rem] font-semibold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-deepGreen focus:shadow-[0_0_0_3.5px_rgba(7,61,53,0.06)] [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#141f1b] [.admin-dark_&]:text-gray-100 [.admin-dark_&]:placeholder:text-gray-500 [.admin-dark_&]:focus:border-emerald-500/50';
+  'w-full rounded-[10px] border-[1.5px] border-black/8 bg-white px-3.5 py-2.5 text-[0.88rem] font-semibold text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-deepGreen focus:shadow-[0_0_0_3.5px_rgba(7,61,53,0.06)] dark:border-white/10 dark:bg-[#141f1b] dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-emerald-500/50 [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#141f1b] [.admin-dark_&]:text-gray-100 [.admin-dark_&]:placeholder:text-gray-500 [.admin-dark_&]:focus:border-emerald-500/50';
 const ADM_TABLE_CARD =
-  'rounded-2xl border border-deepGreen/6 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition hover:shadow-[0_8px_28px_rgba(0,0,0,0.08)] [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:shadow-[0_4px_20px_rgba(0,0,0,0.25)]';
+  'rounded-2xl border border-deepGreen/6 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] transition hover:shadow-[0_8px_28px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#1a2421] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#1a2421] [.admin-dark_&]:shadow-[0_4px_20px_rgba(0,0,0,0.25)]';
 
 const ADM_TABLE =
-  'w-full border-collapse text-[0.88rem] [&_th]:text-left [&_th]:px-4 [&_th]:py-3.5 [&_th]:font-extrabold [&_th]:text-gray-500 [&_th]:border-b-2 [&_th]:border-gray-100 [&_th]:text-[0.78rem] [&_th]:uppercase [&_th]:tracking-wide [&_td]:px-4 [&_td]:py-3.5 [&_td]:border-b [&_td]:border-gray-100 [&_td]:font-semibold [&_td]:align-middle [&_tbody_tr:last-child_td]:border-b-0 [&_tbody_tr]:transition [&_tbody_tr:hover]:bg-deepGreen/[0.015] [.admin-dark_&]:[&_th]:text-gray-400 [.admin-dark_&]:[&_th]:border-white/10 [.admin-dark_&]:[&_td]:border-white/10 [.admin-dark_&]:[&_td]:text-gray-200 [.admin-dark_&]:[&_tbody_tr:hover]:bg-white/[0.03]';
+  'w-full border-collapse text-[0.88rem] [&_th]:border-b-2 [&_th]:border-gray-100 [&_th]:bg-white [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-left [&_th]:text-[0.78rem] [&_th]:font-extrabold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-gray-500 [&_td]:border-b [&_td]:border-gray-100 [&_td]:px-4 [&_td]:py-3.5 [&_td]:align-middle [&_td]:font-semibold [&_tbody_tr:last-child_td]:border-b-0 [&_tbody_tr]:transition [&_tbody_tr:hover]:bg-deepGreen/[0.015] dark:[&_th]:border-white/10 dark:[&_th]:bg-[#1a2421] dark:[&_th]:text-gray-400 dark:[&_td]:border-white/10 dark:[&_td]:text-gray-200 dark:[&_tbody_tr:hover]:bg-white/[0.03] [.admin-dark_&]:[&_th]:border-white/10 [.admin-dark_&]:[&_th]:bg-[#1a2421] [.admin-dark_&]:[&_th]:text-gray-400 [.admin-dark_&]:[&_td]:border-white/10 [.admin-dark_&]:[&_td]:text-gray-200 [.admin-dark_&]:[&_tbody_tr:hover]:bg-white/[0.03]';
 const ADM_ERROR =
   'mb-4 rounded-xl border border-red-500/18 bg-red-500/8 px-4 py-3 text-[0.86rem] font-semibold text-red-700 [.admin-dark_&]:text-red-300';
 const BTN_SM_OUTLINE_SUCCESS =
@@ -749,16 +754,29 @@ export function CmsAdminTab() {
       {/* 5 — Delivery */}
       <CmsSection
         step={5}
-        title="District delivery fees"
-        hint="Used at Cart/Checkout. Also editable under Settings → Delivery."
+        title="District delivery fees (Banadir)"
+        hint={`Warehouse hub: ${WAREHOUSE_DISTRICT}. Fees follow distance from Hodan — closer districts are cheaper (e.g. Shibis ↔ Karaan).`}
         action={
-          <button
-            type="button"
-            className={BTN_SM_OUTLINE_SUCCESS}
-            onClick={() => setDeliveryFees((rows) => [...rows, { district: '', fee: 0.001 }])}
-          >
-            <i className="fa-solid fa-plus" /> Add district
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={BTN_SM_OUTLINE_SECONDARY}
+              onClick={() =>
+                setDeliveryFees(
+                  buildDefaultDeliveryFees().map(({ district, fee }) => ({ district, fee }))
+                )
+              }
+            >
+              <i className="fa-solid fa-route" /> Reset Hodan distance
+            </button>
+            <button
+              type="button"
+              className={BTN_SM_OUTLINE_SUCCESS}
+              onClick={() => setDeliveryFees((rows) => [...rows, { district: '', fee: 0.01 }])}
+            >
+              <i className="fa-solid fa-plus" /> Add district
+            </button>
+          </div>
         }
       >
         <div className="overflow-x-auto rounded-[12px] border border-black/[0.07] [.admin-dark_&]:border-white/10">
@@ -766,51 +784,67 @@ export function CmsAdminTab() {
             <thead>
               <tr>
                 <th>District</th>
-                <th style={{ width: 160 }}>Fee ($)</th>
+                <th style={{ width: 120 }}>Km from Hodan</th>
+                <th style={{ width: 140 }}>Fee ($)</th>
                 <th style={{ width: 100 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {deliveryFees.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="py-6 text-center text-gray-400">
+                  <td colSpan={4} className="py-6 text-center text-gray-400">
                     No delivery districts configured.
                   </td>
                 </tr>
               )}
-              {deliveryFees.map((row, index) => (
-                <tr key={`${row.district}-${index}`}>
-                  <td>
-                    <input
-                      className={ADM_INPUT}
-                      value={row.district || ''}
-                      onChange={(e) => updateDeliveryFee(index, 'district', e.target.value)}
-                      placeholder="Hodan"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      className={ADM_INPUT}
-                      value={row.fee ?? 0}
-                      onChange={(e) => updateDeliveryFee(index, 'fee', e.target.value)}
-                    />
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className={BTN_SM_OUTLINE_DANGER}
-                      onClick={() => setDeliveryFees((rows) => rows.filter((_, i) => i !== index))}
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {deliveryFees.map((row, index) => {
+                const km =
+                  BANADIR_DISTRICTS.find(
+                    (d) => d.name.toLowerCase() === String(row.district || '').toLowerCase()
+                  )?.kmFromHodan ?? '—';
+                return (
+                  <tr key={`${row.district}-${index}`}>
+                    <td>
+                      <input
+                        className={ADM_INPUT}
+                        value={row.district || ''}
+                        onChange={(e) => updateDeliveryFee(index, 'district', e.target.value)}
+                        placeholder="Hodan"
+                        list="banadir-districts"
+                      />
+                    </td>
+                    <td className="text-[0.82rem] text-gray-500">
+                      {km === '—' ? '—' : `${km} km`}
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className={ADM_INPUT}
+                        value={row.fee ?? 0}
+                        onChange={(e) => updateDeliveryFee(index, 'fee', e.target.value)}
+                      />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={BTN_SM_OUTLINE_DANGER}
+                        onClick={() => setDeliveryFees((rows) => rows.filter((_, i) => i !== index))}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          <datalist id="banadir-districts">
+            {BANADIR_DISTRICTS.map((d) => (
+              <option key={d.name} value={d.name} />
+            ))}
+          </datalist>
         </div>
       </CmsSection>
 
@@ -911,7 +945,7 @@ function DriverApplicationModal({
         role="presentation"
       >
         <div
-          className="animate-productModalIn relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]"
+          className="animate-productModalIn relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] dark:bg-[#243029] dark:border-white/14 [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:border-white/14"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"

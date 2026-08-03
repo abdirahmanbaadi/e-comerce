@@ -6,6 +6,7 @@ const {
   onSupportTicketCreated,
   onSupportCustomerMessage,
 } = require('../services/notificationService');
+const { isDashboardRole } = require('../utils/roleUtils');
 
 // Active SSE clients list
 let sseClients = [];
@@ -14,10 +15,10 @@ let sseClients = [];
 const broadcast = (data) => {
   sseClients.forEach(client => {
     // Send event only to:
-    // - Admin users (role === 'admin')
+    // - Dashboard operators (admin / staff)
     // - The user who is associated with the ticket/message
     const isTargetUser = data.ticket && String(data.ticket.userId) === String(client.userId);
-    if (client.role === 'admin' || isTargetUser) {
+    if (isDashboardRole(client.role) || isTargetUser) {
       try {
         client.res.write(`data: ${JSON.stringify(data)}\n\n`);
       } catch (err) {
@@ -188,7 +189,7 @@ exports.getConversationMessages = async (req, res) => {
     }
 
     // Regular users can only see their own tickets
-    if (role !== 'admin' && ticket.userId !== userId) {
+    if (!isDashboardRole(role) && ticket.userId !== userId) {
       return res.status(403).json({ success: false, message: 'Malahid awood aad ku aragto wadahadalkaan!' });
     }
 
@@ -223,13 +224,14 @@ exports.addMessage = async (req, res) => {
     }
 
     // Verify permission
-    if (role !== 'admin' && ticket.userId !== userId) {
+    if (!isDashboardRole(role) && ticket.userId !== userId) {
       return res.status(403).json({ success: false, message: 'Malahid awood aad ku fuliso hawshaan!' });
     }
 
     // Create the message
-    const senderRole = role === 'admin' ? 'admin' : 'user';
-    const senderName = role === 'admin' ? 'Support Admin' : fullName;
+    const asSupport = isDashboardRole(role);
+    const senderRole = asSupport ? 'admin' : 'user';
+    const senderName = asSupport ? (role === 'staff' ? 'Support Staff' : 'Support Admin') : fullName;
 
     const message = await SupportMessage.create({
       ticketId,
@@ -242,8 +244,8 @@ exports.addMessage = async (req, res) => {
     // Update parent ticket metadata
     ticket.lastMessageText = previewText(text, image);
     ticket.lastMessageAt = new Date();
-    // Update status: 'Open' if user replies, 'Replied' if admin replies
-    ticket.status = role === 'admin' ? 'Replied' : 'Open';
+    // Update status: 'Open' if user replies, 'Replied' if support replies
+    ticket.status = asSupport ? 'Replied' : 'Open';
     await ticket.save();
 
     const ticketData = toPlainObject(ticket);
@@ -256,7 +258,7 @@ exports.addMessage = async (req, res) => {
     });
 
     const notifyText = previewText(text, image);
-    if (role === 'admin') {
+    if (asSupport) {
       onSupportAdminReply(ticket, notifyText).catch((err) =>
         console.error('Support notification failed:', err.message)
       );

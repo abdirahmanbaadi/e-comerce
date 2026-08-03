@@ -2,7 +2,7 @@
  * Slim admin bridge — tab sync, header search, deep-links.
  * React tabs own their own data fetching; this bridge only syncs UI helpers.
  */
-const SEARCH_TABS = new Set(['dashboard', 'products', 'orders', 'users', 'stock', 'payments', 'support']);
+const SEARCH_TABS = new Set(['dashboard', 'products', 'orders', 'users', 'stock', 'delivery', 'payments', 'support']);
 
 const TAB_INVALIDATE_EVENTS = {
   dashboard: 'admin-dashboard-invalidate',

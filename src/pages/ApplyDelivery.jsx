@@ -143,7 +143,7 @@ export default function ApplyDelivery() {
     return <Navigate to="/login" replace state={{ from: '/apply-delivery' }} />;
   }
 
-  if (user.role === 'admin') {
+  if (user.role === 'admin' || user.role === 'staff') {
     return <Navigate to="/admin" replace />;
   }
 

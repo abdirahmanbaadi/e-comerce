@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import StoreNavbar from '../features/nav/StoreNavbar';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -15,6 +16,8 @@ import { showTopFloatNotification } from '../utils/notifications';
 export default function TrackOrder() {
   const { syncFromStorage: syncAuth } = useAuth();
   const { syncFromStorage: syncCart } = useCart();
+  const [searchParams] = useSearchParams();
+  const bootstrapped = useRef(false);
 
   const [orderId, setOrderId] = useState('');
   const [order, setOrder] = useState(null);
@@ -23,6 +26,7 @@ export default function TrackOrder() {
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [itemsModalOpen, setItemsModalOpen] = useState(false);
+  const openQrFromQuery = searchParams.get('qr') === '1';
 
   useEffect(() => {
     syncAuth();
@@ -30,12 +34,15 @@ export default function TrackOrder() {
   }, [syncAuth, syncCart]);
 
   useEffect(() => {
-    const last = localStorage.getItem('lastTrackingCode');
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
+    const fromQuery = searchParams.get('order') || searchParams.get('id') || '';
+    const last = fromQuery || localStorage.getItem('lastTrackingCode') || '';
     if (last) {
       setOrderId(last);
       trackOrderById(last);
     }
-  }, []);
+  }, [searchParams]);
 
   const trackOrderById = async (rawCode) => {
     const code = trackOrderIdOrNotify(rawCode);
@@ -151,6 +158,7 @@ export default function TrackOrder() {
             itemsModalOpen={itemsModalOpen}
             onItemsModalOpen={() => setItemsModalOpen(true)}
             onItemsModalClose={() => setItemsModalOpen(false)}
+            initialQrOpen={openQrFromQuery}
           />
         )}
       </main>

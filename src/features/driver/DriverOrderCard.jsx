@@ -183,7 +183,7 @@ export default function DriverOrderCard({
         {phase === 'at_customer' && (
           <>
             <p className="mb-2 text-center text-[0.76rem] font-semibold text-violet-700">
-              You are at the customer. Mark delivered only after handing over the order.
+              Ask the customer for their Track Order QR or 6-digit code, then confirm.
             </p>
             <button
               type="button"
@@ -191,7 +191,7 @@ export default function DriverOrderCard({
               disabled={busy}
               onClick={() => onMarkDelivered(order)}
             >
-              {busy ? 'Updating…' : 'Mark as delivered'}
+              {busy ? 'Updating…' : 'Scan QR / enter code'}
             </button>
           </>
         )}

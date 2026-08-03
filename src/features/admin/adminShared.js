@@ -3,7 +3,7 @@
 export const ADM_TABLE_CARD =
   'rounded-2xl border border-deepGreen/6 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-[#1a2421] [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-[#1a2421]';
 export const ADM_TABLE =
-  'w-full border-collapse text-[0.88rem] [&_th]:border-b-2 [&_th]:border-gray-100 [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-left [&_th]:text-[0.78rem] [&_th]:font-extrabold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-gray-500 [&_td]:border-b [&_td]:border-gray-100 [&_td]:px-4 [&_td]:py-3.5 [&_td]:align-middle [&_td]:font-semibold [&_tbody_tr:hover]:bg-deepGreen/[0.015] dark:[&_th]:border-white/10 dark:[&_td]:border-white/10 dark:[&_td]:text-gray-200 [.admin-dark_&]:[&_th]:border-white/10 [.admin-dark_&]:[&_td]:border-white/10 [.admin-dark_&]:[&_td]:text-gray-200';
+  'w-full border-collapse text-[0.88rem] [&_th]:border-b-2 [&_th]:border-gray-100 [&_th]:bg-white [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-left [&_th]:text-[0.78rem] [&_th]:font-extrabold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-gray-500 [&_td]:border-b [&_td]:border-gray-100 [&_td]:px-4 [&_td]:py-3.5 [&_td]:align-middle [&_td]:font-semibold [&_tbody_tr:hover]:bg-deepGreen/[0.015] dark:[&_th]:border-white/10 dark:[&_th]:bg-[#1a2421] dark:[&_th]:text-gray-400 dark:[&_td]:border-white/10 dark:[&_td]:text-gray-200 dark:[&_tbody_tr:hover]:bg-white/[0.03] [.admin-dark_&]:[&_th]:border-white/10 [.admin-dark_&]:[&_th]:bg-[#1a2421] [.admin-dark_&]:[&_th]:text-gray-400 [.admin-dark_&]:[&_td]:border-white/10 [.admin-dark_&]:[&_td]:text-gray-200 [.admin-dark_&]:[&_tbody_tr:hover]:bg-white/[0.03]';
 export const ADM_LABEL =
   'mb-1.5 block text-[0.82rem] font-extrabold text-gray-800 dark:text-gray-200 [.admin-dark_&]:text-gray-200';
 export const ADM_INPUT =
@@ -42,9 +42,9 @@ export const ADM_DARK_LINK =
 export const ADMIN_MODAL_OVERLAY =
   'fixed inset-0 z-[9999] flex items-center justify-center bg-deepGreen/45 p-4 backdrop-blur-[4px]';
 export const ADMIN_MODAL_PANEL =
-  'animate-productModalIn relative flex h-[min(680px,92vh)] w-full max-w-2xl flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] [.admin-dark_&]:bg-[#1a2421]';
+  'animate-productModalIn relative flex h-[min(680px,92vh)] w-full max-w-2xl flex-col overflow-hidden rounded-[18px] border border-black/[0.04] bg-white shadow-[0_25px_60px_rgba(0,0,0,0.22)] dark:border-white/14 dark:bg-[#243029] dark:shadow-[0_28px_70px_rgba(0,0,0,0.55)] [.admin-dark_&]:border-white/14 [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:shadow-[0_28px_70px_rgba(0,0,0,0.55)]';
 export const ADMIN_MODAL_CLOSE_BTN =
-  'absolute right-[15px] top-[15px] z-10 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-white text-[1.4rem] leading-none text-[#111] shadow-[0_2px_10px_rgba(0,0,0,0.15)] [.admin-dark_&]:bg-[#243029] [.admin-dark_&]:text-gray-200';
+  'absolute right-[15px] top-[15px] z-10 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-white text-[1.4rem] leading-none text-[#111] shadow-[0_2px_10px_rgba(0,0,0,0.15)] dark:bg-[#2f3d38] dark:text-gray-200 [.admin-dark_&]:bg-[#2f3d38] [.admin-dark_&]:text-gray-200';
 
 export const ADMIN_FETCH_TIMEOUT = 20000;
 export const ADMIN_PAYMENTS_FETCH_TIMEOUT = 25000;

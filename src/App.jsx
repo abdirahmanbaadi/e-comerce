@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ProductsProvider } from './context/ProductsContext';
@@ -13,19 +13,29 @@ import TrackOrder from './pages/TrackOrder';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import ApplyDelivery from './pages/ApplyDelivery';
-import Delivery from './pages/Delivery';
 import Admin from './pages/Admin';
 import ProtectedRoute from './components/ProtectedRoute';
 import StaffRouteGuard from './components/StaffRouteGuard';
 import ScrollToTop from './components/ScrollToTop';
 import ErrorBoundary from './components/ErrorBoundary';
 import PostDeliveryReviewProvider from './components/PostDeliveryReviewProvider';
+import MobileAppRoutes from './mobile/MobileAppRoutes';
+
+function MobileLandingRedirect() {
+  const [params] = useSearchParams();
+  if (params.get('classic') === '1') return <Home />;
+  if (typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches) {
+    return <Navigate to="/app" replace />;
+  }
+  return <Home />;
+}
 
 function AppRoutes() {
   return (
     <StaffRouteGuard>
       <Routes>
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={<MobileLandingRedirect />} />
+      <Route path="/app/*" element={<MobileAppRoutes />} />
       <Route path="/products" element={<Products />} />
       <Route path="/categories" element={<Navigate to="/products" replace />} />
       <Route path="/cart" element={<Cart />} />
@@ -48,14 +58,14 @@ function AppRoutes() {
         path="/delivery"
         element={
           <ProtectedRoute roles={['delivery']}>
-            <Delivery />
+            <Navigate to="/app/driver" replace />
           </ProtectedRoute>
         }
       />
       <Route
         path="/admin"
         element={
-          <ProtectedRoute roles={['admin']}>
+          <ProtectedRoute roles={['admin', 'staff']}>
             <ErrorBoundary>
               <Admin />
             </ErrorBoundary>

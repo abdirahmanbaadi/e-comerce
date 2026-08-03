@@ -42,6 +42,18 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+      default: undefined,
+    },
+    authProvider: {
+      type: String,
+      enum: ['local', 'google'],
+      default: 'local',
+    },
     address: {
       type: String,
       default: 'Mogadishu, Somalia',
@@ -53,7 +65,7 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       default: 'user',
-      enum: ['user', 'admin', 'delivery'],
+      enum: ['user', 'admin', 'staff', 'delivery'],
       required: true,
     },
     driverApplication: {

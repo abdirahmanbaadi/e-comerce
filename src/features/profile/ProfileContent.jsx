@@ -22,6 +22,7 @@ import {
   BTN_GHOST,
   BTN_PRIMARY,
 } from '../admin/adminShared.js';
+import { DeliveryQrModal } from '../tracking/DeliveryQrPanel';
 
 /* ═══ SECTION: INFO TAB ═══ */
 function ProfileField({ label, htmlFor, icon, children }) {
@@ -369,6 +370,9 @@ function OrderDetailModal({
   const canCancel = canCustomerCancelOrder(order);
   const canRetry =
     payment.className === 'failed' && String(order.paymentMethod || '').toLowerCase().includes('evc');
+  const qrReady =
+    Boolean(order?.deliveryQrPending) || order?.deliveryConfirmStatus === 'pending';
+  const [qrModalOpen, setQrModalOpen] = useState(false);
 
   const handleDownloadPdf = () => {
     downloadInvoice({
@@ -459,6 +463,16 @@ function OrderDetailModal({
               <i className="fa-solid fa-location-dot" aria-hidden="true" />
               Track
             </button>
+            {qrReady && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-lg border-0 bg-emerald-600 px-4 py-2 text-[0.84rem] font-bold text-white transition hover:bg-emerald-700"
+                onClick={() => setQrModalOpen(true)}
+              >
+                <i className="fa-solid fa-qrcode" aria-hidden="true" />
+                QR code
+              </button>
+            )}
             <button
               type="button"
               className={`${BTN_GHOST} !px-4 !py-2 text-[0.84rem]`}
@@ -514,6 +528,13 @@ function OrderDetailModal({
           </button>
         </div>
       </div>
+
+      <DeliveryQrModal
+        open={qrModalOpen && qrReady}
+        onClose={() => setQrModalOpen(false)}
+        orderId={order.id}
+        phone={order.phone || ''}
+      />
     </div>,
     document.body
   );

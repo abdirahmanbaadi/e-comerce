@@ -11,7 +11,7 @@ import {
 } from '../tracking/orderTrackingShared';
 import { showTopFloatNotification } from '../../utils/notifications';
 
-export default function ProfileTrackOrderTab({ initialOrderId = '' }) {
+export default function ProfileTrackOrderTab({ initialOrderId = '', openQr = false }) {
   const { user } = useAuth();
   const [, setSearchParams] = useSearchParams();
 
@@ -135,6 +135,7 @@ export default function ProfileTrackOrderTab({ initialOrderId = '' }) {
         itemsModalOpen={itemsModalOpen}
         onItemsModalOpen={() => setItemsModalOpen(true)}
         onItemsModalClose={() => setItemsModalOpen(false)}
+        initialQrOpen={openQr}
       />
     </div>
   );

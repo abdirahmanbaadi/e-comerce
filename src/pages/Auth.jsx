@@ -5,6 +5,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import ContinueWithGoogleButton from '../features/auth/ContinueWithGoogleButton';
 import ForgotPasswordModal from '../features/auth/ForgotPasswordModal';
 import { parsePhoneForStorage } from '../utils/phone';
 
@@ -89,6 +90,18 @@ function AuthAlert({
 }
 
 
+function AuthSocialDivider() {
+  return (
+    <div className="my-5 flex w-full items-center gap-3" aria-hidden="true">
+      <span className="h-px flex-1 bg-black/10" />
+      <span className="text-[0.75rem] font-bold uppercase tracking-[0.06em] text-[#9aa3a3]">
+        or continue with
+      </span>
+      <span className="h-px flex-1 bg-black/10" />
+    </div>
+  );
+}
+
 function AuthBrandHeader() {
   return (
     <div className="mx-auto mb-5 flex w-fit max-w-full items-center justify-center gap-3">
@@ -119,6 +132,7 @@ function PasswordField({
   onChange,
   required = true,
   invalid = false,
+  autoComplete = 'current-password',
 }) {
   const [visible, setVisible] = useState(false);
 
@@ -128,10 +142,12 @@ function PasswordField({
       <input
         type={visible ? 'text' : 'password'}
         id={id}
+        name={id}
         placeholder={placeholder}
         value={value}
         onChange={onChange}
         required={required}
+        autoComplete={autoComplete}
         className={passwordInputClass(invalid)}
       />
       <button
@@ -160,7 +176,7 @@ const REMEMBER_KEY = 'rememberedLogin';
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, loginWithGoogle, user } = useAuth();
   const [alert, setAlert] = useState({ message: '', type: 'danger' });
   const [submitting, setSubmitting] = useState(false);
   const [invalid, setInvalid] = useState(false);
@@ -177,12 +193,70 @@ export function LoginPage() {
     []
   );
 
+  const finishAuthRedirect = useCallback(
+    (authUser) => {
+      if (authUser?.role === 'admin' || authUser?.role === 'staff') {
+        window.location.replace('/admin');
+        return;
+      }
+      if (authUser?.role === 'delivery') {
+        window.location.replace('/app/driver');
+        return;
+      }
+      setAlert({ message: 'Login successful. Redirecting...', type: 'success' });
+      const redirectTo = location.state?.from;
+      const mobileDefault =
+        typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches ? '/app' : '/';
+      setTimeout(() => {
+        navigate(redirectTo || mobileDefault, { replace: true });
+      }, 600);
+    },
+    [location.state?.from, navigate]
+  );
+
+  const handleGoogleCredential = useCallback(
+    async (payload) => {
+      setAlert({ message: '', type: 'danger' });
+      setInvalid(false);
+      setSubmitting(true);
+      try {
+        const data = await loginWithGoogle(payload);
+        if (data.success) {
+          finishAuthRedirect(data.user);
+        } else {
+          setAlert({ message: data.message || 'Google sign-in failed', type: 'danger' });
+        }
+      } catch {
+        setAlert({
+          message: 'Cannot reach server. Wait until backend is ready, then try again.',
+          type: 'danger',
+        });
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [finishAuthRedirect, loginWithGoogle]
+  );
+
   useEffect(() => {
     const saved = localStorage.getItem(REMEMBER_KEY);
     if (saved) {
       setForm((prev) => ({ ...prev, login: saved, remember: true }));
     }
   }, []);
+
+  // Already logged in as dashboard/driver → leave login page
+  useEffect(() => {
+    const role = user?.role || localStorage.getItem('userRole') || '';
+    if (!user?.isLoggedIn && localStorage.getItem('isLoggedIn') !== 'true') return;
+    if (role === 'admin' || role === 'staff') {
+      window.location.replace('/admin');
+      return;
+    }
+    if (role === 'delivery') {
+      window.location.replace('/app/driver');
+    }
+  }, [user?.isLoggedIn, user?.role]);
 
   const update = (field) => (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -205,23 +279,23 @@ export function LoginPage() {
           localStorage.removeItem(REMEMBER_KEY);
         }
 
-        if (data.user?.role === 'admin') {
-          navigate('/admin', { replace: true });
+        if (data.user?.role === 'admin' || data.user?.role === 'staff') {
+          // Hard redirect so ProtectedRoute reads fresh role from localStorage
+          // (React state may still hold the previous role for one render).
+          window.location.replace('/admin');
           return;
         }
         if (data.user?.role === 'delivery') {
-          navigate('/delivery', { replace: true });
+          window.location.replace('/app/driver');
           return;
         }
 
         setAlert({ message: 'Login successful. Redirecting...', type: 'success' });
         const redirectTo = location.state?.from;
+        const mobileDefault =
+          typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches ? '/app' : '/';
         setTimeout(() => {
-          if (redirectTo) {
-            navigate(redirectTo, { replace: true });
-          } else {
-            navigate('/');
-          }
+          navigate(redirectTo || mobileDefault, { replace: true });
         }, 600);
       } else {
         setAlert({ message: data.message || 'Login failed', type: 'danger' });
@@ -310,6 +384,9 @@ export function LoginPage() {
             </button>
           </form>
 
+          <AuthSocialDivider />
+          <ContinueWithGoogleButton onCredential={handleGoogleCredential} disabled={submitting} />
+
           <div className="mt-[22px] text-center text-[0.84rem] font-bold text-[#7A8585]">
             Don&apos;t have an account?{' '}
             <Link to="/register" className="font-black text-deepGreen no-underline hover:text-gold hover:underline">
@@ -345,7 +422,7 @@ const COUNTRY_CODES = [
 export function RegisterPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const [alert, setAlert] = useState({ message: '', type: 'danger' });
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -364,6 +441,33 @@ export function RegisterPage() {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setForm((prev) => ({ ...prev, [field]: value }));
   };
+
+  const handleGoogleCredential = useCallback(
+    async (payload) => {
+      setAlert({ message: '', type: 'danger' });
+      setSubmitting(true);
+      try {
+        const data = await loginWithGoogle(payload);
+        if (data.success) {
+          setAlert({
+            message: 'Account ready. Welcome to Mogadishu Modern Furniture.',
+            type: 'success',
+          });
+          setTimeout(() => {
+            const redirectTo = location.state?.from;
+            navigate(redirectTo || '/', { replace: true });
+          }, 600);
+        } else {
+          setAlert({ message: data.message || 'Google sign-in failed', type: 'danger' });
+        }
+      } catch {
+        setAlert({ message: 'Network error. Please try again.', type: 'danger' });
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [location.state?.from, loginWithGoogle, navigate]
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -453,15 +557,17 @@ export function RegisterPage() {
             duration={3000}
           />
 
-          <form onSubmit={handleSubmit} noValidate>
+          <form onSubmit={handleSubmit} noValidate autoComplete="off">
             <div className="group relative mb-4">
               <i className="fa-regular fa-user pointer-events-none absolute left-[15px] top-1/2 z-[3] -translate-y-1/2 text-[0.9rem] text-[#A0ACAC] transition-colors group-focus-within:text-deepGreen" />
               <input
                 type="text"
+                name="regFirstName"
                 placeholder="First Name"
                 value={form.firstName}
                 onChange={update('firstName')}
                 className={AUTH_REGISTER_INPUT_CLASS}
+                autoComplete="given-name"
                 required
               />
             </div>
@@ -470,10 +576,12 @@ export function RegisterPage() {
               <i className="fa-regular fa-user pointer-events-none absolute left-[15px] top-1/2 z-[3] -translate-y-1/2 text-[0.9rem] text-[#A0ACAC] transition-colors group-focus-within:text-deepGreen" />
               <input
                 type="text"
+                name="regLastName"
                 placeholder="Last Name"
                 value={form.lastName}
                 onChange={update('lastName')}
                 className={AUTH_REGISTER_INPUT_CLASS}
+                autoComplete="family-name"
                 required
               />
             </div>
@@ -482,11 +590,12 @@ export function RegisterPage() {
               <i className="fa-solid fa-at pointer-events-none absolute left-[15px] top-1/2 z-[3] -translate-y-1/2 text-[0.9rem] text-[#A0ACAC] transition-colors group-focus-within:text-deepGreen" />
               <input
                 type="text"
+                name="regUsername"
                 placeholder="Username (e.g. abdullahi_01)"
                 value={form.username}
                 onChange={update('username')}
                 className={AUTH_REGISTER_INPUT_CLASS}
-                autoComplete="username"
+                autoComplete="off"
                 required
               />
             </div>
@@ -495,10 +604,12 @@ export function RegisterPage() {
               <i className="fa-regular fa-envelope pointer-events-none absolute left-[15px] top-1/2 z-[3] -translate-y-1/2 text-[0.9rem] text-[#A0ACAC] transition-colors group-focus-within:text-deepGreen" />
               <input
                 type="email"
+                name="regEmail"
                 placeholder="Gmail"
                 value={form.email}
                 onChange={update('email')}
                 className={AUTH_REGISTER_INPUT_CLASS}
+                autoComplete="off"
                 required
               />
             </div>
@@ -509,6 +620,7 @@ export function RegisterPage() {
                   className="auth-country-select w-[110px] cursor-pointer rounded-l-[11px] border-[1.5px] border-r-0 border-black/10 bg-[#FAFBFB] py-3 pl-2.5 pr-6 font-sans text-[0.9rem] font-semibold text-[#111111] outline-none transition-all group-focus-within:border-deepGreen group-focus-within:bg-white group-focus-within:shadow-[0_0_0_3.5px_rgba(7,61,53,0.08)]"
                   value={form.countryCode}
                   onChange={update('countryCode')}
+                  autoComplete="tel-country-code"
                 >
                   {COUNTRY_CODES.map(({ value, label }) => (
                     <option key={value} value={value}>
@@ -518,10 +630,12 @@ export function RegisterPage() {
                 </select>
                 <input
                   type="tel"
+                  name="regPhone"
                   className="flex-1 rounded-r-[11px] border-[1.5px] border-black/10 bg-[#FAFBFB] px-[15px] py-3 font-sans text-[0.9rem] font-medium text-[#111111] outline-none transition-all group-focus-within:border-deepGreen group-focus-within:bg-white group-focus-within:shadow-[0_0_0_3.5px_rgba(7,61,53,0.08)]"
                   placeholder="Phone Number"
                   value={form.phone}
                   onChange={update('phone')}
+                  autoComplete="tel-national"
                   required
                 />
               </div>
@@ -532,6 +646,7 @@ export function RegisterPage() {
               placeholder="Password"
               value={form.password}
               onChange={update('password')}
+              autoComplete="new-password"
             />
 
             <PasswordField
@@ -539,6 +654,7 @@ export function RegisterPage() {
               placeholder="Confirm Password"
               value={form.confirmPassword}
               onChange={update('confirmPassword')}
+              autoComplete="new-password"
             />
 
             <label className="mb-5 mt-1.5 flex cursor-pointer items-center gap-2.5 text-[0.8rem] font-bold text-[#5d6868]">
@@ -568,6 +684,9 @@ export function RegisterPage() {
               )}
             </button>
           </form>
+
+          <AuthSocialDivider />
+          <ContinueWithGoogleButton onCredential={handleGoogleCredential} disabled={submitting} />
 
           <div className="mt-[22px] text-center text-[0.84rem] font-bold text-[#7A8585]">
             Already have an account?{' '}

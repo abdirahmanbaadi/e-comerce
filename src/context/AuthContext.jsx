@@ -28,6 +28,60 @@ export function AuthProvider({ children }) {
     };
   }, [syncFromStorage]);
 
+  /** Keep role in sync with server (e.g. after admin promotes user to staff). */
+  const refreshSession = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token || localStorage.getItem('isLoggedIn') !== 'true') return null;
+
+    try {
+      const response = await fetch(apiUrl('/api/auth/profile'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!data.success || !data.user) return null;
+
+      const role = data.user.role || 'user';
+      localStorage.setItem('userEmail', data.user.email || '');
+      localStorage.setItem(
+        'userFullName',
+        `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim()
+      );
+      localStorage.setItem('userPhone', data.user.phone || '');
+      localStorage.setItem('userAvatar', data.user.avatar || '');
+      localStorage.setItem('userAddress', data.user.address || '');
+      localStorage.setItem('userRole', role);
+      if (data.user.driverApplication?.status) {
+        localStorage.setItem('driverApplicationStatus', data.user.driverApplication.status);
+      }
+      if (data.user.notificationPreferences) {
+        storeNotificationPreferences(data.user.notificationPreferences);
+      }
+
+      setUser((prev) => ({
+        ...prev,
+        isLoggedIn: true,
+        email: data.user.email || prev.email,
+        fullName: `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim() || prev.fullName,
+        phone: data.user.phone || '',
+        avatar: data.user.avatar || '',
+        address: data.user.address || '',
+        role,
+        driverApplicationStatus: data.user.driverApplication?.status || 'none',
+        token,
+        notificationPreferences:
+          data.user.notificationPreferences || prev.notificationPreferences,
+      }));
+      notifyAuthUpdated();
+      return data.user;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshSession();
+  }, [refreshSession]);
+
   const login = useCallback(async (loginId, password) => {
     try {
       const response = await fetch(apiUrl('/api/auth/login'), {
@@ -125,6 +179,69 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const applyAuthSession = useCallback((data) => {
+    if (!data?.success || !data.token || !data.user) return;
+    localStorage.setItem('isLoggedIn', 'true');
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('userEmail', data.user.email);
+    localStorage.setItem('userFullName', `${data.user.firstName} ${data.user.lastName || ''}`.trim());
+    localStorage.setItem('userPhone', data.user.phone || '');
+    localStorage.setItem('userAvatar', data.user.avatar || '');
+    localStorage.setItem('userAddress', data.user.address || '');
+    localStorage.setItem('userRole', data.user.role || 'user');
+    if (data.user.driverApplication?.status) {
+      localStorage.setItem('driverApplicationStatus', data.user.driverApplication.status);
+    } else {
+      localStorage.removeItem('driverApplicationStatus');
+    }
+    if (data.user.notificationPreferences) {
+      storeNotificationPreferences(data.user.notificationPreferences);
+    }
+    setUser({
+      isLoggedIn: true,
+      email: data.user.email,
+      fullName: `${data.user.firstName} ${data.user.lastName || ''}`.trim(),
+      phone: data.user.phone || '',
+      avatar: data.user.avatar || '',
+      address: data.user.address || '',
+      role: data.user.role || 'user',
+      driverApplicationStatus: data.user.driverApplication?.status || 'none',
+      token: data.token,
+      notificationPreferences: data.user.notificationPreferences || storeNotificationPreferences({}),
+    });
+    notifyAuthUpdated();
+    window.dispatchEvent(new CustomEvent('user-logged-in'));
+  }, []);
+
+  const loginWithGoogle = useCallback(
+    async ({ credential, accessToken } = {}) => {
+      try {
+        const response = await fetch(apiUrl('/api/auth/google'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential, accessToken }),
+        });
+        const data = await response.json();
+        if (!response.ok && data.message) {
+          return { success: false, message: data.message };
+        }
+        if (!response.ok) {
+          return { success: false, message: `Server error (${response.status}). Check backend is running.` };
+        }
+        if (data.success) {
+          applyAuthSession(data);
+        }
+        return data;
+      } catch {
+        return {
+          success: false,
+          message: 'Cannot reach server. Start backend with npm run dev.',
+        };
+      }
+    },
+    [applyAuthSession]
+  );
+
   const logout = useCallback(() => {
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('token');
@@ -186,8 +303,18 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, login, register, logout, updateProfile, setUser, syncFromStorage }),
-    [user, login, register, logout, updateProfile, syncFromStorage]
+    () => ({
+      user,
+      login,
+      register,
+      loginWithGoogle,
+      logout,
+      updateProfile,
+      setUser,
+      syncFromStorage,
+      refreshSession,
+    }),
+    [user, login, register, loginWithGoogle, logout, updateProfile, syncFromStorage, refreshSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

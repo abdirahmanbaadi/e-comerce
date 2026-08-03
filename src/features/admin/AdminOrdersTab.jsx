@@ -6,6 +6,8 @@ import { createPortal } from 'react-dom';
 import { apiUrl, fetchWithTimeout } from '../../utils/data';
 import { productImage } from '../../utils/format';
 import { showTopFloatNotification } from '../../utils/notifications';
+import { useAuth } from '../../context/AuthContext';
+import ForceDeliverModal from './ForceDeliverModal';
 import {
   ADM_TABLE_CARD,
   ADM_TABLE,
@@ -417,6 +419,8 @@ function DeliveryProgressBar({ currentStep, paymentStatus }) {
 }
 
 export function OrderEditModal({ open, order, onClose, onSaved }) {
+  const { user } = useAuth();
+  const isAdminUser = user?.role === 'admin';
   const [drivers, setDrivers] = useState([]);
   const [details, setDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -425,6 +429,7 @@ export function OrderEditModal({ open, order, onClose, onSaved }) {
   const [deliveryStep, setDeliveryStep] = useState(1);
   const [assignedDriverId, setAssignedDriverId] = useState('');
   const [estimate, setEstimate] = useState('');
+  const [forceModalOpen, setForceModalOpen] = useState(false);
 
   const loadDrivers = useCallback(async () => {
     if (!token()) return;
@@ -502,7 +507,11 @@ export function OrderEditModal({ open, order, onClose, onSaved }) {
   const declined = Boolean(String(order?.assignmentRejectReason || '').trim());
   const savedStep = Math.max(1, Number(order.currentStep) || 1);
   const isDelivered = savedStep >= 5;
-  const selectableStages = ADMIN_STAGE_STEPS.filter((stage) => stage.value >= Math.max(3, savedStep));
+  const selectableStages = ADMIN_STAGE_STEPS.filter((stage) => {
+    if (stage.value < Math.max(3, savedStep)) return false;
+    if (stage.value === 5 && !isAdminUser) return false;
+    return true;
+  });
 
   const itemsSource = {
     ...order,
@@ -529,6 +538,13 @@ export function OrderEditModal({ open, order, onClose, onSaved }) {
       showTopFloatNotification('This order is already delivered. Progress is locked.', 'danger');
       return;
     }
+    if (step === 5 && !isAdminUser) {
+      showTopFloatNotification(
+        'Only admin can force-mark Delivered without customer QR confirmation.',
+        'danger'
+      );
+      return;
+    }
     if (step < savedStep) {
       showTopFloatNotification('Delivery progress cannot move backwards.', 'danger');
       return;
@@ -539,34 +555,8 @@ export function OrderEditModal({ open, order, onClose, onSaved }) {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const applyOrderUpdate = async ({ forceDeliver = false, forceDeliverReason = '' } = {}) => {
     if (!order) return;
-
-    if (!canAdvanceStage) {
-      showTopFloatNotification(
-        orderPayment === 'Failed'
-          ? 'Cannot update this order until the customer completes EVC Plus payment.'
-          : 'Cannot update delivery while payment is Pending.',
-        'danger'
-      );
-      return;
-    }
-
-    if (isDelivered && deliveryStep === savedStep) {
-      // Allow ETA / driver updates on delivered? User said progress locked.
-      // Still allow driver/ETA if needed - but if they try to change step, blocked.
-    }
-
-    if (deliveryStep < 3) {
-      showTopFloatNotification('Select Preparing, Out for delivery, or Delivered before updating.', 'danger');
-      return;
-    }
-
-    if (deliveryStep < savedStep) {
-      showTopFloatNotification('Delivery progress cannot move backwards.', 'danger');
-      return;
-    }
 
     setSaving(true);
 
@@ -575,11 +565,14 @@ export function OrderEditModal({ open, order, onClose, onSaved }) {
       finalEstimate = STEP_ESTIMATES[deliveryStep - 1] || 'Processing';
     }
 
-    // Payment is system-owned (EVC) — do not send payment fields from admin modal
     const payload = {
       currentStep: deliveryStep,
       estimate: finalEstimate,
     };
+    if (forceDeliver) {
+      payload.forceDeliver = true;
+      payload.forceDeliverReason = forceDeliverReason;
+    }
 
     const orderIdEncoded = encodeURIComponent(order.id);
 
@@ -608,7 +601,12 @@ export function OrderEditModal({ open, order, onClose, onSaved }) {
       const data = await res.json();
 
       if (data.success) {
-        showTopFloatNotification(`Order '${order.id}' status updated successfully!`);
+        setForceModalOpen(false);
+        showTopFloatNotification(
+          forceDeliver
+            ? `Order '${order.id}' force-marked delivered (admin override).`
+            : `Order '${order.id}' status updated successfully!`
+        );
         window.dispatchEvent(new CustomEvent('admin-orders-invalidate'));
         window.dispatchEvent(new CustomEvent('admin-dashboard-invalidate'));
         onSaved();
@@ -623,6 +621,45 @@ export function OrderEditModal({ open, order, onClose, onSaved }) {
     }
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!order) return;
+
+    if (!canAdvanceStage) {
+      showTopFloatNotification(
+        orderPayment === 'Failed'
+          ? 'Cannot update this order until the customer completes EVC Plus payment.'
+          : 'Cannot update delivery while payment is Pending.',
+        'danger'
+      );
+      return;
+    }
+
+    if (deliveryStep < 3) {
+      showTopFloatNotification('Select Preparing, Out for delivery, or Delivered before updating.', 'danger');
+      return;
+    }
+
+    if (deliveryStep < savedStep) {
+      showTopFloatNotification('Delivery progress cannot move backwards.', 'danger');
+      return;
+    }
+
+    if (deliveryStep >= 5 && savedStep < 5) {
+      if (!isAdminUser) {
+        showTopFloatNotification(
+          'Only admin can force-mark Delivered without customer QR confirmation.',
+          'danger'
+        );
+        return;
+      }
+      setForceModalOpen(true);
+      return;
+    }
+
+    await applyOrderUpdate();
+  };
+
   const lockHint =
     orderPayment === 'Failed'
       ? 'Payment failed. Customer must retry EVC Plus. Stages stay locked until Paid.'
@@ -630,14 +667,20 @@ export function OrderEditModal({ open, order, onClose, onSaved }) {
         ? 'Payment pending EVC Plus confirmation. Stages stay locked until Paid.'
         : isDelivered
           ? 'Order already delivered. Delivery stage is locked and cannot go backwards.'
-          : null;
+          : !isAdminUser
+            ? 'Staff can update Preparing / Out for delivery. Only admin can force-mark Delivered (QR override).'
+            : deliveryStep === 5 && savedStep < 5
+              ? 'Delivered requires admin override — you will confirm a reason (skips customer QR).'
+              : null;
 
   const stageBadge = getDeliveryStageBadge(deliveryStep);
 
   const isAdminDark =
     typeof document !== 'undefined' && Boolean(document.querySelector('[data-theme="dark"]'));
 
-  return createPortal(
+  return (
+    <>
+      {createPortal(
     <div className={isAdminDark ? 'admin-dark' : ''} data-theme={isAdminDark ? 'dark' : 'light'}>
       <div
         className={ADMIN_MODAL_OVERLAY}
@@ -905,6 +948,17 @@ export function OrderEditModal({ open, order, onClose, onSaved }) {
       </div>
     </div>,
     document.body
+      )}
+      <ForceDeliverModal
+        open={forceModalOpen}
+        order={order}
+        busy={saving}
+        onClose={() => {
+          if (!saving) setForceModalOpen(false);
+        }}
+        onConfirm={(reason) => applyOrderUpdate({ forceDeliver: true, forceDeliverReason: reason })}
+      />
+    </>
   );
 }
 

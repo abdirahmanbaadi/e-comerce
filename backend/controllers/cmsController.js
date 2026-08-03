@@ -4,6 +4,10 @@ const { onPromotionActivated, onBannerActivated } = require('../services/notific
 const { validateCmsUpdate } = require('../utils/cmsValidation');
 const { FIXED_COUPON_DISCOUNT, discountLabel } = require('../utils/pricing');
 const { stripPromotionPasswordFromStoreSettings } = require('../utils/cmsSecurityUtils');
+const {
+  buildDefaultDeliveryFees,
+  mergeBanadirDeliveryFees,
+} = require('../utils/banadirDelivery');
 
 function normalizeCmsAssetPath(path) {
   if (!path) return path;
@@ -112,14 +116,7 @@ const DEFAULT_CMS = {
       order: 4,
     },
   ],
-  deliveryFees: [
-    { district: 'Hodan', fee: 0.01 },
-    { district: 'Wadajir', fee: 0.01 },
-    { district: 'Karaan', fee: 0.02 },
-    { district: 'Hamarweyne', fee: 0.01 },
-    { district: 'Dayniile', fee: 0.02 },
-    { district: 'Yaqshid', fee: 0.01 },
-  ],
+  deliveryFees: buildDefaultDeliveryFees().map(({ district, fee }) => ({ district, fee })),
   storeSettings: {
     isOpen: true,
     maintenanceMessage: 'We are temporarily closed for maintenance. Please check back soon.',
@@ -147,15 +144,35 @@ function migrateLegacyDemoDeliveryFees(cms) {
   return changed;
 }
 
+function expandBanadirDeliveryFees(cms) {
+  const existing = cms.deliveryFees || [];
+  // Incomplete list → seed all 20 Banadir districts with Hodan-distance fees
+  if (existing.length < 15) {
+    cms.deliveryFees = buildDefaultDeliveryFees().map(({ district, fee }) => ({ district, fee }));
+    return true;
+  }
+  const merged = mergeBanadirDeliveryFees(existing);
+  if (merged.length === existing.length) {
+    const same = merged.every(
+      (row, i) =>
+        row.district === existing[i]?.district && Number(row.fee) === Number(existing[i]?.fee)
+    );
+    if (same) return false;
+  }
+  cms.deliveryFees = merged.map(({ district, fee }) => ({ district, fee }));
+  return true;
+}
+
 async function getOrCreateCms() {
   let cms = await CmsContent.findOne({ id: 'main' });
   if (!cms) {
     cms = await CmsContent.create(DEFAULT_CMS);
     return cms;
   }
-  if (migrateLegacyDemoDeliveryFees(cms)) {
-    await cms.save();
-  }
+  let dirty = false;
+  if (migrateLegacyDemoDeliveryFees(cms)) dirty = true;
+  if (expandBanadirDeliveryFees(cms)) dirty = true;
+  if (dirty) await cms.save();
   return cms;
 }
 

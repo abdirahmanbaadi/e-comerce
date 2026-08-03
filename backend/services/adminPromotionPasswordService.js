@@ -24,15 +24,15 @@ async function verifyAdminPromotionPassword(password) {
   const cms = await getCmsDocument();
   const hash = getHashFromCms(cms);
   if (!hash) {
-    return { ok: false, code: 'NOT_CONFIGURED', message: 'Admin promotion password is not set. Configure it in Settings first.' };
+    return { ok: false, code: 'NOT_CONFIGURED', message: 'Role-change password is not set. Configure it in Settings first.' };
   }
   const plain = String(password || '');
   if (!plain) {
-    return { ok: false, code: 'MISSING', message: 'Enter the admin promotion password.' };
+    return { ok: false, code: 'MISSING', message: 'Enter the role-change password.' };
   }
   const match = await bcrypt.compare(plain, hash);
   if (!match) {
-    return { ok: false, code: 'INVALID', message: 'Incorrect admin promotion password.' };
+    return { ok: false, code: 'INVALID', message: 'Incorrect role-change password.' };
   }
   return { ok: true };
 }

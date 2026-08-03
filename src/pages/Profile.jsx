@@ -19,6 +19,7 @@ export default function Profile() {
   const tabParam = searchParams.get('tab');
   const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'profile';
   const trackOrderId = searchParams.get('orderId') || '';
+  const openTrackQr = searchParams.get('qr') === '1';
   const supportEnabled = user?.isLoggedIn && (activeTab === 'notifications' || activeTab === 'help');
 
   const [unreadCount, setUnreadCount] = useState(0);
@@ -74,7 +75,9 @@ export default function Profile() {
             {activeTab === 'orders' && (
               <ProfileOrdersTab onTrackOrder={(id) => handleTabChange('track', { orderId: id })} />
             )}
-            {activeTab === 'track' && <ProfileTrackOrderTab initialOrderId={trackOrderId} />}
+            {activeTab === 'track' && (
+              <ProfileTrackOrderTab initialOrderId={trackOrderId} openQr={openTrackQr} />
+            )}
             {activeTab === 'notifications' && (
               <Suspense
                 fallback={

@@ -10,6 +10,12 @@ router.get('/my-status', protect, authorize('delivery'), driverController.getMyS
 router.put('/my-status', protect, authorize('delivery'), driverController.updateMyStatus);
 router.post('/assignments/:orderId/accept', protect, authorize('delivery'), driverController.acceptAssignment);
 router.post('/assignments/:orderId/reject', protect, authorize('delivery'), driverController.rejectAssignment);
+router.post(
+  '/assignments/:orderId/confirm-delivery',
+  protect,
+  authorize('delivery'),
+  driverController.confirmDeliveryByQr
+);
 
 router.get('/applications', protect, authorize('admin'), driverController.listApplications);
 router.get('/applications/:userId', protect, authorize('admin'), driverController.getApplication);

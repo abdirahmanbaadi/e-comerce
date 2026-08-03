@@ -1,13 +1,6 @@
-export const MOGADISHU_DISTRICTS = [
-  { value: 'Hodan', label: 'Hodan' },
-  { value: 'Wadajir', label: 'Wadajir' },
-  { value: 'Karaan', label: 'Karaan' },
-  { value: 'Hamarweyne', label: 'Hamarweyne' },
-  { value: 'Waberi', label: 'Waberi' },
-  { value: 'Yaaqshiid', label: 'Yaaqshiid' },
-  { value: 'Dayniile', label: 'Dayniile' },
-  { value: 'Dharkenley', label: 'Dharkenley' },
-];
+import { MOGADISHU_DISTRICT_OPTIONS } from './banadirDelivery';
+
+export const MOGADISHU_DISTRICTS = MOGADISHU_DISTRICT_OPTIONS;
 
 export const VEHICLE_TYPES = [
   { value: 'motorcycle', label: 'Motorcycle / Mooto' },

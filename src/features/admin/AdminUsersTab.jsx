@@ -26,7 +26,7 @@ import {
   ADMIN_MODAL_CLOSE_BTN,
 } from './adminShared.js';
 
-const ROLE_LABELS = { user: 'Customer', delivery: 'Driver', admin: 'Admin' };
+const ROLE_LABELS = { user: 'Customer', delivery: 'Driver', staff: 'Staff', admin: 'Admin' };
 
 const AVATAR_PHOTOS = [
   { match: 'abdi hassan', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150' },
@@ -44,8 +44,17 @@ const EMPTY_EDIT_FORM = {
   email: '',
   phone: '',
   role: 'user',
+  originalRole: 'user',
   isActive: true,
+  roleChangePassword: '',
 };
+
+/** Roles an admin may assign (never another admin) */
+const ASSIGNABLE_ROLES = [
+  { id: 'user', label: 'Customer' },
+  { id: 'staff', label: 'Staff' },
+  { id: 'delivery', label: 'Driver' },
+];
 
 function fullName(user) {
   return `${user.firstName || ''} ${user.lastName || ''}`.trim();
@@ -196,6 +205,7 @@ function UsersFilterToolbar({
         {[
           { id: 'all', label: 'All' },
           { id: 'user', label: 'Customer' },
+          { id: 'staff', label: 'Staff' },
           { id: 'delivery', label: 'Driver' },
           { id: 'admin', label: 'Admin' },
         ].map((pill) => (
@@ -296,9 +306,21 @@ function ModalShell({ open, onClose, zClass = 'z-[9999]', maxWidth = 'max-w-2xl'
 
 /* ═══ EDIT USER MODAL ═══ */
 
-function EditUserModal({ open, form, saving, onChange, onClose, onSubmit }) {
+function EditUserModal({
+  open,
+  form,
+  saving,
+  promotionConfigured,
+  onChange,
+  onClose,
+  onSubmit,
+}) {
   const name = `${form.firstName || ''} ${form.lastName || ''}`.trim() || 'Edit account';
   const roleLabel = ROLE_LABELS[form.role] || form.role || 'Customer';
+  const roleChanged = form.role !== form.originalRole;
+  const selectRole = ASSIGNABLE_ROLES.some((r) => r.id === form.role)
+    ? form.role
+    : 'user';
 
   return (
     <ModalShell open={open} onClose={onClose} zClass="z-[10000]" labelledBy="editUserTitle" lockScroll={false}>
@@ -327,58 +349,36 @@ function EditUserModal({ open, form, saving, onChange, onClose, onSubmit }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 [scrollbar-width:thin]">
         <form id="editUserForm" className="space-y-4" onSubmit={onSubmit}>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className={ADM_LABEL} htmlFor="admUserFirstName">
-                First name
-              </label>
-              <input
-                id="admUserFirstName"
-                className={ADM_INPUT}
-                required
-                value={form.firstName}
-                onChange={(e) => onChange('firstName', e.target.value)}
-              />
+          <div className="rounded-xl border border-black/[0.06] bg-[#faf9f7] p-3.5 [.admin-dark_&]:border-white/10 [.admin-dark_&]:bg-white/[0.03]">
+            <p className="mb-2.5 text-[0.65rem] font-bold uppercase tracking-wide text-gray-400">
+              Account details (read-only)
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="mb-0.5 text-[0.7rem] font-bold text-gray-400">First name</p>
+                <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">
+                  {form.firstName || '—'}
+                </p>
+              </div>
+              <div>
+                <p className="mb-0.5 text-[0.7rem] font-bold text-gray-400">Last name</p>
+                <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">
+                  {form.lastName || '—'}
+                </p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="mb-0.5 text-[0.7rem] font-bold text-gray-400">Email</p>
+                <p className="mb-0 break-all text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">
+                  {form.email || '—'}
+                </p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="mb-0.5 text-[0.7rem] font-bold text-gray-400">Phone</p>
+                <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">
+                  {form.phone || '—'}
+                </p>
+              </div>
             </div>
-            <div>
-              <label className={ADM_LABEL} htmlFor="admUserLastName">
-                Last name
-              </label>
-              <input
-                id="admUserLastName"
-                className={ADM_INPUT}
-                value={form.lastName}
-                onChange={(e) => onChange('lastName', e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className={ADM_LABEL} htmlFor="admUserEmail">
-              Email
-            </label>
-            <input
-              id="admUserEmail"
-              type="email"
-              className={ADM_INPUT}
-              required
-              value={form.email}
-              onChange={(e) => onChange('email', e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className={ADM_LABEL} htmlFor="admUserPhone">
-              Phone
-            </label>
-            <input
-              id="admUserPhone"
-              type="tel"
-              className={ADM_INPUT}
-              required
-              value={form.phone}
-              onChange={(e) => onChange('phone', e.target.value)}
-            />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -390,18 +390,18 @@ function EditUserModal({ open, form, saving, onChange, onClose, onSubmit }) {
                 id="admUserRole"
                 className={ADM_SELECT}
                 required
-                value={form.role}
+                value={selectRole}
                 onChange={(e) => onChange('role', e.target.value)}
               >
-                {form.role === 'admin' ? <option value="admin">Admin</option> : null}
-                <option value="user">Customer</option>
-                <option value="delivery">Driver</option>
+                {ASSIGNABLE_ROLES.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.label}
+                  </option>
+                ))}
               </select>
-              {form.role !== 'admin' ? (
-                <p className="mt-1.5 text-[0.72rem] text-gray-500 [.admin-dark_&]:text-gray-400">
-                  To make this user an admin, close Edit and use <strong>Promote to Admin</strong> (password required).
-                </p>
-              ) : null}
+              <p className="mt-1.5 text-[0.72rem] text-gray-500 [.admin-dark_&]:text-gray-400">
+                Only one Admin exists in the system. You can assign Customer, Staff, or Driver.
+              </p>
             </div>
             <div>
               <label className={ADM_LABEL} htmlFor="admUserStatus">
@@ -419,6 +419,37 @@ function EditUserModal({ open, form, saving, onChange, onClose, onSubmit }) {
               </select>
             </div>
           </div>
+
+          {roleChanged ? (
+            <div>
+              <label className={ADM_LABEL} htmlFor="admRoleChangePassword">
+                Promotion password
+              </label>
+              <input
+                id="admRoleChangePassword"
+                type="password"
+                name="mmf-promotion-password-challenge"
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                data-form-type="other"
+                className={ADM_INPUT}
+                required
+                value={form.roleChangePassword}
+                onChange={(e) => onChange('roleChangePassword', e.target.value)}
+                placeholder="Enter your promotion password"
+              />
+              <p className="mt-1.5 text-[0.72rem] text-gray-500 [.admin-dark_&]:text-gray-400">
+                {promotionConfigured
+                  ? 'Type it manually every time — browsers must not save or autofill this field.'
+                  : 'Not configured yet — set it in Settings before changing roles.'}
+              </p>
+            </div>
+          ) : null}
         </form>
       </div>
 
@@ -426,87 +457,18 @@ function EditUserModal({ open, form, saving, onChange, onClose, onSubmit }) {
         <button type="button" className={BTN_GHOST} onClick={onClose} disabled={saving}>
           Cancel
         </button>
-        <button type="submit" form="editUserForm" className={BTN_PRIMARY} disabled={saving}>
+        <button
+          type="submit"
+          form="editUserForm"
+          className={BTN_PRIMARY}
+          disabled={saving || (roleChanged && !promotionConfigured)}
+        >
           {saving ? (
             <>
               <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" /> Saving…
             </>
           ) : (
             'Save changes'
-          )}
-        </button>
-      </div>
-    </ModalShell>
-  );
-}
-
-function PromoteAdminModal({
-  open,
-  user,
-  password,
-  configured,
-  saving,
-  onPasswordChange,
-  onClose,
-  onConfirm,
-}) {
-  const name = user ? fullName(user) : 'User';
-
-  return (
-    <ModalShell open={open} onClose={onClose} zClass="z-[10001]" labelledBy="promoteAdminTitle" lockScroll={false}>
-      <div className="border-b border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
-        <h3 id="promoteAdminTitle" className="font-display text-xl font-bold text-deepGreen [.admin-dark_&]:text-[#e8f0ed]">
-          Promote to Admin
-        </h3>
-        <p className="mb-0 mt-1 text-[0.84rem] text-gray-500 [.admin-dark_&]:text-gray-400">
-          {name} ({user?.email || '—'})
-        </p>
-      </div>
-
-      <div className="space-y-4 p-5">
-        {!configured ? (
-          <div className="rounded-xl border border-amber-500/25 bg-amber-50/90 px-3 py-3 text-[0.82rem] text-amber-900 [.admin-dark_&]:border-amber-500/20 [.admin-dark_&]:bg-amber-500/10 [.admin-dark_&]:text-amber-100">
-            Admin promotion password is not set. Go to <strong>Settings</strong> and set it before promoting anyone.
-          </div>
-        ) : (
-          <>
-            <p className="mb-0 text-[0.82rem] leading-relaxed text-gray-600 [.admin-dark_&]:text-gray-300">
-              Geli admin promotion password-ka si aad u sameyso admin cusub. Waa inaad gacanta ku qortaa mar kasta.
-            </p>
-            <div>
-              <label className={ADM_LABEL} htmlFor="promoteAdminPassword">
-                Admin promotion password
-              </label>
-              <input
-                id="promoteAdminPassword"
-                type="password"
-                autoComplete="off"
-                className={ADM_INPUT}
-                value={password}
-                onChange={(e) => onPasswordChange(e.target.value)}
-                placeholder="Enter promotion password"
-              />
-            </div>
-          </>
-        )}
-      </div>
-
-      <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
-        <button type="button" className={BTN_GHOST} onClick={onClose} disabled={saving}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className={BTN_PRIMARY}
-          disabled={saving || !configured || !password.trim()}
-          onClick={onConfirm}
-        >
-          {saving ? (
-            <>
-              <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" /> Promoting…
-            </>
-          ) : (
-            'Confirm promotion'
           )}
         </button>
       </div>
@@ -858,10 +820,7 @@ function ViewUserModal({
   acting,
   onClose,
   onEdit,
-  onToggleActive,
   onDelete,
-  onPromote,
-  promotionConfigured,
 }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
 
@@ -880,12 +839,6 @@ function ViewUserModal({
   const name = user ? fullName(user) : '';
   const isActive = user?.isActive !== false;
   const spentLabel = formatAdminPrice(stats.totalSpent || 0);
-
-  const handleStatusSelect = (e) => {
-    const nextActive = e.target.value === 'true';
-    if (nextActive === isActive) return;
-    onToggleActive?.(user);
-  };
 
   const roleLabel = user ? ROLE_LABELS[user.role] || user.role || 'Customer' : '';
 
@@ -927,19 +880,6 @@ function ViewUserModal({
                 <div>
                   <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Phone</p>
                   <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">{user.phone || '—'}</p>
-                </div>
-                <div>
-                  <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Account status</p>
-                  <select
-                    className={`${ADM_SELECT} !py-1.5 text-[0.82rem]`}
-                    value={isActive ? 'true' : 'false'}
-                    disabled={acting}
-                    onChange={handleStatusSelect}
-                    aria-label="Account status"
-                  >
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
-                  </select>
                 </div>
                 <div>
                   <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">Orders</p>
@@ -1152,18 +1092,6 @@ function ViewUserModal({
                 <i className="fa-regular fa-trash-can text-[0.75rem]" />
                 Delete
               </button>
-              {user.role !== 'admin' && (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 rounded-[10px] border border-deepGreen/20 bg-deepGreen/[0.06] px-3 py-2 text-[0.8rem] font-bold text-deepGreen transition hover:bg-deepGreen/10 disabled:opacity-50 [.admin-dark_&]:border-emerald-500/25 [.admin-dark_&]:bg-emerald-500/10 [.admin-dark_&]:text-emerald-300"
-                  disabled={acting || !promotionConfigured}
-                  title={promotionConfigured ? 'Promote to admin' : 'Set promotion password in Settings first'}
-                  onClick={() => onPromote?.(user)}
-                >
-                  <i className="fa-solid fa-user-shield text-[0.75rem]" />
-                  Promote to Admin
-                </button>
-              )}
             </div>
             <button type="button" className={BTN_PRIMARY} disabled={acting} onClick={() => onEdit?.(user)}>
               <i className="fa-regular fa-pen-to-square" />
@@ -1196,12 +1124,7 @@ export default function AdminUsersTab({ headerSearch = '' }) {
   const [viewError, setViewError] = useState('');
   const [viewData, setViewData] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-
   const [promotionConfigured, setPromotionConfigured] = useState(false);
-  const [promoteOpen, setPromoteOpen] = useState(false);
-  const [promoteTarget, setPromoteTarget] = useState(null);
-  const [promotePassword, setPromotePassword] = useState('');
-  const [promoteSaving, setPromoteSaving] = useState(false);
 
   const searchQuery = headerSearch.toLowerCase().trim();
 
@@ -1375,60 +1298,24 @@ export default function AdminUsersTab({ headerSearch = '' }) {
   };
 
   const openEdit = (customer) => {
+    if (String(customer.email || '').toLowerCase() === 'admin@gmail.com') {
+      showTopFloatNotification('The main admin account cannot be edited here.', 'warning');
+      return;
+    }
+    const currentRole = customer.role || 'user';
+    const editableRole = ASSIGNABLE_ROLES.some((r) => r.id === currentRole) ? currentRole : 'user';
     setEditForm({
       id: customer.id,
       firstName: customer.firstName || '',
       lastName: customer.lastName || '',
       email: customer.email || '',
       phone: customer.phone || '',
-      role: customer.role || 'user',
+      role: editableRole,
+      originalRole: currentRole,
       isActive: customer.isActive !== false,
+      roleChangePassword: '',
     });
     setEditOpen(true);
-  };
-
-  const openPromote = (customer) => {
-    if (!promotionConfigured) {
-      showTopFloatNotification('Set the admin promotion password in Settings first.', 'warning');
-      return;
-    }
-    setPromoteTarget(customer);
-    setPromotePassword('');
-    setPromoteOpen(true);
-  };
-
-  const closePromote = () => {
-    setPromoteOpen(false);
-    setPromoteTarget(null);
-    setPromotePassword('');
-  };
-
-  const handlePromoteConfirm = async () => {
-    if (!promoteTarget?.id || !promotePassword.trim()) return;
-
-    setPromoteSaving(true);
-    try {
-      const res = await fetch(apiUrl(`/api/auth/users/${promoteTarget.id}/promote-admin`), {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ adminPromotionPassword: promotePassword }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showTopFloatNotification(data.message || 'User promoted to admin.');
-        closePromote();
-        closeView();
-        loadUsers({ quiet: true });
-        window.dispatchEvent(new CustomEvent('admin-users-invalidate'));
-      } else {
-        showTopFloatNotification(data.message || 'Promotion failed.', 'danger');
-      }
-    } catch {
-      showTopFloatNotification('Could not connect to the server. Try again.', 'danger');
-    } finally {
-      setPromoteSaving(false);
-      setPromotePassword('');
-    }
   };
 
   const handleEditChange = (field, value) => {
@@ -1437,15 +1324,23 @@ export default function AdminUsersTab({ headerSearch = '' }) {
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
+    const roleChanged = editForm.role !== editForm.originalRole;
+
+    if (roleChanged && !promotionConfigured) {
+      showTopFloatNotification('Set the promotion password in Settings first.', 'warning');
+      return;
+    }
+    if (roleChanged && !editForm.roleChangePassword.trim()) {
+      showTopFloatNotification('Enter your promotion password to update this user’s role.', 'warning');
+      return;
+    }
+
     setSaving(true);
 
     const payload = {
-      firstName: editForm.firstName.trim(),
-      lastName: editForm.lastName.trim(),
-      email: editForm.email.trim(),
-      phone: editForm.phone.trim(),
       role: editForm.role,
       isActive: editForm.isActive,
+      ...(roleChanged ? { adminPromotionPassword: editForm.roleChangePassword } : {}),
     };
 
     try {
@@ -1456,14 +1351,23 @@ export default function AdminUsersTab({ headerSearch = '' }) {
       });
       const data = await res.json();
       if (data.success) {
-        showTopFloatNotification('User account updated successfully!');
+        showTopFloatNotification(
+          payload.role === 'staff'
+            ? 'Saved as Staff. Ask them to log out and log in again (they will open the dashboard).'
+            : 'User account updated successfully!'
+        );
+        setEditForm((f) => ({ ...f, roleChangePassword: '' }));
         setEditOpen(false);
         loadUsers({ quiet: true });
         window.dispatchEvent(new CustomEvent('admin-users-invalidate'));
         if (viewOpen && selectedCustomer?.id === editForm.id) {
-          setSelectedCustomer((prev) => (prev ? { ...prev, ...payload } : prev));
+          setSelectedCustomer((prev) =>
+            prev ? { ...prev, role: payload.role, isActive: payload.isActive } : prev
+          );
           setViewData((prev) =>
-            prev?.user ? { ...prev, user: { ...prev.user, ...payload } } : prev
+            prev?.user
+              ? { ...prev, user: { ...prev.user, role: payload.role, isActive: payload.isActive } }
+              : prev
           );
         }
       } else {
@@ -1473,41 +1377,6 @@ export default function AdminUsersTab({ headerSearch = '' }) {
       showTopFloatNotification('Could not connect to the server. Try again.', 'danger');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const toggleActive = async (customer) => {
-    const nextActive = customer.isActive === false;
-    const actionLabel = nextActive ? 'activate' : 'deactivate';
-    if (!window.confirm(`Are you sure you want to ${actionLabel} '${fullName(customer)}'?`)) return;
-
-    setActingId(customer.id);
-    try {
-      const res = await fetch(apiUrl(`/api/auth/users/${customer.id}`), {
-        method: 'PUT',
-        headers: authHeaders(),
-        body: JSON.stringify({ isActive: nextActive }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showTopFloatNotification(
-          `User account ${nextActive ? 'activated' : 'deactivated'} successfully.`
-        );
-        loadUsers({ quiet: true });
-        window.dispatchEvent(new CustomEvent('admin-users-invalidate'));
-        setSelectedCustomer((prev) => (prev?.id === customer.id ? { ...prev, isActive: nextActive } : prev));
-        setViewData((prev) =>
-          prev?.user?.id === customer.id
-            ? { ...prev, user: { ...prev.user, isActive: nextActive } }
-            : prev
-        );
-      } else {
-        showTopFloatNotification(data.message || 'Request failed.', 'danger');
-      }
-    } catch {
-      showTopFloatNotification('Could not connect to the server. Try again.', 'danger');
-    } finally {
-      setActingId('');
     }
   };
 
@@ -1598,7 +1467,7 @@ export default function AdminUsersTab({ headerSearch = '' }) {
           style={{ maxHeight: USERS_TABLE_MAX_HEIGHT }}
         >
           <table className={`${ADM_TABLE} [&_tbody_tr]:cursor-pointer [&_tbody_tr]:transition-colors`}>
-            <thead className="sticky top-0 z-[5] bg-white [.admin-dark_&]:bg-[#1a2421]">
+            <thead className="sticky top-0 z-[5] bg-white dark:bg-[#1a2421] [.admin-dark_&]:bg-[#1a2421]">
               <tr>
                 <th>User</th>
                 <th>Email / Phone</th>
@@ -1681,8 +1550,12 @@ export default function AdminUsersTab({ headerSearch = '' }) {
         open={editOpen}
         form={editForm}
         saving={saving}
+        promotionConfigured={promotionConfigured}
         onChange={handleEditChange}
-        onClose={() => setEditOpen(false)}
+        onClose={() => {
+          setEditForm((f) => ({ ...f, roleChangePassword: '' }));
+          setEditOpen(false);
+        }}
         onSubmit={handleEditSubmit}
       />
 
@@ -1693,23 +1566,9 @@ export default function AdminUsersTab({ headerSearch = '' }) {
         data={viewData}
         listCustomer={selectedCustomer}
         acting={Boolean(actingId && selectedCustomer && actingId === selectedCustomer.id)}
-        promotionConfigured={promotionConfigured}
         onClose={closeView}
         onEdit={openEdit}
-        onPromote={openPromote}
-        onToggleActive={toggleActive}
         onDelete={handleDelete}
-      />
-
-      <PromoteAdminModal
-        open={promoteOpen}
-        user={promoteTarget}
-        password={promotePassword}
-        configured={promotionConfigured}
-        saving={promoteSaving}
-        onPasswordChange={setPromotePassword}
-        onClose={closePromote}
-        onConfirm={handlePromoteConfirm}
       />
     </div>
   );

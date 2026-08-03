@@ -169,6 +169,35 @@ const orderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    deliveryConfirmStatus: {
+      type: String,
+      enum: ['none', 'pending', 'confirmed'],
+      default: 'none',
+    },
+    deliveryConfirmTokenHash: {
+      type: String,
+      default: '',
+    },
+    deliveryConfirmPayload: {
+      type: String,
+      default: '',
+    },
+    deliveryConfirmPin: {
+      type: String,
+      default: '',
+    },
+    deliveryConfirmPinHash: {
+      type: String,
+      default: '',
+    },
+    deliveryConfirmExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    deliveryConfirmedAt: {
+      type: Date,
+      default: null,
+    },
     deliveredAt: {
       type: Date,
       default: null,

@@ -6,6 +6,11 @@ import { apiUrl, clearDeliveryDistrictsCache, fetchWithTimeout } from '../../uti
 import { showTopFloatNotification } from '../../utils/notifications';
 import { useAdminTheme } from '../../hooks/useAdminTheme';
 import {
+  BANADIR_DISTRICTS,
+  buildDefaultDeliveryFees,
+  WAREHOUSE_DISTRICT,
+} from '../../utils/banadirDelivery';
+import {
   ADM_TABLE_CARD,
   ADM_LABEL,
   ADM_INPUT,
@@ -21,12 +26,7 @@ import {
   ADMIN_TABLE_PAGE_SIZE_OPTIONS,
 } from './adminShared.js';
 
-const DEFAULT_FEES = {
-  Hodan: 0.01,
-  Wadajir: 0.01,
-  Karaan: 0.02,
-  Hamarweyne: 0.01,
-};
+const DEFAULT_FEE_ROWS = buildDefaultDeliveryFees();
 
 const DEFAULT_STORE_SETTINGS = {
   isOpen: true,
@@ -145,7 +145,13 @@ export function AdminSettingsTab() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  const [fees, setFees] = useState({ ...DEFAULT_FEES });
+  const [fees, setFees] = useState(() =>
+    DEFAULT_FEE_ROWS.map(({ district, fee, kmFromHodan }) => ({
+      district,
+      fee,
+      kmFromHodan,
+    }))
+  );
   const [store, setStore] = useState({ ...DEFAULT_STORE_SETTINGS });
   const [notifPrefs, setNotifPrefs] = useState(readNotifPrefs);
   const [refreshMs, setRefreshMs] = useState(
@@ -196,16 +202,17 @@ export function AdminSettingsTab() {
       if (data.success && data.cms) {
         const feeMap = {};
         (data.cms.deliveryFees || []).forEach((entry) => {
-          feeMap[entry.district] = entry.fee;
+          feeMap[String(entry.district || '').toLowerCase()] = Number(entry.fee);
         });
-        setFees({
-          Hodan: Number(feeMap.Hodan ?? localStorage.getItem('deliveryFee_Hodan') ?? DEFAULT_FEES.Hodan),
-          Wadajir: Number(feeMap.Wadajir ?? localStorage.getItem('deliveryFee_Wadajir') ?? DEFAULT_FEES.Wadajir),
-          Karaan: Number(feeMap.Karaan ?? localStorage.getItem('deliveryFee_Karaan') ?? DEFAULT_FEES.Karaan),
-          Hamarweyne: Number(
-            feeMap.Hamarweyne ?? localStorage.getItem('deliveryFee_Hamarweyne') ?? DEFAULT_FEES.Hamarweyne
-          ),
-        });
+        setFees(
+          DEFAULT_FEE_ROWS.map(({ district, fee, kmFromHodan }) => ({
+            district,
+            kmFromHodan,
+            fee: Number.isFinite(feeMap[district.toLowerCase()])
+              ? feeMap[district.toLowerCase()]
+              : fee,
+          }))
+        );
 
         const ss = data.cms.storeSettings || {};
         setStore({
@@ -219,12 +226,13 @@ export function AdminSettingsTab() {
         });
       }
     } catch {
-      setFees({
-        Hodan: Number(localStorage.getItem('deliveryFee_Hodan') || DEFAULT_FEES.Hodan),
-        Wadajir: Number(localStorage.getItem('deliveryFee_Wadajir') || DEFAULT_FEES.Wadajir),
-        Karaan: Number(localStorage.getItem('deliveryFee_Karaan') || DEFAULT_FEES.Karaan),
-        Hamarweyne: Number(localStorage.getItem('deliveryFee_Hamarweyne') || DEFAULT_FEES.Hamarweyne),
-      });
+      setFees(
+        DEFAULT_FEE_ROWS.map(({ district, fee, kmFromHodan }) => ({
+          district,
+          fee,
+          kmFromHodan,
+        }))
+      );
     } finally {
       if (!quiet) {
         setLoading(false);
@@ -250,7 +258,20 @@ export function AdminSettingsTab() {
   };
 
   const updateFee = (district, value) => {
-    setFees((prev) => ({ ...prev, [district]: value }));
+    setFees((prev) =>
+      prev.map((row) => (row.district === district ? { ...row, fee: value } : row))
+    );
+    markDirty();
+  };
+
+  const resetFeesToDistance = () => {
+    setFees(
+      DEFAULT_FEE_ROWS.map(({ district, fee, kmFromHodan }) => ({
+        district,
+        fee,
+        kmFromHodan,
+      }))
+    );
     markDirty();
   };
 
@@ -299,10 +320,9 @@ export function AdminSettingsTab() {
   const saveSettings = async () => {
     setSaving(true);
 
-    localStorage.setItem('deliveryFee_Hodan', String(fees.Hodan));
-    localStorage.setItem('deliveryFee_Wadajir', String(fees.Wadajir));
-    localStorage.setItem('deliveryFee_Karaan', String(fees.Karaan));
-    localStorage.setItem('deliveryFee_Hamarweyne', String(fees.Hamarweyne));
+    fees.forEach((row) => {
+      localStorage.setItem(`deliveryFee_${row.district}`, String(row.fee));
+    });
     localStorage.setItem(ADMIN_SETTINGS_KEYS.lowStockThreshold, String(store.lowStockThreshold));
     localStorage.setItem(ADMIN_SETTINGS_KEYS.storeOpen, String(store.isOpen));
     localStorage.setItem(ADMIN_SETTINGS_KEYS.notifPrefs, JSON.stringify(notifPrefs));
@@ -313,14 +333,10 @@ export function AdminSettingsTab() {
     localStorage.setItem(ADMIN_SETTINGS_KEYS.sidebarCompact, String(sidebarCompact));
     localStorage.setItem(ADMIN_SETTINGS_KEYS.compactTables, String(compactTables));
 
-    const deliveryFees = [
-      { district: 'Hodan', fee: Number(fees.Hodan) },
-      { district: 'Wadajir', fee: Number(fees.Wadajir) },
-      { district: 'Karaan', fee: Number(fees.Karaan) },
-      { district: 'Hamarweyne', fee: Number(fees.Hamarweyne) },
-      { district: 'Dayniile', fee: Number(fees.Karaan) },
-      { district: 'Yaqshid', fee: Number(fees.Hodan) },
-    ];
+    const deliveryFees = fees.map((row) => ({
+      district: row.district,
+      fee: Number(row.fee),
+    }));
 
     try {
       const res = await fetch(apiUrl('/api/cms'), {
@@ -616,30 +632,55 @@ export function AdminSettingsTab() {
 
         <SettingsSection
           icon="fa-truck-fast"
-          title="Delivery fees"
-          description="District fees synced to checkout and CMS."
+          title="Delivery fees (Banadir)"
+          description={`Warehouse hub: ${WAREHOUSE_DISTRICT}. Fee rises with distance from Hodan — closer districts cost less.`}
         >
-          <div className="grid grid-cols-2 gap-3">
-            {Object.keys(DEFAULT_FEES).map((district) => (
-              <div key={district}>
-                <label className={ADM_LABEL} htmlFor={`fee-${district}`}>
-                  {district} ($)
-                </label>
-                <input
-                  id={`fee-${district}`}
-                  type="number"
-                  step="0.001"
-                  min="0"
-                  className={ADM_INPUT}
-                  value={fees[district]}
-                  onChange={(e) => updateFee(district, e.target.value)}
-                />
-              </div>
-            ))}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="mb-0 text-[0.72rem] text-gray-500 [.admin-dark_&]:text-gray-400">
+              {BANADIR_DISTRICTS.length} districts · e.g. Shibis &amp; Karaan are near each other → similar fee
+            </p>
+            <button type="button" className={BTN_GHOST} onClick={resetFeesToDistance}>
+              Reset to Hodan distance
+            </button>
           </div>
-          <p className="mb-0 mt-3 text-[0.72rem] text-gray-500 [.admin-dark_&]:text-gray-400">
-            Dayniile uses Karaan fee · Yaqshid uses Hodan fee (auto-synced on save).
-          </p>
+          <div className="max-h-[320px] overflow-auto rounded-xl border border-black/[0.06] [.admin-dark_&]:border-white/10">
+            <table className="w-full border-collapse text-[0.82rem]">
+              <thead>
+                <tr className="border-b border-black/[0.06] text-left text-[0.68rem] font-extrabold uppercase tracking-wide text-gray-500 [.admin-dark_&]:border-white/10">
+                  <th className="px-3 py-2">District</th>
+                  <th className="px-3 py-2">Km from Hodan</th>
+                  <th className="px-3 py-2">Fee ($)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fees.map((row) => (
+                  <tr
+                    key={row.district}
+                    className="border-b border-black/[0.04] [.admin-dark_&]:border-white/[0.06]"
+                  >
+                    <td className="px-3 py-2 font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">
+                      {row.district}
+                      {row.district === WAREHOUSE_DISTRICT ? (
+                        <span className="ms-1.5 text-[0.65rem] font-bold text-emerald-600">hub</span>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-2 text-gray-500">{row.kmFromHodan} km</td>
+                    <td className="px-3 py-2">
+                      <input
+                        id={`fee-${row.district}`}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className={`${ADM_INPUT} max-w-[110px] py-1.5`}
+                        value={row.fee}
+                        onChange={(e) => updateFee(row.district, e.target.value)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </SettingsSection>
 
         <SettingsSection
@@ -703,8 +744,8 @@ export function AdminSettingsTab() {
 
         <SettingsSection
           icon="fa-shield-halved"
-          title="Admin promotion password"
-          description="Required each time you promote a customer or driver to admin. Typed manually — never stored in the browser."
+          title="Promotion password"
+          description="Required every time you change a user’s role to Customer, Staff, or Driver. Must be typed manually each time — never autofilled. There is only one Admin account."
         >
           <div
             className={`mb-4 rounded-xl border px-3 py-2.5 text-[0.78rem] ${
@@ -715,8 +756,8 @@ export function AdminSettingsTab() {
           >
             <i className={`fa-solid ${promotionConfigured ? 'fa-circle-check' : 'fa-triangle-exclamation'} me-2`} />
             {promotionConfigured
-              ? 'Promotion password is set. You will be asked for it on every Promote to Admin action.'
-              : 'Not set yet — promoting users to admin is blocked until you save a password here.'}
+              ? 'Promotion password is set. You will type it manually on every role change.'
+              : 'Not set yet — role changes are blocked until you save a promotion password here.'}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -727,7 +768,13 @@ export function AdminSettingsTab() {
               <input
                 id="promotionPasswordNew"
                 type="password"
+                name="mmf-set-promotion-password"
                 autoComplete="new-password"
+                autoCorrect="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
                 className={ADM_INPUT}
                 value={promotionNew}
                 onChange={(e) => setPromotionNew(e.target.value)}
@@ -741,7 +788,13 @@ export function AdminSettingsTab() {
               <input
                 id="promotionPasswordConfirm"
                 type="password"
+                name="mmf-confirm-promotion-password"
                 autoComplete="new-password"
+                autoCorrect="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
                 className={ADM_INPUT}
                 value={promotionConfirm}
                 onChange={(e) => setPromotionConfirm(e.target.value)}

@@ -1,4 +1,5 @@
 const Notification = require('../models/Notification');
+const { isDashboardRole } = require('../utils/roleUtils');
 
 function formatTime(date) {
   const d = new Date(date);
@@ -39,6 +40,7 @@ const UI_META = {
   support_message: { iconType: 'support-replied', dot: 'grey', iconWrap: 'solid-brown', modalType: 'support-replied' },
   order_status_changed: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'order-processing' },
   delivery_unassigned: { iconType: 'order-processing', dot: 'gold', iconWrap: 'solid-yellow', modalType: 'delivery-assigned' },
+  delivery_qr_ready: { iconType: 'delivery-qr-ready', dot: 'green', iconWrap: 'solid-green', modalType: 'delivery-qr-ready', highlight: true },
   review_moderated: { iconType: 'weekend-offer', dot: 'green', iconWrap: 'solid-green', modalType: 'review-moderated' },
 };
 
@@ -74,7 +76,7 @@ function mapNotification(n, index) {
 }
 
 function queryForUser(user) {
-  if (user.role === 'admin') {
+  if (isDashboardRole(user.role)) {
     return { audience: 'admin' };
   }
   return { audience: 'user', userId: user.id };
