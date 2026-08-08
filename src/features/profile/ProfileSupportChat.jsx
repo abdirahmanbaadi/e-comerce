@@ -67,7 +67,7 @@ function ChatBubble({ message, formatChatTime }) {
   return (
     <div className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[78%] rounded-2xl px-3 py-2 shadow-[0_1px_1px_rgba(0,0,0,0.06)] ${
+        className={`max-w-[min(72%,36rem)] rounded-2xl px-3.5 py-2.5 shadow-[0_1px_1px_rgba(0,0,0,0.06)] ${
           isUser
             ? 'rounded-br-sm bg-[#d9fdd3] text-gray-900'
             : 'rounded-bl-sm bg-white text-gray-900'
@@ -134,40 +134,42 @@ function ChatComposer({
   const sendEnabled = canSend ?? Boolean(value.trim());
 
   return (
-    <div className="border-t border-black/[0.06] bg-[#f0f2f1] px-3 py-3">
-      <div className="flex items-end gap-2 rounded-full border border-black/[0.06] bg-white px-2 py-1.5 shadow-sm">
-        <button
-          type="button"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-deepGreen disabled:opacity-50"
-          onClick={() => fileRef.current?.click()}
-          disabled={disabled || sending || uploading}
-          title="Send image"
-          aria-label="Send image"
-        >
-          <i className={`fa-regular fa-image text-[1.15rem] ${uploading ? 'fa-spinner fa-spin' : ''}`} />
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-        <textarea
-          rows={1}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          disabled={disabled || sending || uploading}
-          className="max-h-28 min-h-[40px] flex-1 resize-none border-0 bg-transparent px-1 py-2 text-[0.88rem] outline-none placeholder:text-gray-400"
-        />
+    <div className="shrink-0 border-t border-black/[0.06] bg-[#f0f2f1] px-3 py-3 md:px-4">
+      <div className="flex items-end gap-2.5">
+        <div className="flex min-h-[48px] min-w-0 flex-1 items-end rounded-full border border-black/[0.06] bg-white pl-4 pr-1.5 shadow-sm">
+          <textarea
+            rows={1}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={disabled || sending || uploading}
+            className="max-h-28 min-h-[46px] min-w-0 flex-1 resize-none border-0 bg-transparent py-3 text-[0.92rem] outline-none placeholder:text-gray-400 disabled:opacity-60"
+          />
+          <button
+            type="button"
+            className="mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent text-gray-500 transition hover:bg-gray-100 hover:text-deepGreen disabled:opacity-40"
+            onClick={() => fileRef.current?.click()}
+            disabled={disabled || sending || uploading}
+            title="Send photo"
+            aria-label="Send photo"
+          >
+            <i className={`fa-regular fa-image text-[1.15rem] ${uploading ? 'fa-spinner fa-spin' : ''}`} />
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        </div>
         <button
           type="button"
           onClick={onSend}
           disabled={disabled || sending || uploading || !sendEnabled}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-deepGreen text-white transition hover:bg-[#0b5e52] disabled:opacity-40"
-          title="Send message"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-0 bg-deepGreen text-white transition hover:bg-[#0b5e52] disabled:opacity-35"
+          title="Send"
           aria-label="Send message"
         >
           <i className={`fa-solid fa-paper-plane text-[0.95rem] ${sending ? 'fa-spinner fa-spin' : ''}`} />
@@ -211,8 +213,8 @@ function NewConversationPanel({ onCreate, sending, onUploadImage }) {
   };
 
   return (
-    <div className="flex h-full flex-col bg-[#efeae2]">
-      <header className="flex items-center gap-3 border-b border-black/[0.06] bg-[#f0f2f1] px-4 py-3">
+    <div className="flex h-full min-h-0 flex-col bg-[#efeae2]">
+      <header className="flex shrink-0 items-center gap-3 border-b border-black/[0.06] bg-[#f0f2f1] px-4 py-3">
         <SupportAvatar size={40} />
         <div>
           <div className="text-[0.95rem] font-bold text-gray-900">New support chat</div>
@@ -220,8 +222,8 @@ function NewConversationPanel({ onCreate, sending, onUploadImage }) {
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col justify-end p-4">
-        <div className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 [scrollbar-width:thin]">
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
           <label htmlFor="newSupportSubject" className="mb-2 block text-[0.78rem] font-bold text-gray-600">
             Subject
           </label>
@@ -270,7 +272,7 @@ function NewConversationPanel({ onCreate, sending, onUploadImage }) {
   );
 }
 
-export default function ProfileSupportChat({ supportChat, className = '' }) {
+export default function ProfileSupportChat({ supportChat, className = '', onBack }) {
   const {
     tickets,
     activeTicket,
@@ -349,17 +351,30 @@ export default function ProfileSupportChat({ supportChat, className = '' }) {
 
   return (
     <div
-      className={`overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] ${className}`}
+      className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] ${className}`}
     >
-      <div className="flex h-full min-h-0">
+      <div className="flex min-h-0 flex-1">
         <aside
-          className={`flex w-full flex-col border-r border-black/[0.06] bg-white md:w-[34%] md:min-w-[260px] md:max-w-[320px] ${
+          className={`flex h-full min-h-0 w-full flex-col border-r border-black/[0.06] bg-white md:w-[30%] md:min-w-[280px] md:max-w-[360px] ${
             showMobileChat ? 'hidden md:flex' : 'flex'
           }`}
         >
           <div className="shrink-0 border-b border-black/[0.06] bg-[#f7f8f7] px-4 py-3">
             <div className="mb-2.5 flex items-center justify-between gap-2">
-              <h3 className="text-[0.95rem] font-extrabold text-deepGreen">Chats</h3>
+              <div className="flex min-w-0 items-center gap-2">
+                {onBack ? (
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-transparent text-deepGreen transition hover:bg-black/5"
+                    aria-label="Back to Help Center"
+                    title="Back to Help Center"
+                  >
+                    <i className="fa-solid fa-chevron-left text-[0.85rem]" />
+                  </button>
+                ) : null}
+                <h3 className="m-0 text-[0.95rem] font-extrabold text-deepGreen">Chats</h3>
+              </div>
               <button
                 type="button"
                 onClick={handleStartNew}
@@ -404,7 +419,7 @@ export default function ProfileSupportChat({ supportChat, className = '' }) {
         </aside>
 
         <section
-          className={`min-w-0 flex-1 flex-col bg-[#efeae2] ${showMobileChat ? 'flex' : 'hidden md:flex'}`}
+          className={`min-h-0 min-w-0 flex-1 flex-col bg-[#efeae2] ${showMobileChat ? 'flex' : 'hidden md:flex'}`}
         >
           {composeNew ? (
             <NewConversationPanel
@@ -431,7 +446,7 @@ export default function ProfileSupportChat({ supportChat, className = '' }) {
             </div>
           ) : (
             <>
-              <header className="flex items-center gap-3 border-b border-black/[0.06] bg-[#f0f2f1] px-3 py-3 md:px-4">
+              <header className="flex shrink-0 items-center gap-3 border-b border-black/[0.06] bg-[#f0f2f1] px-3 py-3 md:px-4">
                 <button
                   type="button"
                   className="mr-1 flex h-9 w-9 items-center justify-center rounded-full text-gray-600 hover:bg-black/5 md:hidden"
@@ -454,27 +469,29 @@ export default function ProfileSupportChat({ supportChat, className = '' }) {
 
               <div
                 ref={messagesRef}
-                className="flex flex-1 flex-col gap-2 overflow-y-auto bg-[#efeae2] p-3 md:p-4 [scrollbar-width:thin]"
+                className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] p-3 md:p-5 [scrollbar-width:thin]"
                 style={{
                   backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(0,0,0,0.04) 1px, transparent 0)',
                   backgroundSize: '18px 18px',
                 }}
               >
-                {messages.length === 0 ? (
-                  <div className="py-8 text-center text-[0.85rem] text-gray-500">No messages yet.</div>
-                ) : (
-                  messages.map((msg) => (
-                    <ChatBubble
-                      key={msg.id || `${msg.createdAt}-${msg.messageText}`}
-                      message={msg}
-                      formatChatTime={formatChatTime}
-                    />
-                  ))
-                )}
+                <div className="flex min-h-full flex-col justify-end gap-2">
+                  {messages.length === 0 ? (
+                    <div className="py-8 text-center text-[0.85rem] text-gray-500">No messages yet.</div>
+                  ) : (
+                    messages.map((msg) => (
+                      <ChatBubble
+                        key={msg.id || `${msg.createdAt}-${msg.messageText}`}
+                        message={msg}
+                        formatChatTime={formatChatTime}
+                      />
+                    ))
+                  )}
+                </div>
               </div>
 
               {activeTicket.status === 'Closed' && (
-                <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-center text-[0.8rem] text-amber-800">
+                <div className="shrink-0 border-t border-amber-200 bg-amber-50 px-4 py-2 text-center text-[0.8rem] text-amber-800">
                   Ticket-kan waa la xiray. Fariin dir si aad dib u furto.
                 </div>
               )}

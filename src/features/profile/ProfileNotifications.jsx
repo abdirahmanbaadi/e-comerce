@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { NotificationDetailPane } from './WebNotificationDetailPanel';
 import {
   getLastOrderDetails,
   getOrderTotalFormatted,
@@ -628,6 +628,19 @@ function DeliveryAssignedModal({ onClose, item }) {
 }
 
 function GenericNotificationModal({ item, onClose }) {
+  const orderId = item?.orderId || item?.metadata?.orderId || '';
+  const couponCode = item?.couponCode || item?.metadata?.promoCode || '';
+  const productImg = item?.productImage || item?.metadata?.image || '';
+
+  const copyValue = async (value, message) => {
+    try {
+      await navigator.clipboard.writeText(String(value));
+      showTopFloatNotification(message);
+    } catch {
+      showTopFloatNotification('Could not copy.', 'danger');
+    }
+  };
+
   return (
     <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
       <div className={premiumCardClass}>
@@ -639,7 +652,44 @@ function GenericNotificationModal({ item, onClose }) {
         </PremiumDeco>
         <h2 className="mb-2 font-display text-[2.1rem] font-bold text-[#2b3a30]">{item?.title || 'Notification'}</h2>
         <GoldStarSeparator />
+        {productImg ? (
+          <div className="mx-auto mb-4 h-36 w-full max-w-[280px] overflow-hidden rounded-2xl bg-[#f3eee6]">
+            <img src={productImage(productImg)} alt="" className="h-full w-full object-cover" />
+          </div>
+        ) : null}
         <p className="mx-auto mb-6 max-w-[360px] text-[0.92rem] leading-relaxed text-[#666666]">{item?.desc || ''}</p>
+        {orderId ? (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-[#f7f2eb] px-4 py-3 text-left">
+            <div>
+              <p className="mb-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-[#9a8d80]">Order ID</p>
+              <p className="mb-0 text-[0.9rem] font-extrabold text-[#2b3a30]">{orderId}</p>
+            </div>
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-full border-0 bg-white text-[#4a6454] shadow-sm"
+              aria-label="Copy Order ID"
+              onClick={() => copyValue(orderId, 'Order ID copied.')}
+            >
+              <i className="fa-regular fa-copy" />
+            </button>
+          </div>
+        ) : null}
+        {couponCode ? (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-[#f7f2eb] px-4 py-3 text-left">
+            <div>
+              <p className="mb-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-[#9a8d80]">Coupon code</p>
+              <p className="mb-0 text-[0.9rem] font-extrabold text-[#2b3a30]">{couponCode}</p>
+            </div>
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-full border-0 bg-white text-[#4a6454] shadow-sm"
+              aria-label="Copy coupon code"
+              onClick={() => copyValue(couponCode, 'Coupon code copied.')}
+            >
+              <i className="fa-regular fa-copy" />
+            </button>
+          </div>
+        ) : null}
         <BtnCloseFooter onClick={onClose} className="mx-auto w-full max-w-[160px]" />
       </div>
     </ModalBackdrop>
@@ -1143,6 +1193,12 @@ function RetryPaymentModal({ onClose, onSuccess, order, userPhone }) {
   );
 }
 
+/**
+ * LEGACY notification modals — paused in the UI.
+ * Active UI: WebNotificationDetailPanel (app-style).
+ * Do not delete until the new panel is approved; set
+ * window.__MMF_USE_LEGACY_NOTIF_MODALS__ = true to re-enable.
+ */
 export function NotificationDetailModal({
   item,
   onClose,
@@ -1155,12 +1211,15 @@ export function NotificationDetailModal({
   const [subModal, setSubModal] = useState(null);
 
   const orderId = item?.orderId || item?.metadata?.orderId || item?.relatedId;
+  const legacyEnabled =
+    typeof window !== 'undefined' && window.__MMF_USE_LEGACY_NOTIF_MODALS__ === true;
 
   useEffect(() => {
     setSubModal(null);
   }, [item?.modalType, item?.index]);
 
   useEffect(() => {
+    if (!legacyEnabled) return undefined;
     let cancelled = false;
     const type = String(item?.type || '');
     const isSupportRelated = type.startsWith('support_') || type === 'new_support_ticket';
@@ -1181,7 +1240,12 @@ export function NotificationDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [item?.id, orderId, item?.type]);
+  }, [item?.id, orderId, item?.type, legacyEnabled, item]);
+
+  // Soft-disable old heavy modals (code kept for later cleanup).
+  if (!legacyEnabled) {
+    return null;
+  }
 
   if (!item && !subModal) return null;
 
@@ -1246,10 +1310,24 @@ export function NotificationDetailModal({
       return <WeekendOfferModal item={item} navigate={navigate} onClose={onClose} />;
     case 'coupon-offer':
       return <CouponNotificationModal item={item} navigate={navigate} onClose={onClose} />;
+    case 'coupon-expiring':
+      return <CouponNotificationModal item={item} navigate={navigate} onClose={onClose} />;
+    case 'promo-new':
+      return <WeekendOfferModal item={item} navigate={navigate} onClose={onClose} />;
+    case 'wishlist-drop':
+      return <WishlistAvailableModal item={item} navigate={navigate} onClose={onClose} />;
     case 'delivery-assigned':
       return <DeliveryAssignedModal item={item} onClose={onClose} />;
     case 'delivery-qr-ready':
       return <DeliveryQrReadyModal item={item} onClose={onClose} navigate={navigate} />;
+    case 'delivery-delayed':
+    case 'delivery-pickup':
+    case 'payment-pending':
+    case 'payment-refunded':
+    case 'support-ticket':
+    case 'review-reminder':
+    case 'review-thanks':
+    case 'account-security':
     case 'review-moderated':
       return <GenericNotificationModal item={item} onClose={onClose} />;
     default:
@@ -1302,16 +1380,33 @@ function NotificationIcon({ type }) {
       return <i className="fa-solid fa-comment-dots" />;
     case 'wishlist':
       return <i className="fa-regular fa-heart" />;
+    case 'wishlist-drop':
+      return <i className="fa-solid fa-tags" />;
     case 'coupon_offer':
+    case 'coupon-expiring':
       return <i className="fa-solid fa-ticket" />;
     case 'weekend-offer':
+    case 'promo-new':
       return <i className="fa-solid fa-tag" />;
     case 'delivery-assigned':
+    case 'delivery-pickup':
       return <i className="fa-solid fa-truck" />;
+    case 'delivery-delayed':
+      return <i className="fa-solid fa-clock" />;
     case 'delivery-qr-ready':
       return <i className="fa-solid fa-qrcode" />;
+    case 'payment-pending':
+      return <i className="fa-solid fa-clock" />;
+    case 'payment-refunded':
+      return <i className="fa-solid fa-money-bill-transfer" />;
+    case 'support-ticket':
+      return <i className="fa-solid fa-ticket" />;
+    case 'review-reminder':
+    case 'review-thanks':
     case 'review-moderated':
       return <i className="fa-solid fa-star" />;
+    case 'account-security':
+      return <i className="fa-solid fa-shield-halved" />;
     default:
       return <i className="fa-regular fa-bell" />;
   }
@@ -1321,8 +1416,10 @@ export default function ProfileNotificationsTab({
   onUnreadChange,
   supportChat,
   notifications,
+  initialNotifId = '',
+  onNotifIdChange,
 }) {
-  const { user } = useAuth();
+  void supportChat;
   const {
     items = [],
     loading = false,
@@ -1332,7 +1429,7 @@ export default function ProfileNotificationsTab({
     markAllRead = async () => false,
   } = notifications || {};
   const [filter, setFilter] = useState('all');
-  const [activeModal, setActiveModal] = useState(null);
+  const [selectedId, setSelectedId] = useState(initialNotifId || '');
 
   const visibleItems = useMemo(() => {
     const list = Array.isArray(items) ? items : [];
@@ -1353,26 +1450,51 @@ export default function ProfileNotificationsTab({
     return filter === 'unread' ? merged.filter((item) => item.unread) : merged;
   }, [items, filter]);
 
+  const selectedItem = useMemo(() => {
+    if (!selectedId) return null;
+    return visibleItems.find((n) => n.id === selectedId)
+      || (Array.isArray(items) ? items.find((n) => n?.id === selectedId) : null)
+      || null;
+  }, [selectedId, visibleItems, items]);
+
   useEffect(() => {
     onUnreadChange?.(unreadCount);
   }, [unreadCount, onUnreadChange]);
 
-  const handleCardClick = (item) => {
+  useEffect(() => {
+    if (initialNotifId) setSelectedId(initialNotifId);
+  }, [initialNotifId]);
+
+  useEffect(() => {
+    if (selectedId || !visibleItems.length) return;
+    // Desktop: auto-select first when nothing selected
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 900px)').matches) {
+      setSelectedId(visibleItems[0].id);
+    }
+  }, [visibleItems, selectedId]);
+
+  const selectItem = (item) => {
     if (!item?.id) return;
-    setActiveModal(item);
+    setSelectedId(item.id);
+    onNotifIdChange?.(item.id);
     if (item.unread) markRead(item.id);
   };
 
-  const closeModal = () => setActiveModal(null);
+  const clearSelection = () => {
+    setSelectedId('');
+    onNotifIdChange?.('');
+  };
+
+  const showMobileDetail = Boolean(selectedItem);
 
   return (
-    <div>
-      <div className="mb-5 flex w-full items-end justify-between max-md:flex-col max-md:items-start max-md:gap-3">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-4 flex w-full items-end justify-between max-md:flex-col max-md:items-start max-md:gap-3">
         <div>
           <h1 className="mb-0.5 font-display text-[2.3rem] font-bold text-deepGreen">Notifications</h1>
           <p className="text-[0.92rem] text-[#666666]">Stay updated with your account activity.</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className={`flex items-center gap-4 ${showMobileDetail ? 'max-[899px]:hidden' : ''}`}>
           <div className="flex rounded-full border border-black/[0.04] bg-[#F2ECE1] p-[3px]">
             <button
               type="button"
@@ -1403,79 +1525,96 @@ export default function ProfileNotificationsTab({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-1">
-        {loading && (!Array.isArray(items) || items.length === 0) ? (
-          <p className="p-4 text-[#666666]">Loading notifications...</p>
-        ) : null}
+      {Array.isArray(items) && items.some((n) => n?.isPreview || n?.metadata?.preview) ? (
+        <p className={`mb-3 mt-0 text-[0.78rem] font-bold text-[#9a5b12] ${showMobileDetail ? 'max-[899px]:hidden' : ''}`}>
+          Preview data — sample notifications for UI testing
+        </p>
+      ) : null}
 
-        {error && (!Array.isArray(items) || items.length === 0) ? (
-          <p className="p-4 text-[0.88rem] text-[#666666]">
-            {error}
-            {String(error).toLowerCase().includes('session') ? (
-              <>
-                {' '}
-                <Link to="/login" className="font-bold text-deepGreen underline">
-                  Dib u soo gal
-                </Link>
-              </>
+      <div className="grid min-h-[560px] flex-1 overflow-hidden rounded-2xl border border-[#ebe4da] bg-white shadow-sm min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+        {/* List pane */}
+        <div
+          className={`flex min-h-0 flex-col border-[#ebe4da] min-[900px]:border-r ${
+            showMobileDetail ? 'hidden min-[900px]:flex' : 'flex'
+          }`}
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+            {loading && (!Array.isArray(items) || items.length === 0) ? (
+              <p className="p-4 text-[#666666]">Loading notifications...</p>
             ) : null}
-          </p>
-        ) : null}
 
-        {!loading && !error && visibleItems.length === 0 ? (
-          <p className="p-4 text-[#666666]">No notifications yet.</p>
-        ) : null}
+            {error && (!Array.isArray(items) || items.length === 0) ? (
+              <p className="p-4 text-[0.88rem] text-[#666666]">
+                {error}
+                {String(error).toLowerCase().includes('session') ? (
+                  <>
+                    {' '}
+                    <Link to="/login" className="font-bold text-deepGreen underline">
+                      Dib u soo gal
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
 
-        <div className="flex flex-col" id="notificationsList">
-          {visibleItems.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`mb-2 flex w-full cursor-pointer items-center gap-3.5 rounded-lg border px-4 py-2.5 text-left transition-all duration-200 hover:border-[#DCDCD8] hover:bg-[#FAF9F6] ${
-                item.highlight && item.unread
-                  ? 'border-[#cbd0c4] bg-[#eaeae6]'
-                  : 'border-[#EAE9E4] bg-[#FCFBFA]'
-              }`}
-              data-status={item.unread ? 'unread' : 'read'}
-              onClick={() => handleCardClick(item)}
-            >
-              <div
-                className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full text-[1.15rem] ${
-                  ICON_WRAP_STYLES[item.iconWrap] || 'bg-[#627b6c] text-white'
-                }`}
-              >
-                <NotificationIcon type={item.iconType} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h4 className="mb-0.5 text-[0.88rem] font-bold text-[#333333]">{item.title}</h4>
-                <p className="m-0 line-clamp-2 text-[0.8rem] leading-snug text-[#666666]">{item.desc}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-right text-[0.78rem] font-medium text-[#888888]">{item.time}</span>
-                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${DOT_STYLES[item.dot] || DOT_STYLES.grey}`} />
-                </div>
-                <i className="fa-solid fa-chevron-right text-[0.75rem] text-[#888888]" />
-              </div>
-            </button>
-          ))}
+            {!loading && !error && visibleItems.length === 0 ? (
+              <p className="p-4 text-[#666666]">No notifications yet.</p>
+            ) : null}
+
+            <div className="flex flex-col gap-1.5" id="notificationsList">
+              {visibleItems.map((item) => {
+                const active = item.id === selectedId;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`flex w-full cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-all duration-150 ${
+                      active
+                        ? 'border-deepGreen/25 bg-[#eef3ef] shadow-sm'
+                        : item.unread
+                          ? 'border-[#eadfce] bg-[#fcfbfa] hover:border-[#dcdcd8] hover:bg-[#faf9f6]'
+                          : 'border-transparent bg-transparent hover:bg-[#faf9f6]'
+                    }`}
+                    data-status={item.unread ? 'unread' : 'read'}
+                    onClick={() => selectItem(item)}
+                  >
+                    <div
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[1.05rem] ${
+                        ICON_WRAP_STYLES[item.iconWrap] || 'bg-[#627b6c] text-white'
+                      }`}
+                    >
+                      <NotificationIcon type={item.iconType} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="mb-0.5 text-[0.86rem] font-bold text-[#333333]">{item.title}</h4>
+                        {item.unread ? (
+                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#c45c4a]" />
+                        ) : null}
+                      </div>
+                      <p className="m-0 line-clamp-1 text-[0.76rem] leading-snug text-[#666666]">{item.desc}</p>
+                      <span className="mt-1 block text-[0.7rem] font-medium text-[#888888]">{item.time}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center justify-center gap-2 py-6 pb-3 text-center text-[0.82rem] font-semibold text-[#888888]">
-          New notifications from your orders and support will appear here.
-          <i className="fa-regular fa-bell text-[0.9rem]" />
+        {/* Detail pane */}
+        <div
+          className={`min-h-0 bg-[#fcfaf7] ${
+            showMobileDetail ? 'flex' : 'hidden min-[900px]:flex'
+          } flex-col`}
+        >
+          <NotificationDetailPane
+            item={selectedItem}
+            showBack={showMobileDetail}
+            onBack={clearSelection}
+          />
         </div>
       </div>
-
-      {activeModal ? (
-        <NotificationDetailModal
-          item={activeModal}
-          onClose={closeModal}
-          user={user}
-          onSendFollowUp={supportChat?.sendTicketMessage}
-          sendingFollowUp={supportChat?.sending}
-        />
-      ) : null}
     </div>
   );
 }

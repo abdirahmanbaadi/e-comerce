@@ -108,6 +108,13 @@ async function onOrderCreated(order, { userId } = {}) {
     await notifyUserByPhone(order.phone, customerPayload);
   }
 
+  await notifyOrderCustomer(order, {
+    type: 'payment_pending',
+    title: 'Payment Pending',
+    message: `Waiting for EVC Plus confirmation on order ${orderId}. Approve the prompt on your phone to complete payment.`,
+    metadata: { orderId, amount: order.amount, paymentStatus: 'pending' },
+  });
+
   await notifyAdmins({
     type: 'new_order',
     title: 'New Order Received',
@@ -177,6 +184,15 @@ async function onOrderUpdated(order, changes = {}) {
           metadata: { orderId, currentStep: changes.currentStep, amount: order.amount },
         });
 
+        if (changes.currentStep === 3) {
+          await userPayload({
+            type: 'delivery_pickup',
+            title: 'Warehouse Pickup Ready',
+            message: `Items for order ${orderId} are packed and ready for the driver to collect.`,
+            metadata: { orderId, currentStep: 3 },
+          });
+        }
+
         if (changes.currentStep === 4) {
           await maybeSendSmsAlert({
             userId: order.userId,
@@ -186,6 +202,12 @@ async function onOrderUpdated(order, changes = {}) {
         }
       }
       if (changes.currentStep === 5) {
+        await userPayload({
+          type: 'review_reminder',
+          title: 'Rate your order',
+          message: `How was your delivery for order ${orderId}? Leave a quick review to help other customers.`,
+          metadata: { orderId, openReviews: true },
+        });
         await maybeSendSmsAlert({
           userId: order.userId,
           phone: order.phone,
@@ -217,6 +239,12 @@ async function onOrderUpdated(order, changes = {}) {
       title: 'Payment Successful',
       message: `Your payment for order ${orderId} was successful.`,
       metadata: { orderId, amount: order.amount },
+    });
+    await userPayload({
+      type: 'order_confirmed',
+      title: 'Order Confirmed',
+      message: `Warehouse confirmed items for order ${orderId}. We will notify you when packing starts.`,
+      metadata: { orderId, amount: order.amount, currentStep: 2 },
     });
     await maybeSendSmsAlert({
       userId: order.userId,
@@ -263,6 +291,12 @@ async function onOrderUpdated(order, changes = {}) {
       title: 'Order Delivered',
       message: `Your order ${orderId} has been delivered. Thank you!`,
       metadata: { orderId },
+    });
+    await userPayload({
+      type: 'review_reminder',
+      title: 'Rate your order',
+      message: `How was your delivery for order ${orderId}? Leave a quick review to help other customers.`,
+      metadata: { orderId, openReviews: true },
     });
     await maybeSendSmsAlert({
       userId: order.userId,
@@ -415,6 +449,17 @@ async function onSupportTicketCreated(ticket) {
     relatedId: ticket.id,
     metadata: { ticketId: ticket.id, subject: ticket.subject },
   });
+
+  if (ticket.userId) {
+    await notifyUser({
+      userId: ticket.userId,
+      type: 'support_ticket',
+      title: 'Support ticket opened',
+      message: `We received your message about "${ticket.subject}". Our team will reply in this chat soon.`,
+      relatedId: ticket.id,
+      metadata: { ticketId: ticket.id, subject: ticket.subject },
+    });
+  }
 }
 
 async function onSupportCustomerMessage(ticket, messageText) {
@@ -435,6 +480,54 @@ async function onDriverApplication(user) {
     message: `${user.firstName} ${user.lastName || ''} applied as delivery driver.`,
     relatedId: user.id,
     metadata: { userId: user.id, name: `${user.firstName} ${user.lastName || ''}`.trim() },
+  });
+}
+
+async function onDeliveryDelayed(order, estimate = '') {
+  const orderId = order?.id;
+  if (!orderId) return null;
+  const estimateText = String(estimate || order.estimate || '').trim();
+  return notifyOrderCustomer(order, {
+    type: 'delivery_delayed',
+    title: 'Delivery delayed',
+    message: estimateText
+      ? `Delivery for order ${orderId} was updated: ${estimateText}.`
+      : `Delivery for order ${orderId} is running behind schedule. We will update you when the driver is nearby.`,
+    metadata: { orderId, estimate: estimateText },
+  });
+}
+
+async function onReviewThanks(review) {
+  if (!review?.userId) return null;
+  return notifyUser({
+    userId: review.userId,
+    type: 'review_thanks',
+    title: 'Thanks for your review',
+    message: review.productTitle
+      ? `Your rating for "${review.productTitle}" was submitted and is pending approval.`
+      : 'Your review was submitted. Thank you for your feedback!',
+    relatedId: String(review.id || review.productId || ''),
+    metadata: {
+      reviewId: review.id,
+      productId: review.productId,
+      productTitle: review.productTitle || '',
+      rating: review.rating,
+    },
+  });
+}
+
+async function onAccountSecurity(user, { reason = 'password_changed' } = {}) {
+  if (!user?.id) return null;
+  const isLogin = reason === 'new_login';
+  return notifyUser({
+    userId: user.id,
+    type: 'account_security',
+    title: isLogin ? 'New login detected' : 'Password changed',
+    message: isLogin
+      ? 'Someone signed in to your MMF account. If this was not you, change your password from Settings.'
+      : 'Your account password was updated successfully. If you did not make this change, contact Customer Service.',
+    relatedId: user.id,
+    metadata: { reason },
   });
 }
 
@@ -464,6 +557,113 @@ async function onProductBackInStock(product) {
         productTitle: title,
         image,
         price: product.price,
+      },
+    }))
+  );
+}
+
+async function onWishlistPriceDrop(product, { previousPrice } = {}) {
+  const Wishlist = require('../models/Wishlist');
+  const title = product?.title;
+  if (!title) return;
+
+  const nextPrice = Number(product.price);
+  const prev = Number(previousPrice);
+  if (!Number.isFinite(nextPrice) || !Number.isFinite(prev) || nextPrice >= prev) return;
+
+  const wishlists = await Wishlist.find({ productTitles: title }).select('userId');
+  const userIds = [...new Set(wishlists.map((w) => w.userId).filter(Boolean))];
+  if (userIds.length === 0) return;
+
+  const image = Array.isArray(product.images) && product.images[0] ? product.images[0] : '';
+
+  await Notification.insertMany(
+    userIds.map((userId, index) => ({
+      id: `NTF-${Date.now()}-drop-${index}-${Math.floor(Math.random() * 9000 + 1000)}`,
+      audience: 'user',
+      userId,
+      type: 'wishlist_drop',
+      title: 'Price drop on wishlist',
+      message: `"${title}" dropped from $${prev.toFixed(2)} to $${nextPrice.toFixed(2)}.`,
+      relatedId: String(product.id),
+      read: false,
+      metadata: {
+        productId: product.id,
+        productTitle: title,
+        image,
+        previousPrice: prev,
+        price: nextPrice,
+      },
+    }))
+  );
+}
+
+async function onPromoNew(product) {
+  const title = product?.title;
+  if (!title) return;
+
+  const customers = await User.find({
+    status: { $ne: 'Inactive' },
+    role: { $in: ['user', 'customer', ''] },
+  }).select('id');
+
+  let userIds = customers.map((u) => u.id).filter(Boolean);
+  if (userIds.length === 0) {
+    const all = await User.find({ status: { $ne: 'Inactive' } }).select('id role');
+    userIds = all
+      .filter((u) => !['admin', 'staff', 'delivery'].includes(String(u.role || '').toLowerCase()))
+      .map((u) => u.id)
+      .filter(Boolean);
+  }
+  if (userIds.length === 0) return;
+
+  const image = Array.isArray(product.images) && product.images[0] ? product.images[0] : '';
+
+  await Notification.insertMany(
+    userIds.map((userId, index) => ({
+      id: `NTF-${Date.now()}-new-${index}-${Math.floor(Math.random() * 9000 + 1000)}`,
+      audience: 'user',
+      userId,
+      type: 'promo_new',
+      title: 'New arrival',
+      message: `"${title}" just landed in the shop. Explore new pieces curated for Mogadishu homes.`,
+      relatedId: String(product.id),
+      read: false,
+      metadata: {
+        productId: product.id,
+        productTitle: title,
+        image,
+        price: product.price,
+      },
+    }))
+  );
+}
+
+async function onCouponExpiring(promo) {
+  const code = promo?.code || '';
+  if (!code) return;
+
+  const customers = await User.find({ status: { $ne: 'Inactive' } }).select('id role');
+  const userIds = customers
+    .filter((u) => !['admin', 'staff', 'delivery'].includes(String(u.role || '').toLowerCase()))
+    .map((u) => u.id)
+    .filter(Boolean);
+  if (userIds.length === 0) return;
+
+  await Notification.insertMany(
+    userIds.map((userId, index) => ({
+      id: `NTF-${Date.now()}-exp-${index}-${Math.floor(Math.random() * 9000 + 1000)}`,
+      audience: 'user',
+      userId,
+      type: 'coupon_expiring',
+      title: 'Coupon expires soon',
+      message: `Code ${code} expires soon. Use it at checkout before it ends.`,
+      relatedId: promo.id || code,
+      read: false,
+      metadata: {
+        promoCode: code,
+        expiresAt: promo.expiresAt || null,
+        description: promo.description || '',
       },
     }))
   );
@@ -555,7 +755,13 @@ module.exports = {
   onSupportTicketCreated,
   onSupportCustomerMessage,
   onDriverApplication,
+  onDeliveryDelayed,
+  onReviewThanks,
+  onAccountSecurity,
   onProductBackInStock,
+  onWishlistPriceDrop,
+  onPromoNew,
+  onCouponExpiring,
   onPromotionActivated,
   onBannerActivated,
 };

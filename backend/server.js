@@ -540,6 +540,14 @@ const startServer = async () => {
       console.warn('Refund scheduler skipped:', refundErr.message);
     }
 
+    try {
+      const { startCouponExpiringJob } = require('./services/couponExpiringService');
+      startCouponExpiringJob();
+      console.log('Coupon expiring notifier started (24h window).');
+    } catch (couponErr) {
+      console.warn('Coupon expiring job skipped:', couponErr.message);
+    }
+
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
         console.error(`\nPort ${PORT} is already in use.`);

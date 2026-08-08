@@ -20,10 +20,15 @@ export default function Profile() {
   const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'profile';
   const trackOrderId = searchParams.get('orderId') || '';
   const openTrackQr = searchParams.get('qr') === '1';
+  const notifId = searchParams.get('notifId') || '';
   const supportEnabled = user?.isLoggedIn && (activeTab === 'notifications' || activeTab === 'help');
 
   const [unreadCount, setUnreadCount] = useState(0);
-  const notifications = useNotifications({ enabled: user?.isLoggedIn, pollMs: 45000 });
+  const notifications = useNotifications({
+    enabled: user?.isLoggedIn,
+    pollMs: 45000,
+    previewMocks: true,
+  });
 
   const refreshNotifications = notifications.refresh;
 
@@ -55,7 +60,18 @@ export default function Profile() {
       }
       const params = { tab };
       if (extra.orderId) params.orderId = extra.orderId;
+      if (extra.notifId) params.notifId = extra.notifId;
+      if (extra.qr) params.qr = extra.qr;
       setSearchParams(params);
+    },
+    [setSearchParams]
+  );
+
+  const handleNotifIdChange = useCallback(
+    (id) => {
+      const params = { tab: 'notifications' };
+      if (id) params.notifId = id;
+      setSearchParams(params, { replace: true });
     },
     [setSearchParams]
   );
@@ -66,10 +82,16 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-[#FCFAF7] font-sans text-[#111]">
-      <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
+      <div className={`min-h-screen lg:grid lg:grid-cols-[240px_1fr] ${activeTab === 'help' ? 'lg:h-screen lg:overflow-hidden' : ''}`}>
           <ProfileSidebar activeTab={activeTab} unreadCount={unreadCount} onTabChange={handleTabChange} />
 
-          <main className="flex min-h-screen flex-col gap-5 px-4 py-4 sm:px-6 sm:py-5 lg:px-10 lg:py-6">
+          <main
+            className={`flex flex-col px-4 sm:px-6 lg:px-10 ${
+              activeTab === 'help'
+                ? 'overflow-hidden py-3 sm:py-4 lg:h-[100dvh] lg:max-h-[100dvh] lg:py-5 max-lg:min-h-[calc(100dvh-8rem)]'
+                : 'min-h-screen gap-5 py-4 sm:py-5 lg:py-6'
+            }`}
+          >
             <div key={activeTab} className="animate-profileTabIn flex min-h-0 flex-1 flex-col">
             {activeTab === 'profile' && <ProfileInfoTab />}
             {activeTab === 'orders' && (
@@ -91,6 +113,8 @@ export default function Profile() {
                   onUnreadChange={setUnreadCount}
                   supportChat={supportChat}
                   notifications={notifications}
+                  initialNotifId={notifId}
+                  onNotifIdChange={handleNotifIdChange}
                 />
               </Suspense>
             )}

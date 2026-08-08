@@ -7,6 +7,7 @@
     "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev --prefix backend\" \"vite\"",
     "dev:frontend": "vite",
     "dev:backend": "npm run dev --prefix backend",
+    "dev:public": "cloudflared tunnel --url http://localhost:5173",
     "build": "vite build",
     "preview": "vite preview"
   },

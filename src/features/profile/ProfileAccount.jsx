@@ -1,8 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { apiUrl } from '../../utils/data';
 import { DEFAULT_NOTIFICATION_PREFERENCES, showTopFloatNotification } from '../../utils/notifications';
+import {
+  applyAppAppearance,
+  appearanceScopeLabel,
+  getAppAppearance,
+  getAppAppearanceScope,
+  getAppLanguage,
+  setAppAppearanceScope,
+  setAppLanguage,
+} from '../../mobile/mmfPreferences';
+import { PRIVACY_SECTIONS, TERMS_SECTIONS } from '../../utils/legalDocuments';
+
+const APP_VERSION = '1.0.0';
 
 /* ═══ SECTION: MODAL SHELL (ACCOUNT) ═══ */
 export function ModalBackdrop({ children, onClose, maxWidth = 'max-w-lg', className = '' }) {
@@ -362,21 +374,28 @@ function ChangePasswordModal({ isOpen, onClose, onPasswordChanged }) {
 const settingsCardClass =
   'mb-5 overflow-hidden rounded-xl border border-black/[0.04] bg-white shadow-[0_10px_30px_rgba(7,61,53,0.03)]';
 
-function SettingsRow({ icon, title, desc, onClick, staticRow = false, children }) {
+function SettingsRow({ icon, title, desc, onClick, staticRow = false, danger = false, children }) {
+  const titleClass = danger
+    ? 'm-0 text-[0.92rem] font-bold text-[#c0392b]'
+    : 'm-0 text-[0.92rem] font-bold text-[#111111]';
+  const iconWrapClass = danger
+    ? 'flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] bg-[#fff0ee] text-[1.15rem] text-[#c0392b] transition-all duration-200 group-hover:scale-[1.03]'
+    : 'flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] bg-[#f0f5f2] text-[1.15rem] text-deepGreen transition-all duration-200 group-hover:scale-[1.03] group-hover:bg-[#e2ede7]';
   const inner = (
     <>
       <div className="flex items-center gap-4">
-        <span className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] bg-[#f0f5f2] text-[1.15rem] text-deepGreen transition-all duration-200 group-hover:scale-[1.03] group-hover:bg-[#e2ede7]">
+        <span className={iconWrapClass}>
           <i className={icon} />
         </span>
         <div className="flex flex-col gap-0.5">
-          <h4 className="m-0 text-[0.92rem] font-bold text-[#111111]">{title}</h4>
+          <h4 className={titleClass}>{title}</h4>
           <p className="m-0 text-[0.76rem] text-[#777777]">{desc}</p>
         </div>
       </div>
-      {children || (
-        <i className="fa-solid fa-chevron-right text-[0.76rem] text-[#888888] transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-deepGreen" />
-      )}
+      {children ||
+        (staticRow ? null : (
+          <i className="fa-solid fa-chevron-right text-[0.76rem] text-[#888888] transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-deepGreen" />
+        ))}
     </>
   );
 
@@ -404,12 +423,10 @@ function SettingsDivider() {
 }
 
 export default function ProfileSettingsTab() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, logout } = useAuth();
+  const navigate = useNavigate();
   const [panel, setPanel] = useState('main');
   const [passwordOpen, setPasswordOpen] = useState(false);
-  const [verificationOpen, setVerificationOpen] = useState(false);
-  const [securityNotifOpen, setSecurityNotifOpen] = useState(false);
-  const [verificationPhone, setVerificationPhone] = useState(user?.phone || '+252 61 2345678');
   const [emailAlerts, setEmailAlerts] = useState(
     user?.notificationPreferences?.emailAlerts ?? DEFAULT_NOTIFICATION_PREFERENCES.emailAlerts
   );
@@ -419,60 +436,38 @@ export default function ProfileSettingsTab() {
   const [pushAlerts, setPushAlerts] = useState(
     user?.notificationPreferences?.pushAlerts ?? DEFAULT_NOTIFICATION_PREFERENCES.pushAlerts
   );
-  const [securityEmail, setSecurityEmail] = useState(
-    user?.notificationPreferences?.securityEmail ?? DEFAULT_NOTIFICATION_PREFERENCES.securityEmail
-  );
-  const [securitySms, setSecuritySms] = useState(
-    user?.notificationPreferences?.securitySms ?? DEFAULT_NOTIFICATION_PREFERENCES.securitySms
-  );
   const [savingPrefs, setSavingPrefs] = useState(false);
-  const [passwordChangedAt, setPasswordChangedAt] = useState(null);
-
-  const passwordChangedLabel = useMemo(() => {
-    if (!passwordChangedAt) return 'Not recorded yet';
-    const date = new Date(passwordChangedAt);
-    if (Number.isNaN(date.getTime())) return 'Not recorded yet';
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  }, [passwordChangedAt]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const token = localStorage.getItem('token');
-    if (!token) return undefined;
-
-    fetch(apiUrl('/api/auth/security-info'), {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled && data.success) {
-          setPasswordChangedAt(data.security?.passwordChangedAt || null);
-        }
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.isLoggedIn]);
+  const [language, setLanguage] = useState(getAppLanguage());
+  const [appearance, setAppearance] = useState(getAppAppearance());
+  const [appearanceScope, setAppearanceScopeState] = useState(getAppAppearanceScope());
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [rateStars, setRateStars] = useState(0);
 
   useEffect(() => {
     const prefs = user?.notificationPreferences;
     if (!prefs) return;
-    setEmailAlerts(prefs.emailAlerts);
-    setSmsAlerts(prefs.smsAlerts);
-    setPushAlerts(prefs.pushAlerts);
-    setSecurityEmail(prefs.securityEmail);
-    setSecuritySms(prefs.securitySms);
+    setEmailAlerts(prefs.emailAlerts ?? DEFAULT_NOTIFICATION_PREFERENCES.emailAlerts);
+    setSmsAlerts(prefs.smsAlerts ?? DEFAULT_NOTIFICATION_PREFERENCES.smsAlerts);
+    setPushAlerts(prefs.pushAlerts ?? DEFAULT_NOTIFICATION_PREFERENCES.pushAlerts);
   }, [user?.notificationPreferences]);
 
-  const title =
-    panel === 'security' ? 'Security' : panel === 'notifications' ? 'Notification Preferences' : 'Settings';
+  const panelTitles = {
+    main: 'Settings',
+    notifications: 'Notifications',
+    language: 'Language',
+    appearance: 'Appearance',
+    privacy: 'Privacy Policy',
+    terms: 'Terms & Conditions',
+    about: 'About',
+    rate: 'Rate Experience',
+    delete: 'Delete Account',
+  };
+  const title = panelTitles[panel] || 'Settings';
 
   const breadcrumbs = () => {
     const linkClass = 'font-semibold text-deepGreen no-underline hover:underline';
     const sep = <span className="mx-1.5 text-[#ccc]">&gt;</span>;
-
     if (panel === 'main') {
       return (
         <>
@@ -483,8 +478,6 @@ export default function ProfileSettingsTab() {
         </>
       );
     }
-
-    const panelLabel = panel === 'security' ? 'Security' : 'Notification Preferences';
     return (
       <>
         <Link to="/" className={linkClass}>
@@ -498,43 +491,95 @@ export default function ProfileSettingsTab() {
         >
           Settings
         </button>
-        {sep} {panelLabel}
+        {sep} {title}
       </>
     );
   };
 
-  const handleVerificationSave = async (e) => {
-    e.preventDefault();
-    const data = await updateProfile({ phone: verificationPhone.trim() });
-    if (data.success) {
-      showTopFloatNotification(`✅ Verification phone number changed successfully to: ${verificationPhone}`);
-      setVerificationOpen(false);
-    } else {
-      showTopFloatNotification(`❌ ${data.message || 'Failed to update phone'}`, 'danger');
-    }
-  };
-
   const persistNotificationPreferences = async (nextPrefs) => {
-    if (!user?.isLoggedIn) return;
+    if (!user?.isLoggedIn) return false;
     setSavingPrefs(true);
     const data = await updateProfile({ notificationPreferences: nextPrefs });
     setSavingPrefs(false);
     if (!data.success) {
-      showTopFloatNotification(`❌ ${data.message || 'Failed to save notification preferences'}`, 'danger');
+      showTopFloatNotification(`${data.message || 'Failed to save notification preferences'}`, 'danger');
+      return false;
     }
+    return true;
   };
 
-  const handleSecurityNotifSave = async (e) => {
-    e.preventDefault();
-    await persistNotificationPreferences({
+  const handleSaveNotifications = async () => {
+    const ok = await persistNotificationPreferences({
       emailAlerts,
       smsAlerts,
       pushAlerts,
-      securityEmail,
-      securitySms,
+      securityEmail: user?.notificationPreferences?.securityEmail ?? DEFAULT_NOTIFICATION_PREFERENCES.securityEmail,
+      securitySms: user?.notificationPreferences?.securitySms ?? DEFAULT_NOTIFICATION_PREFERENCES.securitySms,
     });
-    showTopFloatNotification('✅ Security notification settings saved!');
-    setSecurityNotifOpen(false);
+    if (ok) {
+      showTopFloatNotification('Notification preferences saved.');
+      setPanel('main');
+    }
+  };
+
+  const handleLanguage = (lang) => {
+    setLanguage(setAppLanguage(lang));
+    showTopFloatNotification(lang === 'so' ? 'Somali selected.' : 'English selected.');
+  };
+
+  const handleAppearance = (mode) => {
+    const result = applyAppAppearance(mode, appearanceScope);
+    setAppearance(result.mode);
+    setAppearanceScopeState(result.scope);
+  };
+
+  const handleAppearanceScope = (scope) => {
+    const result = setAppAppearanceScope(scope);
+    setAppearance(result.mode);
+    setAppearanceScopeState(result.scope);
+  };
+
+  const handleRate = () => {
+    if (rateStars < 1) {
+      showTopFloatNotification('Please select a star rating.', 'warning');
+      return;
+    }
+    showTopFloatNotification('Thanks for your feedback!');
+    setRateStars(0);
+    setPanel('main');
+  };
+
+  const handleDelete = async (e) => {
+    e.preventDefault();
+    if (!deletePassword.trim()) {
+      showTopFloatNotification('Enter your password to confirm.', 'danger');
+      return;
+    }
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(apiUrl('/api/auth/account'), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        showTopFloatNotification('Account deleted.');
+        logout();
+        navigate('/', { replace: true });
+      } else {
+        showTopFloatNotification(data.message || 'Could not delete account.', 'danger');
+      }
+    } catch {
+      showTopFloatNotification('Connection failed.', 'danger');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -549,196 +594,326 @@ export default function ProfileSettingsTab() {
       </div>
 
       {panel === 'main' && (
-        <div id="settingsMainMenu">
-          <div className={settingsCardClass}>
-            <SettingsRow
-              icon="fa-solid fa-user-lock"
-              title="Security"
-              desc="Change your password and manage security settings"
-              onClick={() => setPanel('security')}
-            />
-            <SettingsDivider />
-            <SettingsRow
-              icon="fa-solid fa-bell"
-              title="Notification Preferences"
-              desc="Choose what you want to be notified about"
-              onClick={() => setPanel('notifications')}
-            />
+        <div className="max-w-2xl space-y-5">
+          <div>
+            <SettingsSectionLabel>Notifications</SettingsSectionLabel>
+            <div className={settingsCardClass}>
+              <SettingsRow
+                icon="fa-solid fa-bell"
+                title="Notifications"
+                desc="Email, SMS, and push alerts"
+                onClick={() => setPanel('notifications')}
+              />
+            </div>
           </div>
-        </div>
-      )}
 
-      {panel === 'security' && (
-        <div id="settingsSecurityPanel">
-          <div className={settingsCardClass}>
-            <SettingsRow
-              icon="fa-solid fa-lock"
-              title="Change Password"
-              desc="Update your account password securely"
-              onClick={() => setPasswordOpen(true)}
-            />
-            <SettingsDivider />
-            <SettingsRow
-              icon="fa-solid fa-bell"
-              title="Notifications"
-              desc="Manage your security-related alerts"
-              onClick={() => setSecurityNotifOpen(true)}
-            />
-            <SettingsDivider />
-            <SettingsRow
-              icon="fa-solid fa-mobile-screen-button"
-              title="Change Verification Number"
-              desc="Update the phone number used for verification"
-              onClick={() => setVerificationOpen(true)}
-            />
-            <SettingsDivider />
-            <SettingsRow
-              icon="fa-solid fa-shield-halved"
-              title="Password Last Changed"
-              desc={passwordChangedLabel}
-              staticRow
-            />
+          <div>
+            <SettingsSectionLabel>Preferences</SettingsSectionLabel>
+            <div className={settingsCardClass}>
+              <SettingsRow
+                icon="fa-solid fa-globe"
+                title="Language"
+                desc={language === 'so' ? 'Somali' : 'English'}
+                onClick={() => setPanel('language')}
+              />
+              <SettingsDivider />
+              <SettingsRow
+                icon="fa-solid fa-moon"
+                title="Appearance / Dark Mode"
+                desc={
+                  appearance === 'dark'
+                    ? `Dark · ${appearanceScopeLabel(appearanceScope)}`
+                    : 'Light'
+                }
+                onClick={() => setPanel('appearance')}
+              />
+            </div>
+          </div>
+
+          <div>
+            <SettingsSectionLabel>Privacy & Legal</SettingsSectionLabel>
+            <div className={settingsCardClass}>
+              <SettingsRow
+                icon="fa-solid fa-lock"
+                title="Privacy Policy"
+                desc="How we handle your data"
+                onClick={() => setPanel('privacy')}
+              />
+              <SettingsDivider />
+              <SettingsRow
+                icon="fa-regular fa-file-lines"
+                title="Terms & Conditions"
+                desc="Rules for using MMF"
+                onClick={() => setPanel('terms')}
+              />
+            </div>
+          </div>
+
+          <div>
+            <SettingsSectionLabel>About</SettingsSectionLabel>
+            <div className={settingsCardClass}>
+              <SettingsRow
+                icon="fa-solid fa-circle-info"
+                title="About"
+                desc="Mogadishu Modern Furniture"
+                onClick={() => setPanel('about')}
+              />
+              <SettingsDivider />
+              <SettingsRow
+                icon="fa-solid fa-star"
+                title="Rate Experience"
+                desc="Tell us how shopping feels"
+                onClick={() => setPanel('rate')}
+              />
+              <SettingsDivider />
+              <SettingsRow
+                icon="fa-solid fa-code-branch"
+                title="Version"
+                desc={`v${APP_VERSION}`}
+                staticRow
+              />
+            </div>
+          </div>
+
+          <div>
+            <SettingsSectionLabel>Account</SettingsSectionLabel>
+            <div className={settingsCardClass}>
+              <SettingsRow
+                icon="fa-solid fa-key"
+                title="Change Password"
+                desc="Update your account password"
+                onClick={() => setPasswordOpen(true)}
+              />
+              <SettingsDivider />
+              <SettingsRow
+                icon="fa-regular fa-trash-can"
+                title="Delete Account"
+                desc="Permanently remove your account"
+                onClick={() => setPanel('delete')}
+                danger
+              />
+            </div>
           </div>
         </div>
       )}
 
       {panel === 'notifications' && (
-        <div id="settingsNotificationsPanel">
+        <div className="max-w-2xl">
           <div className={settingsCardClass}>
             <SwitchRow
               icon="fa-solid fa-envelope"
               title="Email Alerts"
-              desc="Receive notifications for new orders and promotions"
+              desc="Orders and delivery updates"
               checked={emailAlerts}
               disabled={savingPrefs}
-              onChange={async (value) => {
-                setEmailAlerts(value);
-                await persistNotificationPreferences({
-                  emailAlerts: value,
-                  smsAlerts,
-                  pushAlerts,
-                  securityEmail,
-                  securitySms,
-                });
-              }}
+              onChange={async (value) => setEmailAlerts(value)}
             />
             <SettingsDivider />
             <SwitchRow
               icon="fa-solid fa-mobile-screen"
               title="SMS Alerts"
-              desc="Get updates on delivery status directly to your phone"
+              desc="Important delivery messages"
               checked={smsAlerts}
               disabled={savingPrefs}
-              onChange={async (value) => {
-                setSmsAlerts(value);
-                await persistNotificationPreferences({
-                  emailAlerts,
-                  smsAlerts: value,
-                  pushAlerts,
-                  securityEmail,
-                  securitySms,
-                });
-              }}
+              onChange={async (value) => setSmsAlerts(value)}
             />
             <SettingsDivider />
             <SwitchRow
               icon="fa-solid fa-bell"
               title="Push Notifications"
-              desc="Allow browser notifications when you are online"
+              desc="Browser and in-app badges"
               checked={pushAlerts}
               disabled={savingPrefs}
-              onChange={async (value) => {
-                setPushAlerts(value);
-                await persistNotificationPreferences({
-                  emailAlerts,
-                  smsAlerts,
-                  pushAlerts: value,
-                  securityEmail,
-                  securitySms,
-                });
-              }}
+              onChange={async (value) => setPushAlerts(value)}
             />
           </div>
+          <button
+            type="button"
+            onClick={handleSaveNotifications}
+            disabled={savingPrefs}
+            className="mt-3 inline-flex min-h-[46px] items-center justify-center rounded-full border-0 bg-deepGreen px-6 text-[0.88rem] font-bold text-white disabled:opacity-60"
+          >
+            {savingPrefs ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      )}
+
+      {panel === 'language' && (
+        <div className="max-w-2xl">
+          <div className={settingsCardClass}>
+            <ChoiceRow label="English" selected={language === 'en'} onClick={() => handleLanguage('en')} />
+            <SettingsDivider />
+            <ChoiceRow label="Somali" selected={language === 'so'} onClick={() => handleLanguage('so')} />
+          </div>
+          <p className="m-0 mt-3 text-[0.78rem] font-medium leading-relaxed text-[#8b8178]">
+            Somali language preference is saved. Full site translation will expand over time.
+          </p>
+        </div>
+      )}
+
+      {panel === 'appearance' && (
+        <div className="max-w-2xl space-y-4">
+          <div>
+            <SettingsSectionLabel>Theme</SettingsSectionLabel>
+            <div className={settingsCardClass}>
+              <ChoiceRow label="Light" selected={appearance === 'light'} onClick={() => handleAppearance('light')} />
+              <SettingsDivider />
+              <ChoiceRow
+                label="Dark Mode"
+                selected={appearance === 'dark'}
+                onClick={() => handleAppearance('dark')}
+              />
+            </div>
+          </div>
+          {appearance === 'dark' ? (
+            <div>
+              <SettingsSectionLabel>Apply dark to</SettingsSectionLabel>
+              <div className={settingsCardClass}>
+                <ChoiceRow
+                  label="Profile only"
+                  selected={appearanceScope === 'profile'}
+                  onClick={() => handleAppearanceScope('profile')}
+                />
+                <SettingsDivider />
+                <ChoiceRow
+                  label="Customer app"
+                  selected={appearanceScope === 'customer'}
+                  onClick={() => handleAppearanceScope('customer')}
+                />
+                <SettingsDivider />
+                <ChoiceRow
+                  label="Everywhere (All)"
+                  selected={appearanceScope === 'all'}
+                  onClick={() => handleAppearanceScope('all')}
+                />
+              </div>
+              <p className="m-0 mt-3 text-[0.78rem] font-medium leading-relaxed text-[#8b8178]">
+                Profile only = Profile &amp; Settings. Customer app = /app screens. All = keep dark
+                everywhere.
+              </p>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {panel === 'privacy' && (
+        <div className={`${settingsCardClass} max-w-3xl space-y-4 px-5 py-6`}>
+          {PRIVACY_SECTIONS.map((section) => (
+            <div key={section.heading}>
+              <h2 className="mb-1.5 mt-0 text-[1rem] font-bold text-[#111111]">{section.heading}</h2>
+              <p className="m-0 text-[0.9rem] leading-relaxed text-[#2a2a2a]">{section.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {panel === 'terms' && (
+        <div className={`${settingsCardClass} max-w-3xl space-y-4 px-5 py-6`}>
+          {TERMS_SECTIONS.map((section) => (
+            <div key={section.heading}>
+              <h2 className="mb-1.5 mt-0 text-[1rem] font-bold text-[#111111]">{section.heading}</h2>
+              <p className="m-0 text-[0.9rem] leading-relaxed text-[#2a2a2a]">{section.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {panel === 'about' && (
+        <div className={`${settingsCardClass} max-w-2xl px-5 py-5 text-[0.9rem] font-medium leading-relaxed text-[#4a4038]`}>
+          <p className="mt-0 text-[1.05rem] font-bold text-[#1c140e]">Mogadishu Modern Furniture</p>
+          <p>
+            Premium furniture shopping and delivery for Mogadishu. Browse collections, pay with EVC
+            Plus, track orders, and get support in one place.
+          </p>
+          <p className="mb-0">Version {APP_VERSION}</p>
+        </div>
+      )}
+
+      {panel === 'rate' && (
+        <div className={`${settingsCardClass} max-w-md px-5 py-6 text-center`}>
+          <p className="mb-4 mt-0 text-[0.95rem] font-semibold text-[#1c140e]">How is your experience?</p>
+          <div className="mb-5 flex items-center justify-center gap-2">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setRateStars(n)}
+                className="border-0 bg-transparent p-1 text-[1.6rem] text-[#d4a017]"
+                aria-label={`${n} stars`}
+              >
+                <i className={`fa-${rateStars >= n ? 'solid' : 'regular'} fa-star`} />
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleRate}
+            className="inline-flex min-h-[46px] w-full items-center justify-center rounded-full border-0 bg-deepGreen text-[0.88rem] font-bold text-white"
+          >
+            Submit rating
+          </button>
+        </div>
+      )}
+
+      {panel === 'delete' && (
+        <div className="max-w-md">
+          <div className="mb-4 rounded-xl bg-[#fff5f4] px-4 py-3 text-[0.84rem] font-semibold leading-relaxed text-[#9b2c2c] ring-1 ring-[#f0d0cc]">
+            This permanently deletes your account. Orders already placed are not removed from store
+            records.
+          </div>
+          <form onSubmit={handleDelete} className={`${settingsCardClass} space-y-3 px-4 py-4`}>
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="Enter password to confirm"
+              className={fieldClass}
+              required
+              autoComplete="current-password"
+            />
+            <button
+              type="submit"
+              disabled={deleting}
+              className="flex min-h-[46px] w-full items-center justify-center rounded-full border-0 bg-[#c0392b] text-[0.86rem] font-bold text-white disabled:opacity-60"
+            >
+              {deleting ? 'Deleting…' : 'Delete my account'}
+            </button>
+          </form>
         </div>
       )}
 
       <ChangePasswordModal
         isOpen={passwordOpen}
         onClose={() => setPasswordOpen(false)}
-        onPasswordChanged={() => setPasswordChangedAt(new Date().toISOString())}
       />
-
-      <ProfileOverlayModal
-        isOpen={verificationOpen}
-        onClose={() => setVerificationOpen(false)}
-        title="Verification Number"
-        icon={<i className="fa-solid fa-mobile-screen-button" />}
-        footer={
-          <>
-            <BtnDeepGreen type="submit" form="verificationNumberForm" className="flex-1">
-              Save Changes
-            </BtnDeepGreen>
-            <BtnSecondary type="button" onClick={() => setVerificationOpen(false)}>
-              Cancel
-            </BtnSecondary>
-          </>
-        }
-      >
-        <form id="verificationNumberForm" onSubmit={handleVerificationSave}>
-          <div className="mb-3">
-            <label className="mb-1.5 block text-[0.8rem] font-bold text-[#111111]" htmlFor="verificationNumberInput">
-              Phone Number
-            </label>
-            <input
-              type="tel"
-              className={fieldClass}
-              id="verificationNumberInput"
-              value={verificationPhone}
-              onChange={(e) => setVerificationPhone(e.target.value)}
-              required
-            />
-          </div>
-        </form>
-      </ProfileOverlayModal>
-
-      <ProfileOverlayModal
-        isOpen={securityNotifOpen}
-        onClose={() => setSecurityNotifOpen(false)}
-        title="Security Notifications"
-        icon={<i className="fa-solid fa-bell" />}
-        footer={
-          <>
-            <BtnDeepGreen type="submit" form="securityNotificationsForm" className="flex-1">
-              Save Changes
-            </BtnDeepGreen>
-            <BtnSecondary type="button" onClick={() => setSecurityNotifOpen(false)}>
-              Cancel
-            </BtnSecondary>
-          </>
-        }
-      >
-        <form id="securityNotificationsForm" onSubmit={handleSecurityNotifSave}>
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-[0.85rem] font-bold text-[#111111]">Email Security Alerts</span>
-            <input type="checkbox" checked={securityEmail} onChange={(e) => setSecurityEmail(e.target.checked)} />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[0.85rem] font-bold text-[#111111]">SMS Security Alerts</span>
-            <input type="checkbox" checked={securitySms} onChange={(e) => setSecuritySms(e.target.checked)} />
-          </div>
-        </form>
-      </ProfileOverlayModal>
     </div>
+  );
+}
+
+function SettingsSectionLabel({ children }) {
+  return (
+    <h2 className="mb-2 mt-0 px-0.5 text-[0.72rem] font-bold uppercase tracking-[0.08em] text-[#8b8178]">
+      {children}
+    </h2>
+  );
+}
+
+function ChoiceRow({ label, selected, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full cursor-pointer items-center justify-between border-0 bg-white px-5 py-4 text-left transition-colors duration-200 hover:bg-[#fcfbf9]"
+    >
+      <span className="text-[0.92rem] font-bold text-[#111111]">{label}</span>
+      {selected ? <i className="fa-solid fa-check text-[0.9rem] text-deepGreen" /> : null}
+    </button>
   );
 }
 
 function SwitchRow({ icon, title, desc, checked, onChange, disabled = false }) {
   const handleChange = async (e) => {
-    const value = e.target.checked;
-    await onChange(value);
-    showTopFloatNotification(
-      value ? `✅ ${title} enabled!` : `⚠️ ${title} disabled!`
-    );
+    await onChange(e.target.checked);
   };
 
   return (

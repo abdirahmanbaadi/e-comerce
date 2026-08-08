@@ -1,0 +1,37 @@
+---
+description: Single-admin policy, assignable roles, and role-change password
+alwaysApply: true
+---
+
+# Roles & dashboard access
+
+## Roles
+
+- `admin` — **one account only** (`admin@gmail.com`); full dashboard
+- `staff` — operations dashboard (limited)
+- `delivery` — driver app only
+- `user` — customer
+
+## Staff can access (`/admin` only)
+
+- Dashboard, Orders, Products, Stock, Reviews, Support
+- Login always redirects staff straight to `/admin`
+- Staff cannot open customer storefront pages
+
+## Staff cannot access
+
+- Customer store / View Store
+- Users / role management
+- Payments / refunds
+- Coupons / CMS
+- Delivery assign, Driver Applications
+- Settings / role-change password
+- Force-mark Delivered (admin QR override) — admin only; requires a logged reason
+
+## Admin user management rules
+
+- Never create a second admin (UI + API)
+- Assignable roles only: Customer (`user`), Staff (`staff`), Driver (`delivery`)
+- Changing a role requires the **role-change password** from Settings (every time)
+- Admin must not edit user identity (name, email, phone) — profile fields are read-only in Edit
+- Keep `$0.01` Waafi test pricing unless the user changes it

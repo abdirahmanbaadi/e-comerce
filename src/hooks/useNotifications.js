@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiUrl } from '../utils/data';
+import { getWebMockNotifications, getWebMockUnreadCount } from '../utils/mockWebNotifications';
 import { useIntervalWhenVisible } from './useIntervalWhenVisible';
 
 const DEFAULT_POLL_MS = 30000;
@@ -12,7 +13,12 @@ async function parseJsonSafe(response) {
   }
 }
 
-export function useNotifications({ enabled = true, pollMs = DEFAULT_POLL_MS, onNewItems } = {}) {
+export function useNotifications({
+  enabled = true,
+  pollMs = DEFAULT_POLL_MS,
+  onNewItems,
+  previewMocks = false,
+} = {}) {
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -21,14 +27,28 @@ export function useNotifications({ enabled = true, pollMs = DEFAULT_POLL_MS, onN
   const initializedRef = useRef(false);
   const knownIdsRef = useRef(new Set());
   const onNewItemsRef = useRef(onNewItems);
+  const previewMocksRef = useRef(previewMocks);
 
   useEffect(() => {
     onNewItemsRef.current = onNewItems;
   }, [onNewItems]);
 
+  useEffect(() => {
+    previewMocksRef.current = previewMocks;
+  }, [previewMocks]);
+
   const getHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
+  }, []);
+
+  const applyPreviewMocks = useCallback(() => {
+    const mocks = getWebMockNotifications();
+    setItems(mocks);
+    setUnreadCount(getWebMockUnreadCount(mocks));
+    setError(null);
+    setLoading(false);
+    initializedRef.current = true;
   }, []);
 
   const fetchNotifications = useCallback(async ({ quiet = false } = {}) => {
@@ -39,6 +59,12 @@ export function useNotifications({ enabled = true, pollMs = DEFAULT_POLL_MS, onN
       setError(null);
       initializedRef.current = false;
       knownIdsRef.current = new Set();
+      return;
+    }
+
+    // Customer preview: same rich mock set as the mobile app (navbar + profile).
+    if (previewMocksRef.current) {
+      applyPreviewMocks();
       return;
     }
 
@@ -94,12 +120,22 @@ export function useNotifications({ enabled = true, pollMs = DEFAULT_POLL_MS, onN
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [getHeaders]);
+  }, [applyPreviewMocks, getHeaders]);
 
   const markRead = useCallback(
     async (id) => {
+      if (!id) return false;
+
+      if (previewMocksRef.current || String(id).startsWith('web-mock-')) {
+        setItems((prev) =>
+          prev.map((item) => (item.id === id ? { ...item, unread: false, read: true, dot: 'grey' } : item))
+        );
+        setUnreadCount((c) => Math.max(0, c - 1));
+        return true;
+      }
+
       const token = localStorage.getItem('token');
-      if (!token || !id) return false;
+      if (!token) return false;
 
       try {
         const res = await fetch(apiUrl(`/api/notifications/${id}/read`), {
@@ -123,6 +159,12 @@ export function useNotifications({ enabled = true, pollMs = DEFAULT_POLL_MS, onN
   );
 
   const markAllRead = useCallback(async () => {
+    if (previewMocksRef.current) {
+      setItems((prev) => prev.map((item) => ({ ...item, unread: false, read: true, dot: 'grey' })));
+      setUnreadCount(0);
+      return true;
+    }
+
     const token = localStorage.getItem('token');
     if (!token) return false;
 
@@ -154,12 +196,12 @@ export function useNotifications({ enabled = true, pollMs = DEFAULT_POLL_MS, onN
     if (!enabled) return undefined;
     fetchNotifications();
     return undefined;
-  }, [enabled, fetchNotifications]);
+  }, [enabled, fetchNotifications, previewMocks]);
 
   useIntervalWhenVisible(
     () => fetchNotifications({ quiet: true }),
     pollMs,
-    enabled
+    enabled && !previewMocks
   );
 
   return {

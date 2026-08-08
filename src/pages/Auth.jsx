@@ -200,15 +200,13 @@ export function LoginPage() {
         return;
       }
       if (authUser?.role === 'delivery') {
-        window.location.replace('/app/driver');
+        window.location.replace('/delivery');
         return;
       }
       setAlert({ message: 'Login successful. Redirecting...', type: 'success' });
       const redirectTo = location.state?.from;
-      const mobileDefault =
-        typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches ? '/app' : '/';
       setTimeout(() => {
-        navigate(redirectTo || mobileDefault, { replace: true });
+        navigate(redirectTo || '/', { replace: true });
       }, 600);
     },
     [location.state?.from, navigate]
@@ -254,7 +252,7 @@ export function LoginPage() {
       return;
     }
     if (role === 'delivery') {
-      window.location.replace('/app/driver');
+      window.location.replace('/delivery');
     }
   }, [user?.isLoggedIn, user?.role]);
 
@@ -286,16 +284,14 @@ export function LoginPage() {
           return;
         }
         if (data.user?.role === 'delivery') {
-          window.location.replace('/app/driver');
+          window.location.replace('/delivery');
           return;
         }
 
         setAlert({ message: 'Login successful. Redirecting...', type: 'success' });
         const redirectTo = location.state?.from;
-        const mobileDefault =
-          typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches ? '/app' : '/';
         setTimeout(() => {
-          navigate(redirectTo || mobileDefault, { replace: true });
+          navigate(redirectTo || '/', { replace: true });
         }, 600);
       } else {
         setAlert({ message: data.message || 'Login failed', type: 'danger' });
@@ -327,7 +323,7 @@ export function LoginPage() {
             Welcome Back
           </h1>
           <p className="mb-7 text-center text-[0.88rem] font-semibold text-[#7A8585]">
-            Login with username, email, or phone
+            Login with email or phone
           </p>
 
           <AuthAlert
@@ -344,7 +340,7 @@ export function LoginPage() {
               <input
                 type="text"
                 id="loginIdentifier"
-                placeholder="Username, email, or phone number"
+                placeholder="Email or phone number"
                 value={form.login}
                 onChange={update('login')}
                 className={authTextInputClass(invalid)}
@@ -428,7 +424,6 @@ export function RegisterPage() {
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
-    username: '',
     email: '',
     countryCode: '+252',
     phone: '',
@@ -481,12 +476,8 @@ export function RegisterPage() {
       setAlert({ message: 'Passwords do not match.', type: 'danger' });
       return;
     }
-    const normalizedUsername = form.username.trim().toLowerCase();
-    if (!/^[a-z0-9._-]{3,30}$/.test(normalizedUsername)) {
-      setAlert({
-        message: 'Username must be 3–30 characters (letters, numbers, dots, underscores, hyphens).',
-        type: 'danger',
-      });
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      setAlert({ message: 'Please enter your first and last name.', type: 'danger' });
       return;
     }
     if (!form.terms) {
@@ -506,7 +497,6 @@ export function RegisterPage() {
       const data = await register({
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        username: normalizedUsername,
         email: form.email.trim().toLowerCase(),
         phone: phoneParsed.e164,
         password: form.password,
@@ -558,46 +548,34 @@ export function RegisterPage() {
           />
 
           <form onSubmit={handleSubmit} noValidate autoComplete="off">
-            <div className="group relative mb-4">
-              <i className="fa-regular fa-user pointer-events-none absolute left-[15px] top-1/2 z-[3] -translate-y-1/2 text-[0.9rem] text-[#A0ACAC] transition-colors group-focus-within:text-deepGreen" />
-              <input
-                type="text"
-                name="regFirstName"
-                placeholder="First Name"
-                value={form.firstName}
-                onChange={update('firstName')}
-                className={AUTH_REGISTER_INPUT_CLASS}
-                autoComplete="given-name"
-                required
-              />
-            </div>
+            <div className="mb-4 grid grid-cols-2 gap-3 max-[420px]:grid-cols-1">
+              <div className="group relative">
+                <i className="fa-regular fa-user pointer-events-none absolute left-[15px] top-1/2 z-[3] -translate-y-1/2 text-[0.9rem] text-[#A0ACAC] transition-colors group-focus-within:text-deepGreen" />
+                <input
+                  type="text"
+                  name="regFirstName"
+                  placeholder="First Name"
+                  value={form.firstName}
+                  onChange={update('firstName')}
+                  className={AUTH_REGISTER_INPUT_CLASS}
+                  autoComplete="given-name"
+                  required
+                />
+              </div>
 
-            <div className="group relative mb-4">
-              <i className="fa-regular fa-user pointer-events-none absolute left-[15px] top-1/2 z-[3] -translate-y-1/2 text-[0.9rem] text-[#A0ACAC] transition-colors group-focus-within:text-deepGreen" />
-              <input
-                type="text"
-                name="regLastName"
-                placeholder="Last Name"
-                value={form.lastName}
-                onChange={update('lastName')}
-                className={AUTH_REGISTER_INPUT_CLASS}
-                autoComplete="family-name"
-                required
-              />
-            </div>
-
-            <div className="group relative mb-4">
-              <i className="fa-solid fa-at pointer-events-none absolute left-[15px] top-1/2 z-[3] -translate-y-1/2 text-[0.9rem] text-[#A0ACAC] transition-colors group-focus-within:text-deepGreen" />
-              <input
-                type="text"
-                name="regUsername"
-                placeholder="Username (e.g. abdullahi_01)"
-                value={form.username}
-                onChange={update('username')}
-                className={AUTH_REGISTER_INPUT_CLASS}
-                autoComplete="off"
-                required
-              />
+              <div className="group relative">
+                <i className="fa-regular fa-user pointer-events-none absolute left-[15px] top-1/2 z-[3] -translate-y-1/2 text-[0.9rem] text-[#A0ACAC] transition-colors group-focus-within:text-deepGreen" />
+                <input
+                  type="text"
+                  name="regLastName"
+                  placeholder="Last Name"
+                  value={form.lastName}
+                  onChange={update('lastName')}
+                  className={AUTH_REGISTER_INPUT_CLASS}
+                  autoComplete="family-name"
+                  required
+                />
+              </div>
             </div>
 
             <div className="group relative mb-4">
@@ -605,11 +583,11 @@ export function RegisterPage() {
               <input
                 type="email"
                 name="regEmail"
-                placeholder="Gmail"
+                placeholder="Email Address"
                 value={form.email}
                 onChange={update('email')}
                 className={AUTH_REGISTER_INPUT_CLASS}
-                autoComplete="off"
+                autoComplete="email"
                 required
               />
             </div>

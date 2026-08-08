@@ -463,18 +463,18 @@ function TrendBadge({ trend, compact = false, enabled = true }) {
   const { up, label } = formatted;
   return (
     <div className="flex flex-col items-end gap-0.5">
-      <span
+    <span
         className={`inline-flex items-center gap-0.5 rounded-md font-bold ${
           compact ? 'px-1.5 py-0.5 text-[0.62rem]' : 'gap-1 px-2 py-0.5 text-[0.72rem]'
         } ${
-          up
-            ? 'bg-emerald-500/10 text-emerald-600 [.admin-dark_&]:text-emerald-400'
-            : 'bg-red-500/10 text-red-600 [.admin-dark_&]:text-red-400'
-        }`}
-      >
+        up
+          ? 'bg-emerald-500/10 text-emerald-600 [.admin-dark_&]:text-emerald-400'
+          : 'bg-red-500/10 text-red-600 [.admin-dark_&]:text-red-400'
+      }`}
+    >
         <i className={`fa-solid fa-arrow-${up ? 'up' : 'down'} text-[0.55rem]`} aria-hidden="true" />
-        {label}
-      </span>
+      {label}
+    </span>
       {compact && (
         <span className="text-[0.58rem] font-medium text-gray-400">vs last week</span>
       )}
@@ -509,7 +509,7 @@ function StatCard({ label, value, trend, trendEnabled = true, icon, iconWrapClas
             {hint}
           </p>
         )}
-      </div>
+        </div>
       <div className="shrink-0">
         <TrendBadge
           trend={trend}
@@ -1436,7 +1436,7 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange, user
                   No sales in this period
                 </p>
               ) : (
-                <canvas ref={chartRef} />
+              <canvas ref={chartRef} />
               )}
             </div>
           </CardShell>
@@ -1474,36 +1474,36 @@ export default function DashboardAdminTab({ headerSearch = '', onTabChange, user
                 style={{ height: `${INSIGHTS_PANEL_HEIGHT_PX}px` }}
               >
                 <div className={`divide-y divide-gray-100 ${ADM_DARK_DIVIDE}`}>
-                  {recentTickets.map((tkt) => {
-                    const name = tkt.name || 'Anonymous';
-                    const msgSnippet = tkt.lastMessageText || tkt.subject || 'No messages';
-                    return (
-                      <button
-                        key={tkt.id}
-                        type="button"
+                {recentTickets.map((tkt) => {
+                  const name = tkt.name || 'Anonymous';
+                  const msgSnippet = tkt.lastMessageText || tkt.subject || 'No messages';
+                  return (
+                    <button
+                      key={tkt.id}
+                      type="button"
                         onClick={() => handleOpenTicket(tkt)}
                         className="group flex w-full cursor-pointer items-center justify-between gap-2 px-1 py-2.5 text-left transition hover:bg-deepGreen/[0.04] dark:hover:bg-white/[0.04] [.admin-dark_&]:hover:bg-white/[0.04]"
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
                           <SupportAvatar name={name} avatar={tkt.avatar} />
-                          <div className="min-w-0">
+                        <div className="min-w-0">
                             <span className={`block truncate text-[0.78rem] font-bold text-gray-900 ${ADM_DARK_TEXT_BODY}`}>
-                              {name}
-                            </span>
-                            <span className={`block max-w-[150px] truncate text-[0.7rem] text-gray-500 ${ADM_DARK_TEXT_MUTED}`}>
-                              {msgSnippet}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-end">
-                          <span className={`mb-0.5 block text-[0.68rem] font-medium text-gray-400 ${ADM_DARK_TEXT_MUTED}`}>
-                            {formatRelativeTime(tkt.lastMessageAt)}
+                            {name}
                           </span>
-                          <SupportStatusBadge status={tkt.status} />
+                            <span className={`block max-w-[150px] truncate text-[0.7rem] text-gray-500 ${ADM_DARK_TEXT_MUTED}`}>
+                            {msgSnippet}
+                          </span>
                         </div>
-                      </button>
-                    );
-                  })}
+                      </div>
+                      <div className="shrink-0 text-end">
+                          <span className={`mb-0.5 block text-[0.68rem] font-medium text-gray-400 ${ADM_DARK_TEXT_MUTED}`}>
+                          {formatRelativeTime(tkt.lastMessageAt)}
+                        </span>
+                        <SupportStatusBadge status={tkt.status} />
+                      </div>
+                    </button>
+                  );
+                })}
                 </div>
               </div>
             )}

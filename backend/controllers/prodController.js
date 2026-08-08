@@ -1,7 +1,7 @@
 const Product = require('../models/Product');
 const Review = require('../models/Review');
 const Order = require('../models/Order');
-const { onProductBackInStock } = require('../services/notificationService');
+const { onProductBackInStock, onWishlistPriceDrop, onPromoNew } = require('../services/notificationService');
 const { recordStockChange, getProductStockHistory } = require('../services/stockHistoryService');
 const { getProductStockConsumption, getProductStockInventory } = require('../services/stockConsumptionService');
 const { createStockBatch, reduceBatchesForAdjustment } = require('../services/stockBatchService');
@@ -354,6 +354,10 @@ exports.createProduct = async (req, res) => {
       images: productImages,
     });
 
+    if (product.isNewest) {
+      onPromoNew(product).catch((err) => console.error('Promo new notification failed:', err));
+    }
+
     return res.status(201).json({ success: true, message: 'New product added to database successfully!', product });
   } catch (error) {
     console.error(error);
@@ -371,6 +375,7 @@ exports.updateProduct = async (req, res) => {
 
     const updateFields = { ...req.body };
     const wasOutOfStock = (product.stockVal ?? 0) <= 0 || product.stock === 'out-of-stock';
+    const previousPrice = Number(product.price);
 
     delete updateFields.imagesOrder;
 
@@ -443,6 +448,12 @@ exports.updateProduct = async (req, res) => {
     const nowInStock = (product.stockVal ?? 0) > 0 && product.stock === 'in-stock';
     if (wasOutOfStock && nowInStock) {
       onProductBackInStock(product).catch((err) => console.error('Wishlist stock notification failed:', err));
+    }
+
+    if (updateFields.price !== undefined && Number(product.price) < previousPrice) {
+      onWishlistPriceDrop(product, { previousPrice }).catch((err) =>
+        console.error('Wishlist price-drop notification failed:', err)
+      );
     }
 
     return res.status(200).json({

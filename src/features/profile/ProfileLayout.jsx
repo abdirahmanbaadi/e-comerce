@@ -6,7 +6,7 @@ const TABS = [
   { id: 'orders', label: 'My Orders', icon: 'fa-solid fa-bag-shopping' },
   { id: 'track', label: 'Track Order', icon: 'fa-solid fa-location-dot' },
   { id: 'notifications', label: 'Notifications', icon: 'fa-regular fa-bell', badge: true },
-  { id: 'help', label: 'Help / Support', icon: 'fa-regular fa-circle-question' },
+  { id: 'help', label: 'Help Center', icon: 'fa-regular fa-circle-question' },
   { id: 'settings', label: 'Settings', icon: 'fa-solid fa-gear' },
 ];
 

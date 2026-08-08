@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import StoreNavbar from '../features/nav/StoreNavbar';
-import { ProductCard } from '../features/products/StoreProducts';
 import ProductModal from '../features/products/StoreProducts';
+import { HomeSectionHeader, ProductRail } from '../features/products/ProductRail';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useProducts } from '../context/ProductsContext';
@@ -19,6 +19,8 @@ const DEFAULT_HERO = {
   ctaLink: '/products',
   image: '/product-images/hero1.jpeg',
 };
+
+const RAIL_LIMIT = 10;
 
 function heroBackgroundStyle(image) {
   const url = productImage(image || DEFAULT_HERO.image);
@@ -111,10 +113,35 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
-  const featuredProducts = useMemo(
-    () => products.filter((p) => p.status !== 'Inactive'),
+  const activeProducts = useMemo(
+    () => (products || []).filter((p) => p.status !== 'Inactive'),
     [products]
   );
+
+  const popular = useMemo(() => {
+    const byPopularity = [...activeProducts].sort(
+      (a, b) => Number(b.popularity || 0) - Number(a.popularity || 0)
+    );
+    return (byPopularity.length ? byPopularity : activeProducts).slice(0, RAIL_LIMIT);
+  }, [activeProducts]);
+
+  const newArrivals = useMemo(
+    () => [...activeProducts].slice(-RAIL_LIMIT).reverse(),
+    [activeProducts]
+  );
+
+  const bestSellers = useMemo(
+    () =>
+      [...activeProducts]
+        .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0))
+        .slice(0, RAIL_LIMIT),
+    [activeProducts]
+  );
+
+  const recommended = useMemo(() => {
+    const deals = activeProducts.filter((p) => p.discount || p.oldPrice).slice(0, RAIL_LIMIT);
+    return deals.length ? deals : popular;
+  }, [activeProducts, popular]);
 
   const openProduct = (product) => {
     setSelectedProduct(product);
@@ -194,32 +221,42 @@ export default function Home() {
         </section>
       )}
 
-      <main id="products-section" className="container pb-14 pt-8 md:pt-10">
-        <div className="mx-auto mb-8 max-w-[760px] text-center md:mb-10">
-          <span className="mb-2.5 inline-block text-[0.76rem] font-extrabold uppercase tracking-[3px] text-gold">
-            Curated for Your Home
-          </span>
+      <main id="products-section" className="container space-y-10 pb-16 pt-8 md:space-y-12 md:pt-10">
+        <section>
+          <HomeSectionHeader
+            eyebrow="Trending"
+            title="Popular Products"
+            to="/products?sort=rating"
+          />
+          <ProductRail products={popular} onOpen={openProduct} onAddToCart={handleAddToCart} />
+        </section>
 
-          <h2 className="mb-3 font-display text-[2.25rem] font-bold tracking-tight text-deepGreen md:text-[2.9rem]">
-            Featured Furniture Pieces
-          </h2>
+        <section>
+          <HomeSectionHeader
+            eyebrow="Just in"
+            title="New Arrivals"
+            to="/products?sort=newest"
+          />
+          <ProductRail products={newArrivals} onOpen={openProduct} onAddToCart={handleAddToCart} />
+        </section>
 
-          <p className="mx-auto text-[0.98rem] leading-[1.8] text-[#5f5f5f]">
-            Discover selected furniture pieces crafted for modern homes in Mogadishu. View product
-            details, prices, ratings, and add your favorite items to the cart.
-          </p>
-        </div>
+        <section>
+          <HomeSectionHeader
+            eyebrow="Top rated"
+            title="Best Sellers"
+            to="/products?sort=rating"
+          />
+          <ProductRail products={bestSellers} onOpen={openProduct} onAddToCart={handleAddToCart} />
+        </section>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {featuredProducts.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onOpen={openProduct}
-              onAddToCart={handleAddToCart}
-            />
-          ))}
-        </div>
+        <section>
+          <HomeSectionHeader
+            eyebrow="For you"
+            title="Recommended"
+            to="/products"
+          />
+          <ProductRail products={recommended} onOpen={openProduct} onAddToCart={handleAddToCart} />
+        </section>
       </main>
 
       <ProductModal isOpen={modalOpen} product={selectedProduct} onClose={closeProduct} />

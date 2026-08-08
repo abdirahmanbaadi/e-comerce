@@ -72,7 +72,7 @@ export function isAdminBlockedCustomerPath(pathname) {
 
 export function isDriverAllowedPath(pathname) {
   const path = pathname.split('?')[0];
-  return path === DRIVER_ONLY_PATH || path === '/app/driver' || path.startsWith('/app/driver/');
+  return path === DRIVER_ONLY_PATH || path.startsWith(`${DRIVER_ONLY_PATH}/`);
 }
 
 /** Staff may only use the operations dashboard — no customer storefront */

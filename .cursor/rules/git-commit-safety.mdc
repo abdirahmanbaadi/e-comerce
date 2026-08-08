@@ -1,0 +1,31 @@
+---
+description: What to include or exclude when committing and pushing this e-commerce repo
+alwaysApply: true
+---
+
+# Git commit & push safety
+
+## Never commit
+
+- `.env` and any credential / secret files
+- `backend/uploads/` (user/CMS/product media — local only)
+- Temporary debug scripts under `backend/scripts/` unless the user explicitly asks (e.g. `checkRefunds.js`, `retryRefund.js`, `testCouponCategory.js`, `_tmp*.js`)
+- `node_modules/`, `dist/`, `build/`, lockfiles already ignored
+
+## Do commit (when the user asks)
+
+- App source: `src/`, `backend/controllers|models|routes|services|utils|config|middleware`
+- Real feature scripts the user wants shared (e.g. one-off migrations they approve)
+- `.cursor/rules/` when adding project conventions
+
+## Commit / push habits
+
+- Only commit when the user explicitly asks
+- Only push when the user explicitly asks
+- Prefer clear, why-focused commit messages
+- Keep `$0.01` Waafi test pricing unless the user changes it
+- Do not force-push `main`/`master`
+
+## If unsure
+
+Ask before adding large binaries, uploads, or one-off test scripts.

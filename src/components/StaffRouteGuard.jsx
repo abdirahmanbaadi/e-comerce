@@ -15,7 +15,7 @@ export default function StaffRouteGuard({ children }) {
   const path = location.pathname;
 
   if (isDriverUser(user) && !isDriverAllowedPath(path)) {
-    return <Navigate to="/app/driver" replace />;
+    return <Navigate to="/delivery" replace />;
   }
 
   // Staff: dashboard only — never customer storefront pages

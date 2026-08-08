@@ -3,7 +3,7 @@ const OrderActivity = require('../models/OrderActivity');
 const PaymentTransaction = require('../models/PaymentTransaction');
 const User = require('../models/User');
 const Product = require('../models/Product');
-const { onOrderCreated, onOrderUpdated, onDriverAssignmentPending, onDriverUnassigned, userAllowsEmailAlerts } = require('../services/notificationService');
+const { onOrderCreated, onOrderUpdated, onDriverAssignmentPending, onDriverUnassigned, onDeliveryDelayed, userAllowsEmailAlerts } = require('../services/notificationService');
 const { sendOrderConfirmationEmail } = require('../services/emailService');
 const { logUserActivity } = require('../services/activityService');
 const { resolveCoupon } = require('./couponController');
@@ -423,11 +423,34 @@ exports.trackOrder = async (req, res) => {
     }
 
     const activities = await OrderActivity.find({ orderId: order.id }).sort({ createdAt: 1 }).lean();
+    const orderPayload = withResolvedStatus(order);
+    let driverInfo = null;
+
+    if (order.assignedDriverId) {
+      const driver = await User.findOne({ id: order.assignedDriverId })
+        .select('id firstName lastName phone avatar driverRatingAvg driverRatingCount')
+        .lean();
+      if (driver) {
+        driverInfo = {
+          id: driver.id,
+          name: `${driver.firstName || ''} ${driver.lastName || ''}`.trim() || order.driver || 'Driver',
+          phone: driver.phone || '',
+          avatar: driver.avatar || '',
+          ratingAvg: Number(driver.driverRatingAvg || 0),
+          ratingCount: Number(driver.driverRatingCount || 0),
+        };
+        orderPayload.driverInfo = driverInfo;
+        if (!orderPayload.driver || orderPayload.driver === 'Not assigned yet') {
+          orderPayload.driver = driverInfo.name;
+        }
+      }
+    }
 
     return res.status(200).json({
       success: true,
-      order: withResolvedStatus(order),
+      order: orderPayload,
       activities,
+      driverInfo,
     });
   } catch (error) {
     console.error(error);
@@ -975,6 +998,12 @@ exports.updateOrder = async (req, res) => {
         actorRole: req.user?.role || 'system',
         metadata: { estimate: order.estimate },
       });
+      const step = typeof order.currentStep === 'number' ? order.currentStep : 1;
+      if (step >= 3 && step < 5 && order.status !== 'cancelled') {
+        onDeliveryDelayed(order, order.estimate).catch((err) =>
+          console.error('Delivery delay notification failed:', err.message)
+        );
+      }
     }
 
     return res.status(200).json({
@@ -1130,5 +1159,59 @@ exports.getDeliveryQr = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to load delivery QR.' });
+  }
+};
+
+/** Customer: update delivery address while order is still processing (before shipment). */
+exports.updateOwnOrderAddress = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const address = String(req.body?.address || '').trim();
+
+    if (!address || address.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid delivery address.',
+      });
+    }
+
+    const order = await Order.findOne({ id: orderId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found!' });
+    }
+
+    if (!req.user || isDashboardRole(req.user.role) || req.user.role === 'delivery') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the customer can update the delivery address here.',
+      });
+    }
+
+    const allowed = await userCanAccessOrder(req.user, order);
+    if (!allowed) {
+      return res.status(403).json({ success: false, message: 'You cannot update this order.' });
+    }
+
+    const status = resolveOrderStatus(order);
+    const step = typeof order.currentStep === 'number' ? order.currentStep : 1;
+    if (status === 'cancelled' || status === 'delivered' || status === 'shipped' || step >= 4) {
+      return res.status(400).json({
+        success: false,
+        code: 'ADDRESS_LOCKED',
+        message: 'Address can only be changed while the order is processing (before shipment).',
+      });
+    }
+
+    order.address = address;
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Delivery address updated.',
+      order: withResolvedStatus(order),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to update address.' });
   }
 };

@@ -18,6 +18,7 @@ router.get('/profile', protect, authController.getProfile);
 router.get('/security-info', protect, authController.getSecurityInfo);
 router.put('/profile', protect, authController.updateProfile);
 router.put('/change-password', protect, authController.changePassword);
+router.delete('/account', protect, authController.deleteOwnAccount);
 
 // Admin Only Endpoints
 router.get('/users', protect, authorize('admin'), authController.getUsers);

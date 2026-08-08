@@ -13,8 +13,14 @@ import { showTopFloatNotification } from '../../utils/notifications';
 import RetryPaymentModal from '../checkout/RetryPaymentModal';
 import WriteReviewModal from '../products/WriteReviewModal';
 import { AppSearchField } from '../nav/StoreNavbar';
-import ProfileSupportForm from './ProfileSupportForm';
+import ProfileSupportChat from './ProfileSupportChat';
 import { OrderItemsList } from '../admin/AdminOrdersTab.jsx';
+import {
+  HELP_CATEGORIES,
+  HELP_FAQS,
+  HELP_PHONE_HREF,
+  HELP_WHATSAPP_HREF,
+} from '../../utils/helpCenterContent';
 import {
   ADMIN_MODAL_CLOSE_BTN,
   ADMIN_MODAL_OVERLAY,
@@ -958,123 +964,163 @@ export function ProfileOrdersTab({ onTrackOrder }) {
 
 /* ═══ SECTION: HELP TAB ═══ */
 
-const FALLBACK_FAQS = [
-  {
-    icon: 'fa-solid fa-box',
-    title: 'How can I track my order?',
-    body: 'Open Track Order from the sidebar, enter your Order ID, and view status updates in your profile.',
-  },
-  {
-    icon: 'fa-regular fa-credit-card',
-    title: 'How do I retry failed payment?',
-    body: 'You can retry a failed payment by clicking on the order in your Order History and selecting "Retry Payment", or contact our customer support for assistance.',
-  },
-  {
-    icon: 'fa-solid fa-truck',
-    title: 'How long does delivery take?',
-    body: 'Deliveries within Mogadishu typically take 24 to 48 hours depending on your district and courier availability.',
-  },
-  {
-    icon: 'fa-solid fa-location-dot',
-    title: 'How can I change my address?',
-    body: 'To change your shipping address, please contact our support team immediately before the order status updates to "Out for Delivery".',
-  },
-  {
-    icon: 'fa-solid fa-rotate-left',
-    title: 'How can I return a product?',
-    body: 'We accept returns within 7 days of delivery for unused products in their original packaging. Please submit a support ticket to initiate the process.',
-  },
-];
-
-function FaqAccordion({ items }) {
-  const [openIndex, setOpenIndex] = useState(-1);
-  const faqItems = items?.length ? items : FALLBACK_FAQS;
-
+function HelpFaqRow({ item, open, onToggle }) {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
-      <div className="flex flex-col gap-3">
-        {faqItems.map((item, index) => {
-          const isOpen = openIndex === index;
-          const title = item.question || item.title;
-          const body = item.answer || item.body;
-          return (
-            <div
-              key={item.id || `${title}-${index}`}
-              className="overflow-hidden rounded-xl border-[1.5px] border-black/[0.06] bg-white"
-            >
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-3 border-0 bg-white px-4 py-4 text-left transition hover:bg-[#fafaf8]"
-                onClick={() => setOpenIndex(isOpen ? -1 : index)}
-                aria-expanded={isOpen}
-              >
-                <div className="flex min-w-0 items-center gap-3.5">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[1.05rem] text-deepGreen">
-                    <i className={item.icon || 'fa-solid fa-circle-question'} />
-                  </span>
-                  <span className="text-[0.88rem] font-semibold text-[#1c3022]">{title}</span>
-                </div>
-                <i
-                  className={`fa-solid shrink-0 text-[0.8rem] text-gray-400 ${
-                    isOpen ? 'fa-chevron-down' : 'fa-chevron-right'
-                  }`}
-                />
-              </button>
-              {isOpen && (
-                <div className="border-t border-black/[0.05] px-4 py-3.5 pl-[3.1rem] text-[0.84rem] leading-relaxed text-gray-600">
-                  {body}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+    <div className="border-b border-[#eceae6] last:border-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 border-0 bg-transparent px-4 py-4 text-left"
+        aria-expanded={open}
+      >
+        <span className="min-w-0 flex-1 text-[0.92rem] font-medium leading-snug text-[#111111]">{item.q}</span>
+        <i
+          className={`fa-solid fa-chevron-down text-[0.7rem] text-[#9a9a9a] transition-transform duration-200 ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+      {open ? (
+        <p className="mb-4 mt-0 px-4 text-[0.86rem] font-normal leading-relaxed text-[#6b6b6b]">{item.a}</p>
+      ) : null}
     </div>
   );
 }
 
-export function ProfileHelpTab({ supportChat }) {
-  const [faqItems, setFaqItems] = useState(FALLBACK_FAQS);
+function HelpContactRow({ icon, iconClass, label, onClick, href }) {
+  const className =
+    'mb-3 flex w-full items-center gap-3.5 rounded-[18px] border border-[#e8e8e8] bg-white px-4 py-3.5 text-left no-underline last:mb-0 transition hover:bg-[#fafafa]';
+  const inner = (
+    <>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#f4f4f4] text-[#111111]">
+        <i className={`${iconClass} ${icon} text-[1.05rem]`} aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1 text-[0.95rem] font-semibold text-[#111111]">{label}</span>
+      <i className="fa-solid fa-chevron-right text-[0.7rem] text-[#c0c0c0]" />
+    </>
+  );
 
-  useEffect(() => {
-    fetch(apiUrl('/api/cms'))
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.cms?.faqs?.length) {
-          setFaqItems(data.cms.faqs.sort((a, b) => (a.order || 0) - (b.order || 0)));
-        }
-      })
-      .catch(() => {});
-  }, []);
+  if (href) {
+    return (
+      <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" className={className}>
+        {inner}
+      </a>
+    );
+  }
 
   return (
-    <div>
-      <header className="mb-4">
+    <button type="button" onClick={onClick} className={className}>
+      {inner}
+    </button>
+  );
+}
+
+export function ProfileHelpTab({ supportChat }) {
+  const [view, setView] = useState('help');
+  const [category, setCategory] = useState('general');
+  const [query, setQuery] = useState('');
+  const [openFaq, setOpenFaq] = useState(null);
+
+  const filteredFaqs = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return HELP_FAQS.filter((item) => {
+      if (item.category !== category) return false;
+      if (!q) return true;
+      return item.q.toLowerCase().includes(q) || item.a.toLowerCase().includes(q);
+    });
+  }, [category, query]);
+
+  useEffect(() => {
+    setOpenFaq(null);
+  }, [category, query]);
+
+  if (view === 'service') {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <ProfileSupportChat
+          supportChat={supportChat}
+          className="h-full"
+          onBack={() => setView('help')}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
+      <header className="mb-5">
         <h1 className="mb-1 font-display text-[1.75rem] font-extrabold text-deepGreen sm:text-[2rem]">
-          Help & Support
+          Help Center
         </h1>
         <p className="text-[0.85rem] font-medium text-gray-500">
           <Link to="/" className="font-semibold text-deepGreen no-underline hover:underline">
             Home
           </Link>
           <span className="mx-2 text-gray-400">&gt;</span>
-          <span>Help & Support</span>
+          <span>Help Center</span>
         </p>
       </header>
 
-      <div className="grid gap-5 lg:grid-cols-[1.35fr_1fr] lg:items-stretch">
-        <ProfileSupportForm supportChat={supportChat} />
+      <div className="grid gap-8 lg:grid-cols-[1.4fr_0.9fr] lg:items-start">
+        <section>
+          <div className="mb-4 flex flex-wrap gap-2">
+            {HELP_CATEGORIES.map((cat) => {
+              const active = category === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setCategory(cat.id)}
+                  className={`shrink-0 rounded-full border px-4 py-2 text-[0.82rem] font-semibold transition ${
+                    active
+                      ? 'border-[#111111] bg-[#111111] text-white'
+                      : 'border-[#dcdcdc] bg-white text-[#111111] hover:border-[#111111]'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
 
-        <aside className="flex min-h-[480px] flex-col rounded-2xl border border-black/[0.06] bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] sm:p-7">
-          <h3 className="mb-5 shrink-0 text-[1.2rem] font-bold text-deepGreen">Quick Help / FAQ</h3>
-          <FaqAccordion items={faqItems} />
-          <Link
-            to="/contact"
-            className="mt-4 inline-flex shrink-0 items-center gap-1.5 text-[0.86rem] font-semibold text-deepGreen no-underline hover:underline"
-          >
-            View all FAQs
-            <i className="fa-solid fa-chevron-right text-[0.72rem]" />
-          </Link>
+          <label className="relative mb-4 block max-w-xl">
+            <i className="fa-solid fa-magnifying-glass pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[0.85rem] text-[#9a9a9a]" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search"
+              className="h-11 w-full rounded-xl border-0 bg-[#f5f5f5] pl-10 pr-4 text-[0.88rem] font-medium text-[#111111] outline-none placeholder:text-[#9a9a9a]"
+            />
+          </label>
+
+          <div className="overflow-hidden rounded-[20px] border border-[#eceae6] bg-white">
+            {filteredFaqs.length === 0 ? (
+              <p className="m-0 px-4 py-8 text-center text-[0.88rem] font-medium text-[#8a8a8a]">
+                No questions match your search.
+              </p>
+            ) : (
+              filteredFaqs.map((item) => (
+                <HelpFaqRow
+                  key={item.id}
+                  item={item}
+                  open={openFaq === item.id}
+                  onToggle={() => setOpenFaq((prev) => (prev === item.id ? null : item.id))}
+                />
+              ))
+            )}
+          </div>
+        </section>
+
+        <aside>
+          <h2 className="mb-3 mt-0 text-[1.05rem] font-semibold tracking-tight text-[#111111]">Contact Us</h2>
+          <HelpContactRow
+            icon="fa-headset"
+            iconClass="fa-solid"
+            label="Customer Service"
+            onClick={() => setView('service')}
+          />
+          <HelpContactRow icon="fa-whatsapp" iconClass="fa-brands" label="WhatsApp" href={HELP_WHATSAPP_HREF} />
+          <HelpContactRow icon="fa-phone" iconClass="fa-solid" label="Phone" href={HELP_PHONE_HREF} />
         </aside>
       </div>
     </div>

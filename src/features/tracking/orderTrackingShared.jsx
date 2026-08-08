@@ -549,9 +549,14 @@ export async function fetchTrackedOrder(rawCode) {
   if (data.success && data.order) {
     return {
       success: true,
-      order: { ...data.order, status: resolveTrackStatus(data.order) },
+      order: {
+        ...data.order,
+        status: resolveTrackStatus(data.order),
+        driverInfo: data.driverInfo || data.order.driverInfo || null,
+      },
       activities: Array.isArray(data.activities) ? data.activities : [],
       orderId: data.order.id || code,
+      driverInfo: data.driverInfo || data.order.driverInfo || null,
     };
   }
 

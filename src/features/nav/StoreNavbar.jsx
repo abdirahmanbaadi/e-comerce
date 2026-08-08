@@ -6,7 +6,6 @@ import { useProducts } from '../../context/ProductsContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useNotifications } from '../../hooks/useNotifications';
-import { NotificationDetailModal } from '../profile/ProfileNotifications';
 import { formatMoney, productImage } from '../../utils/format';
 import { showTopFloatNotification } from '../../utils/notifications';
 import { canUseCustomerShopping } from '../../utils/roleAccess';
@@ -60,17 +59,31 @@ export function AppSearchField({
 const NOTIF_TYPE_ICON = {
   order_placed: { icon: 'fa-bag-shopping', color: '#f59e0b' },
   order_confirmed: { icon: 'fa-bag-shopping', color: '#10b981' },
-  payment_success: { icon: 'fa-circle-check', color: '#10b981' },
+  payment_success: { icon: 'fa-wallet', color: '#10b981' },
   payment_failed: { icon: 'fa-circle-xmark', color: '#ef4444' },
+  payment_pending: { icon: 'fa-clock', color: '#f59e0b' },
+  payment_refunded: { icon: 'fa-money-bill-transfer', color: '#10b981' },
   order_processing: { icon: 'fa-box', color: '#f59e0b' },
-  order_shipped: { icon: 'fa-truck', color: '#f59e0b' },
-  delivery_qr_ready: { icon: 'fa-qrcode', color: '#10b981' },
+  order_preparing: { icon: 'fa-box-open', color: '#f59e0b' },
+  order_shipped: { icon: 'fa-truck-fast', color: '#2456c8' },
   order_delivered: { icon: 'fa-check-double', color: '#10b981' },
   order_cancelled: { icon: 'fa-ban', color: '#ef4444' },
   driver_assigned: { icon: 'fa-user-check', color: '#10b981' },
+  delivery_qr_ready: { icon: 'fa-qrcode', color: '#10b981' },
+  delivery_delayed: { icon: 'fa-clock', color: '#f59e0b' },
+  delivery_pickup: { icon: 'fa-warehouse', color: '#f59e0b' },
   support_replied: { icon: 'fa-headset', color: '#3b82f6' },
+  support_ticket: { icon: 'fa-ticket', color: '#5b3cc4' },
   wishlist_stock: { icon: 'fa-heart', color: '#d8a128' },
+  wishlist_drop: { icon: 'fa-tags', color: '#c0392b' },
+  coupon_offer: { icon: 'fa-tags', color: '#b4236b' },
+  coupon_expiring: { icon: 'fa-hourglass-half', color: '#b4236b' },
   weekend_offer: { icon: 'fa-tag', color: '#f59e0b' },
+  promo_new: { icon: 'fa-sparkles', color: '#0b6b45' },
+  review_reminder: { icon: 'fa-star', color: '#c48a00' },
+  review_thanks: { icon: 'fa-star', color: '#10b981' },
+  review_moderated: { icon: 'fa-star', color: '#10b981' },
+  account_security: { icon: 'fa-shield-halved', color: '#334155' },
 };
 
 function iconForNotification(n) {
@@ -438,7 +451,6 @@ export default function StoreNavbar({ cartActive = false }) {
   const [wishlistOpen, setWishlistOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [activeNotification, setActiveNotification] = useState(null);
 
   const handleNewNotifications = useCallback((newItems) => {
     newItems.forEach((n) => {
@@ -450,6 +462,7 @@ export default function StoreNavbar({ cartActive = false }) {
     enabled: user.isLoggedIn,
     pollMs: 30000,
     onNewItems: handleNewNotifications,
+    previewMocks: true,
   });
 
   const wishlistRef = useRef(null);
@@ -540,8 +553,9 @@ export default function StoreNavbar({ cartActive = false }) {
             unreadCount={unreadCount}
             onItemClick={async (n) => {
               if (n.unread) await markRead(n.id);
-              setActiveNotification(n);
               setNotifOpen(false);
+              const id = n?.id ? encodeURIComponent(n.id) : '';
+              navigate(id ? `/profile?tab=notifications&notifId=${id}` : '/profile?tab=notifications');
             }}
             onClose={() => setNotifOpen(false)}
           />
@@ -722,14 +736,6 @@ export default function StoreNavbar({ cartActive = false }) {
 
         {navIcons('desktop')}
       </div>
-
-      {activeNotification && (
-        <NotificationDetailModal
-          item={activeNotification}
-          user={user}
-          onClose={() => setActiveNotification(null)}
-        />
-      )}
     </nav>
   );
 }

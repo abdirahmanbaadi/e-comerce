@@ -9,6 +9,7 @@ router.post('/', protect, rejectStaffShopping, orderController.placeOrder);
 router.get('/track/:orderId', orderController.trackOrder);
 router.get('/:orderId/delivery-qr', optionalProtect, orderController.getDeliveryQr);
 router.patch('/cancel/:orderId', optionalProtect, orderController.cancelOrder);
+router.patch('/:orderId/address', protect, rejectStaffShopping, orderController.updateOwnOrderAddress);
 
 // Protected Order Endpoints (Admins can view/edit all, Delivery can view/edit assigned, Users can view their own)
 router.get('/stats', protect, authorize('admin', 'staff'), orderController.getOrderStats);

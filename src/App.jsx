@@ -13,14 +13,17 @@ import TrackOrder from './pages/TrackOrder';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import ApplyDelivery from './pages/ApplyDelivery';
+import Delivery from './pages/Delivery';
 import Admin from './pages/Admin';
 import ProtectedRoute from './components/ProtectedRoute';
 import StaffRouteGuard from './components/StaffRouteGuard';
 import ScrollToTop from './components/ScrollToTop';
 import ErrorBoundary from './components/ErrorBoundary';
 import PostDeliveryReviewProvider from './components/PostDeliveryReviewProvider';
-import MobileAppRoutes from './mobile/MobileAppRoutes';
+import { mobileAppRoutes } from './mobile/MobileAppRoutes';
+import MobileAppearanceSync from './mobile/MobileAppearanceSync';
 
+/** Phone → PWA splash; desktop keeps website. ?classic=1 forces website on phone. */
 function MobileLandingRedirect() {
   const [params] = useSearchParams();
   if (params.get('classic') === '1') return <Home />;
@@ -35,7 +38,7 @@ function AppRoutes() {
     <StaffRouteGuard>
       <Routes>
       <Route path="/" element={<MobileLandingRedirect />} />
-      <Route path="/app/*" element={<MobileAppRoutes />} />
+      <Route path="/app">{mobileAppRoutes}</Route>
       <Route path="/products" element={<Products />} />
       <Route path="/categories" element={<Navigate to="/products" replace />} />
       <Route path="/cart" element={<Cart />} />
@@ -58,7 +61,7 @@ function AppRoutes() {
         path="/delivery"
         element={
           <ProtectedRoute roles={['delivery']}>
-            <Navigate to="/app/driver" replace />
+            <Delivery />
           </ProtectedRoute>
         }
       />
@@ -84,6 +87,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      <MobileAppearanceSync />
       <ErrorBoundary>
         <AuthProvider>
           <PostDeliveryReviewProvider>

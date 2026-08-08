@@ -1347,23 +1347,23 @@ export function AdminStockTab({ headerSearch = '' }) {
             <thead className="sticky top-0 z-[5] bg-white dark:bg-[#1a2421] [.admin-dark_&]:bg-[#1a2421]">
               <tr>
                 <th>Product</th>
-                <th>Category</th>
-                <th>Price</th>
+              <th>Category</th>
+              <th>Price</th>
                 <th>Stock</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
+              <tr>
                   <td colSpan={5} className="cursor-default py-8 text-center text-gray-400">
-                    <i className="fa-solid fa-spinner fa-spin me-2" aria-hidden="true" />
+                  <i className="fa-solid fa-spinner fa-spin me-2" aria-hidden="true" />
                     Loading stock…
-                  </td>
-                </tr>
-              )}
-              {!loading && filtered.length === 0 && (
-                <tr>
+                </td>
+              </tr>
+            )}
+            {!loading && filtered.length === 0 && (
+              <tr>
                   <td colSpan={5} className="cursor-default py-10 text-center">
                     <div className="mx-auto max-w-xs">
                       <i className="fa-solid fa-inbox mb-2 text-2xl text-gray-300" aria-hidden="true" />
@@ -1374,13 +1374,13 @@ export function AdminStockTab({ headerSearch = '' }) {
                         Try changing filters or search from the header.
                       </p>
                     </div>
-                  </td>
-                </tr>
-              )}
-              {!loading &&
-                filtered.map((p) => {
-                  const stockVal = getStockVal(p);
-                  return (
+                </td>
+              </tr>
+            )}
+            {!loading &&
+              filtered.map((p) => {
+                const stockVal = getStockVal(p);
+                return (
                     <tr
                       key={p.id}
                       role="button"
@@ -1396,34 +1396,34 @@ export function AdminStockTab({ headerSearch = '' }) {
                     >
                       <td>
                         <div className="flex items-center gap-3">
-                          <img
-                            src={productImage(p.images?.[0])}
+                      <img
+                        src={productImage(p.images?.[0])}
                             alt=""
                             className="h-11 w-11 rounded-lg object-cover"
-                          />
+                      />
                           <span className="font-bold text-gray-900 [.admin-dark_&]:text-gray-100">{p.title}</span>
                         </div>
-                      </td>
+                    </td>
                       <td className="font-medium text-gray-600 [.admin-dark_&]:text-gray-400">
                         {formatCategory(p.category)}
-                      </td>
+                    </td>
                       <td className="font-bold text-gray-900 [.admin-dark_&]:text-gray-100">
-                        {formatAdminPrice(p.price)}
-                      </td>
+                      {formatAdminPrice(p.price)}
+                    </td>
                       <td className="font-medium text-gray-600">
                         {stockVal <= getLowStockThreshold() && stockVal > 0 ? (
                           <span className="font-bold text-amber-600">{stockVal} <small>(Low)</small></span>
                         ) : (
                           stockVal
                         )}
-                      </td>
+                    </td>
                       <td>{stockStatusBadge(stockVal)}</td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
       </div>
 
       <StockDetailsModal
@@ -1705,17 +1705,17 @@ export function AdminPaymentsTab({ headerSearch = '' }) {
                     }}
                     className="hover:bg-deepGreen/[0.03]"
                   >
-                    <td className="font-bold">{txn.customer || '—'}</td>
+                      <td className="font-bold">{txn.customer || '—'}</td>
                     <td className="font-mono text-[0.78rem] font-bold text-gray-700 [.admin-dark_&]:text-gray-200">
                       {txn.orderId || '—'}
-                    </td>
+                      </td>
                     <td>{txn.phone || '—'}</td>
-                    <td className="font-bold text-emerald-600 [.admin-dark_&]:text-emerald-400">
-                      {formatUSD(txn.amount)}
-                    </td>
+                      <td className="font-bold text-emerald-600 [.admin-dark_&]:text-emerald-400">
+                        {formatUSD(txn.amount)}
+                      </td>
                     <td>{paymentStatusBadge(normalizePaymentTxnStatus(txn.status))}</td>
                     <td className="whitespace-nowrap text-gray-500">{formatOrderDate(txn.createdAt)}</td>
-                  </tr>
+                    </tr>
                 ))}
             </tbody>
           </table>
@@ -1822,14 +1822,14 @@ function DeliveryDispatchModal({ open, order, drivers, saving, form, onChange, o
     <div className={isAdminDark ? 'admin-dark' : ''} data-theme={isAdminDark ? 'dark' : 'light'}>
       <div
         className={ADMIN_MODAL_OVERLAY}
-        onClick={onClose}
-        role="presentation"
-      >
-        <div
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
           className={ADMIN_MODAL_PANEL}
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
           aria-labelledby="delivery-dispatch-title"
         >
           <button
@@ -1846,7 +1846,7 @@ function DeliveryDispatchModal({ open, order, drivers, saving, form, onChange, o
             <div className="min-w-0 pr-10">
               <h3 id="delivery-dispatch-title" className="font-display text-xl font-bold text-deepGreen [.admin-dark_&]:text-[#e8f0ed]">
                 {order.customer}
-              </h3>
+            </h3>
               <p className="mb-0 mt-1 font-mono text-[0.82rem] text-gray-500 [.admin-dark_&]:text-gray-400">{order.id}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className={`inline-flex rounded-lg px-2.5 py-1 text-[0.75rem] font-extrabold ${paymentBadgeClass(payment)}`}>
@@ -1872,8 +1872,8 @@ function DeliveryDispatchModal({ open, order, drivers, saving, form, onChange, o
               </p>
               <p className="mb-0 text-[0.86rem] font-semibold leading-relaxed text-red-800 [.admin-dark_&]:text-red-100">
                 {order.assignmentRejectReason}
-              </p>
-            </div>
+            </p>
+          </div>
           )}
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 [scrollbar-width:thin]">
@@ -1901,9 +1901,9 @@ function DeliveryDispatchModal({ open, order, drivers, saving, form, onChange, o
                 <p className="mb-0 text-[0.88rem] font-semibold text-gray-800 [.admin-dark_&]:text-gray-100">{deliverySlot}</p>
               </div>
             )}
-              </div>
+        </div>
 
-              <div>
+          <div>
                 {assignmentLocked ? (
                   <>
                     <p className={ADM_LABEL}>Assigned driver</p>
@@ -1919,88 +1919,88 @@ function DeliveryDispatchModal({ open, order, drivers, saving, form, onChange, o
                   </>
                 ) : (
                   <>
-                    <label className={ADM_LABEL} htmlFor="deliveryAssignDriver">
+            <label className={ADM_LABEL} htmlFor="deliveryAssignDriver">
                       {declined || driverChanged ? 'Reassign driver' : 'Assign driver'}
-                    </label>
+            </label>
                     <p className="mb-2 text-[0.78rem] text-gray-500 [.admin-dark_&]:text-gray-400">
                       {declined
                         ? 'Choose another available driver below. Offline or at-capacity drivers cannot be selected.'
                         : form.driverHint}
                     </p>
-                    <select
-                      id="deliveryAssignDriver"
-                      className={ADM_SELECT}
-                      value={form.assignedDriverId}
-                      onChange={(e) => onChange('assignedDriverId', e.target.value)}
+            <select
+              id="deliveryAssignDriver"
+              className={ADM_SELECT}
+              value={form.assignedDriverId}
+              onChange={(e) => onChange('assignedDriverId', e.target.value)}
                       disabled={saving}
-                    >
-                      <option value="">— Select driver —</option>
-                      {drivers.map((driver) => (
-                        <option
-                          key={driver.id}
-                          value={driver.id}
-                          disabled={!isDriverSelectable(driver, form.assignedDriverId)}
-                        >
-                          {driverOptionLabel(driver)}
-                        </option>
-                      ))}
-                    </select>
+            >
+              <option value="">— Select driver —</option>
+              {drivers.map((driver) => (
+                <option
+                  key={driver.id}
+                  value={driver.id}
+                  disabled={!isDriverSelectable(driver, form.assignedDriverId)}
+                >
+                  {driverOptionLabel(driver)}
+                </option>
+              ))}
+            </select>
                   </>
                 )}
-              </div>
+          </div>
 
-              <div>
-                <label className={ADM_LABEL} htmlFor="deliveryEstimate">
+          <div>
+            <label className={ADM_LABEL} htmlFor="deliveryEstimate">
                   Estimated arrival
-                </label>
-                <input
-                  id="deliveryEstimate"
-                  className={ADM_INPUT}
-                  value={form.estimate}
-                  onChange={(e) => onChange('estimate', e.target.value)}
-                  placeholder="e.g. Today, 4:00 PM"
-                />
-              </div>
+            </label>
+            <input
+              id="deliveryEstimate"
+              className={ADM_INPUT}
+              value={form.estimate}
+              onChange={(e) => onChange('estimate', e.target.value)}
+              placeholder="e.g. Today, 4:00 PM"
+            />
+          </div>
 
-              <div>
-                <label className={ADM_LABEL} htmlFor="deliveryStageSelect">
+          <div>
+            <label className={ADM_LABEL} htmlFor="deliveryStageSelect">
                   Delivery stage
-                </label>
-                <select
-                  id="deliveryStageSelect"
-                  className={ADM_SELECT}
-                  value={form.currentStep}
-                  onChange={(e) => onChange('currentStep', Number(e.target.value))}
-                >
+            </label>
+            <select
+              id="deliveryStageSelect"
+              className={ADM_SELECT}
+              value={form.currentStep}
+              onChange={(e) => onChange('currentStep', Number(e.target.value))}
+            >
                   {DELIVERY_DISPATCH_STAGES.map((stage) => (
-                    <option key={stage.value} value={stage.value}>
-                      {stage.label}
-                    </option>
-                  ))}
-                </select>
+                <option key={stage.value} value={stage.value}>
+                  {stage.label}
+                </option>
+              ))}
+            </select>
                 <p className="mb-0 mt-2 text-[0.78rem] text-gray-500 [.admin-dark_&]:text-gray-400">
                   Paid orders start at Payment Verified. Move to Preparing before dispatch when possible.
                 </p>
-              </div>
             </div>
           </div>
+        </div>
 
           <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 px-5 py-4 [.admin-dark_&]:border-white/10">
-            <button type="button" className={BTN_GHOST} onClick={onClose} disabled={saving}>
-              Cancel
-            </button>
-            <button type="button" className={BTN_PRIMARY} onClick={onSubmit} disabled={saving}>
-              {saving ? (
-                <>
+          <button type="button" className={BTN_GHOST} onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <button type="button" className={BTN_PRIMARY} onClick={onSubmit} disabled={saving}>
+            {saving ? (
+              <>
                   <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" /> Saving…
-                </>
-              ) : (
+              </>
+            ) : (
                 'Save dispatch'
-              )}
-            </button>
-          </div>
+            )}
+          </button>
         </div>
       </div>
+    </div>
     </div>,
     document.body
   );
@@ -2229,7 +2229,7 @@ export function AdminDeliveryTab({ headerSearch = '' }) {
       <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[0.75rem] font-extrabold text-emerald-800 [.admin-dark_&]:bg-emerald-500/15 [.admin-dark_&]:text-emerald-200">
         <i className="fa-solid fa-truck-fast shrink-0 text-[0.68rem]" aria-hidden="true" />
         <span className="truncate">{name}</span>
-      </span>
+            </span>
     );
   };
 

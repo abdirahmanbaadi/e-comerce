@@ -9,6 +9,13 @@ import { formatMoney, productImage } from '../../utils/format';
 import { getMaterialLabel } from '../../utils/productFilters';
 import { renderRatingStars } from '../../utils/rating';
 import { showTopFloatNotification } from '../../utils/notifications';
+import {
+  getProductAvailability,
+  getProductColor,
+  getProductDescription,
+  getProductMaterial,
+  isProductInStock,
+} from '../../utils/productDisplay';
 import { ProductModalGallery, ProductModalHeroRow, ProductModalSpecsTable, PRODUCT_MODAL_BODY_CLASS, PRODUCT_MODAL_DETAILS_COL_CLASS } from './ProductModalGallery';
 
 /* ═══════════════════════════════════════════════════
@@ -146,7 +153,7 @@ export default function ProductModal({ isOpen, product, onClose }) {
   const [reviewStats, setReviewStats] = useState({ avgRating: 0, count: 0 });
   const [reviewsLoading, setReviewsLoading] = useState(false);
 
-  const inStock = product?.stock !== 'out-of-stock';
+  const inStock = isProductInStock(product);
   const wishlisted = product ? isWishlisted(product.title) : false;
 
   useEffect(() => {
@@ -257,15 +264,14 @@ export default function ProductModal({ isOpen, product, onClose }) {
               </div>
 
               <p className="mb-4 text-[0.9rem] leading-relaxed text-[#555555]">
-                {product.description?.trim() ||
-                  'Crafted with premium materials and modern detail, designed to bring comfort, beauty, and long-lasting quality to your home.'}
+                {getProductDescription(product)}
               </p>
 
               <ProductModalSpecsTable
-                material={product.material}
-                color={product.color}
+                material={getProductMaterial(product)}
+                color={getProductColor(product)}
                 dimensions={product.dimensions}
-                availability={product.availability}
+                availability={getProductAvailability(product)}
                 inStock={inStock}
               />
 

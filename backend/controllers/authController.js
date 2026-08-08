@@ -98,6 +98,7 @@ function formatPublicUser(user) {
       : { status: 'none' },
     passwordChangedAt: user.passwordChangedAt || null,
     lastLoginAt: user.lastLoginAt || null,
+    createdAt: user.createdAt || null,
   };
 }
 
@@ -149,27 +150,41 @@ async function linkGuestOrdersToUser(user) {
   }
 }
 
+function buildNameBasedUsername(firstName, lastName, email) {
+  const fromName = `${firstName || ''}${lastName || ''}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 20);
+  const fromEmail = String(email || '')
+    .split('@')[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '')
+    .slice(0, 20);
+  const base = (fromName.length >= 3 ? fromName : fromEmail || 'user').slice(0, 24);
+  return base.length >= 3 ? base : `user${Date.now().toString(36).slice(-5)}`;
+}
+
+async function ensureUniqueRegisterUsername(firstName, lastName, email) {
+  let base = buildNameBasedUsername(firstName, lastName, email);
+  let candidate = base;
+  let n = 0;
+  while (await User.findOne({ username: candidate })) {
+    n += 1;
+    candidate = `${base.slice(0, 24)}${n}`;
+  }
+  return candidate;
+}
+
 // Register User
 exports.register = async (req, res) => {
   try {
-    const { firstName, lastName, username, email, phone, password } = req.body;
+    const { firstName, lastName, email, phone, password } = req.body;
 
-    if (!firstName || !username || !email || !phone || !password) {
+    if (!firstName || !lastName || !email || !phone || !password) {
       return res.status(400).json({ success: false, message: 'Please fill in all required fields!' });
     }
 
-    const normalizedUsername = String(username).trim().toLowerCase();
-    if (!/^[a-z0-9._-]{3,30}$/.test(normalizedUsername)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Username must be 3–30 characters (letters, numbers, dots, underscores, hyphens).',
-      });
-    }
-
-    const usernameExists = await User.findOne({ username: normalizedUsername });
-    if (usernameExists) {
-      return res.status(400).json({ success: false, message: 'This username is already taken!' });
-    }
+    const normalizedUsername = await ensureUniqueRegisterUsername(firstName, lastName, email);
 
     const passwordCheck = validatePassword(password);
     if (!passwordCheck.ok) {
@@ -211,7 +226,7 @@ exports.register = async (req, res) => {
       password: hashedPassword,
       role: 'user', // Default role is user
       passwordChangedAt: new Date(),
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(firstName + ' ' + (lastName || ''))}&background=073D35&color=ffffff&bold=true&size=128`
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(`${firstName} ${lastName || ''}`.trim())}&background=073D35&color=ffffff&bold=true&size=128`
     });
 
     sendWelcomeEmail(user).catch((err) => console.error('Welcome email failed:', err.message));
@@ -502,8 +517,9 @@ exports.updateProfile = async (req, res) => {
       user.address = address;
     }
 
-    if (avatar) {
+    if (typeof avatar === 'string' && avatar.length > 0) {
       user.avatar = avatar;
+      user.markModified?.('avatar');
     }
 
     if (notificationPreferences && typeof notificationPreferences === 'object') {
@@ -563,6 +579,15 @@ exports.changePassword = async (req, res) => {
       action: 'password_change',
       description: 'Password changed successfully.',
     });
+
+    try {
+      const { onAccountSecurity } = require('../services/notificationService');
+      onAccountSecurity(user, { reason: 'password_changed' }).catch((err) =>
+        console.error('Account security notification failed:', err.message)
+      );
+    } catch (_) {
+      /* ignore */
+    }
 
     return res.status(200).json({ success: true, message: 'Your password has been changed successfully!' });
   } catch (error) {
@@ -810,6 +835,15 @@ exports.resetPassword = async (req, res) => {
       action: 'password_change',
       description: 'Password reset via email OTP.',
     });
+
+    try {
+      const { onAccountSecurity } = require('../services/notificationService');
+      onAccountSecurity(user, { reason: 'password_changed' }).catch((err) =>
+        console.error('Account security notification failed:', err.message)
+      );
+    } catch (_) {
+      /* ignore */
+    }
 
     return res.status(200).json({ success: true, message: 'Your password has been changed successfully!' });
   } catch (error) {
@@ -1119,5 +1153,43 @@ exports.deleteUser = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to delete user.' });
+  }
+};
+
+// Delete own account (customer)
+exports.deleteOwnAccount = async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    const user = await User.findOne({ id: req.user.id });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found!' });
+    }
+
+    if (user.role === 'admin') {
+      return res.status(400).json({
+        success: false,
+        message: 'The admin account cannot be deleted from the app.',
+      });
+    }
+
+    if (!password || typeof password !== 'string') {
+      return res.status(400).json({ success: false, message: 'Please enter your password to confirm.' });
+    }
+
+    const valid = await verifyUserPassword(user, password);
+    if (!valid) {
+      return res.status(400).json({ success: false, message: 'Incorrect password.' });
+    }
+
+    await User.deleteOne({ id: user.id });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Your account has been deleted.',
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to delete account.' });
   }
 };

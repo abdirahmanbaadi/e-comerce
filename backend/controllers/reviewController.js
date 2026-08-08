@@ -1,6 +1,7 @@
 const Review = require('../models/Review');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
+const User = require('../models/User');
 const { notifyUser } = require('../services/notificationService');
 const { buildUserOrdersQuery } = require('../utils/phoneUtils');
 const { normalizeOrderId } = require('../utils/orderIdUtils');
@@ -9,7 +10,46 @@ const {
   findDuePromptForUser,
   getOrderPromptState,
   markPromptShown,
+  getOrderLineProducts,
 } = require('../services/reviewPromptService');
+
+function mapProductReviewStatus(review) {
+  if (!review) return 'missing';
+  if (review.status === 'approved') return 'live';
+  if (review.status === 'rejected') return 'rejected';
+  return 'pending';
+}
+
+function driverLabel(order) {
+  const name = String(order.driver || '').trim();
+  if (!name || name === 'Not assigned yet') return 'Delivery driver';
+  return name;
+}
+
+async function resolveDriverContact(order) {
+  const fallback = {
+    driverName: driverLabel(order),
+    driverPhone: '',
+    driverAvatar: '',
+  };
+
+  if (!order.assignedDriverId) return fallback;
+
+  try {
+    const driver = await User.findOne({ id: order.assignedDriverId })
+      .select('firstName lastName phone avatar')
+      .lean();
+    if (!driver) return fallback;
+    const name = `${driver.firstName || ''} ${driver.lastName || ''}`.trim();
+    return {
+      driverName: name || fallback.driverName,
+      driverPhone: driver.phone || '',
+      driverAvatar: driver.avatar || '',
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 function generateReviewId() {
   return `REV-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`;
@@ -179,6 +219,13 @@ exports.createReview = async (req, res) => {
       status: 'pending',
     });
 
+    try {
+      const { onReviewThanks } = require('../services/notificationService');
+      onReviewThanks(review).catch((err) => console.error('Review thanks notification failed:', err.message));
+    } catch (_) {
+      /* ignore */
+    }
+
     return res.status(201).json({ success: true, message: 'Review submitted for moderation.', review });
   } catch (error) {
     console.error(error);
@@ -312,6 +359,117 @@ exports.deleteReview = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to delete review.' });
+  }
+};
+
+/** Customer review inbox: incomplete order sessions + rating history. */
+exports.getReviewInbox = async (req, res) => {
+  try {
+    const baseQuery = buildUserOrdersQuery(req.user);
+    if (!baseQuery) {
+      return res.status(200).json({
+        success: true,
+        toRate: [],
+        history: { delivery: [], products: [] },
+      });
+    }
+
+    const orders = await Order.find({
+      ...baseQuery,
+      $or: [{ currentStep: { $gte: 5 } }, { status: 'delivered' }],
+    })
+      .sort({ deliveredAt: -1, updatedAt: -1 })
+      .lean();
+
+    const toRate = [];
+    const deliveryHistory = [];
+
+    for (const order of orders) {
+      if (!isOrderPaid(order) || !isOrderDelivered(order)) continue;
+
+      const lineProducts = await getOrderLineProducts(order);
+      const productIds = lineProducts.map((p) => p.productId).filter(Boolean);
+      const reviews = productIds.length
+        ? await Review.find({ userId: req.user.id, productId: { $in: productIds } }).lean()
+        : [];
+      const reviewByProduct = new Map(reviews.map((r) => [Number(r.productId), r]));
+
+      const products = lineProducts
+        .filter((p) => p.productId)
+        .map((p) => {
+          const review = reviewByProduct.get(Number(p.productId));
+          return {
+            productId: p.productId,
+            title: p.title,
+            image: p.image || '',
+            status: mapProductReviewStatus(review),
+            rating: review ? Number(review.rating) || null : null,
+            comment: review?.comment || '',
+            reviewId: review?.id || null,
+          };
+        });
+
+      const deliveryDone = Boolean(order.deliveryRating);
+      const driverContact = await resolveDriverContact(order);
+      const delivery = {
+        status: deliveryDone ? 'done' : 'missing',
+        rating: deliveryDone ? Number(order.deliveryRating) : null,
+        comment: order.deliveryRatingComment || '',
+        ratedAt: order.deliveryRatedAt || null,
+        driverName: driverContact.driverName,
+        driverPhone: driverContact.driverPhone,
+        driverAvatar: driverContact.driverAvatar,
+      };
+
+      const ratedCount =
+        (deliveryDone ? 1 : 0) + products.filter((p) => p.status !== 'missing').length;
+      const totalCount = 1 + products.length;
+      const isComplete = ratedCount >= totalCount && products.every((p) => p.status !== 'missing') && deliveryDone;
+
+      const session = {
+        orderId: order.id,
+        deliveredAt: order.deliveredAt || order.updatedAt || null,
+        delivery,
+        products,
+        progress: { rated: ratedCount, total: totalCount },
+        isComplete,
+      };
+
+      if (!isComplete) toRate.push(session);
+
+      if (deliveryDone) {
+        deliveryHistory.push({
+          orderId: order.id,
+          rating: delivery.rating,
+          comment: delivery.comment,
+          ratedAt: delivery.ratedAt,
+          driverName: delivery.driverName,
+        });
+      }
+    }
+
+    const productReviews = await Review.find({ userId: req.user.id }).sort({ createdAt: -1 }).lean();
+    const historyProducts = productReviews.map((review) => ({
+      reviewId: review.id,
+      productId: review.productId,
+      title: review.productTitle || 'Product',
+      rating: Number(review.rating) || 0,
+      comment: review.comment || '',
+      status: mapProductReviewStatus(review),
+      createdAt: review.createdAt,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      toRate,
+      history: {
+        delivery: deliveryHistory,
+        products: historyProducts,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to load review inbox.' });
   }
 };
 
