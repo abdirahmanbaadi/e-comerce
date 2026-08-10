@@ -15,7 +15,11 @@ export default function StaffRouteGuard({ children }) {
   const path = location.pathname;
 
   if (isDriverUser(user) && !isDriverAllowedPath(path)) {
-    return <Navigate to="/delivery" replace />;
+    // Opening admin/dashboard while logged in as driver → web login to switch account
+    if (path === '/admin' || path.startsWith('/admin/')) {
+      return <Navigate to="/login" replace state={{ from: '/admin', switchAccount: true }} />;
+    }
+    return <Navigate to="/app/driver" replace />;
   }
 
   // Staff: dashboard only — never customer storefront pages

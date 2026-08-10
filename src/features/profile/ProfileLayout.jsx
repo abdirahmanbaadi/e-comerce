@@ -194,7 +194,7 @@ export default function ProfileSidebar({ activeTab, unreadCount, onTabChange }) 
           )}
         {user?.role === 'delivery' && (
           <SidebarLink
-            to="/delivery"
+            to="/app/driver"
             className="animate-sidebarItemIn"
             style={staggerStyle(TABS.length + 1)}
           >

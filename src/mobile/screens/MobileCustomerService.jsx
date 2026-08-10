@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSupportChat } from '../../hooks/useSupportChat';
 import { productImage } from '../../utils/format';
 import { showTopFloatNotification } from '../../utils/notifications';
+import { useProfileHome } from '../useProfileHome';
 
 const DEFAULT_SUBJECT = 'Customer Service';
 
@@ -95,11 +96,13 @@ export default function MobileCustomerService() {
   const fileRef = useRef(null);
   const inputRef = useRef(null);
 
+  const profileHome = useProfileHome();
+
   useEffect(() => {
     if (!user?.isLoggedIn) {
-      navigate('/app/login', { replace: true, state: { from: '/app/profile/support/chat' } });
+      navigate('/app/login', { replace: true, state: { from: `${profileHome}/support/chat` } });
     }
-  }, [user, navigate]);
+  }, [user, navigate, profileHome]);
 
   useEffect(() => {
     if (!user?.isLoggedIn || booted || activeTicketId) return;
@@ -196,7 +199,7 @@ export default function MobileCustomerService() {
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-[#f0f0f0] bg-white px-4 py-3.5 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <button
             type="button"
-            onClick={() => navigate('/app/profile/support')}
+            onClick={() => navigate(`${profileHome}/support`)}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent text-[#111111]"
             aria-label="Back"
           >

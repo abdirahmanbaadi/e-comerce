@@ -446,11 +446,27 @@ exports.trackOrder = async (req, res) => {
       }
     }
 
+    let driverLocation = null;
+    if (
+      Number.isFinite(Number(order.driverLat)) &&
+      Number.isFinite(Number(order.driverLng)) &&
+      (Number(order.currentStep) || 0) >= 4 &&
+      String(order.status || '').toLowerCase() !== 'delivered'
+    ) {
+      driverLocation = {
+        lat: Number(order.driverLat),
+        lng: Number(order.driverLng),
+        updatedAt: order.driverLocationUpdatedAt || null,
+      };
+      orderPayload.driverLocation = driverLocation;
+    }
+
     return res.status(200).json({
       success: true,
       order: orderPayload,
       activities,
       driverInfo,
+      driverLocation,
     });
   } catch (error) {
     console.error(error);

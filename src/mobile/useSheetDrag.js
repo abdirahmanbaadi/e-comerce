@@ -4,8 +4,8 @@ const DISMISS_PX = 100;
 const EXPAND_PX = 48;
 const COLLAPSE_PX = 56;
 /** Max sheet height when expanded — not full screen. */
-export const SHEET_EXPANDED_MAX = '85dvh';
-export const SHEET_COLLAPSED_MAX = '68dvh';
+export const SHEET_EXPANDED_MAX = '92dvh';
+export const SHEET_COLLAPSED_MAX = '78dvh';
 
 /**
  * Drag handle for bottom sheets:

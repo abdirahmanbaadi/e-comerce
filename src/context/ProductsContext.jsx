@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useIntervalWhenVisible } from '../hooks/useIntervalWhenVisible';
 import { apiUrl, fetchWithTimeout, getProductsList } from '../utils/data';
 
 const ProductsContext = createContext(null);
@@ -28,6 +29,15 @@ export function ProductsProvider({ children }) {
 
   useEffect(() => {
     syncProducts();
+  }, [syncProducts]);
+
+  // Keep catalog fresh when the tab/app is focused (admin product changes).
+  useIntervalWhenVisible(() => syncProducts(), 60000, true);
+
+  useEffect(() => {
+    const onFocus = () => syncProducts();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, [syncProducts]);
 
   const value = useMemo(

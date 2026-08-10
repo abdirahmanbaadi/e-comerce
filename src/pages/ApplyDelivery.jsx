@@ -135,7 +135,7 @@ export default function ApplyDelivery() {
 
   useEffect(() => {
     if (userRole === 'delivery' || application.status === 'approved') {
-      navigate('/delivery', { replace: true });
+      navigate('/app/driver', { replace: true });
     }
   }, [userRole, application.status, navigate]);
 
@@ -148,7 +148,7 @@ export default function ApplyDelivery() {
   }
 
   if (userRole === 'delivery' || application.status === 'approved') {
-    return <Navigate to="/delivery" replace />;
+    return <Navigate to="/app/driver" replace />;
   }
 
   const update = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));

@@ -2,9 +2,8 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { productImage } from '../utils/format';
-import { showTopFloatNotification } from '../utils/notifications';
+import { copyToClipboard } from '../utils/clipboard';
 import {
-  getNotificationCouponCode,
   getNotificationCta,
   getNotificationDetailText,
   getNotificationOrderId,
@@ -14,17 +13,6 @@ import {
   getNotificationTypeTone,
 } from '../utils/notificationTypes';
 import { useSheetDrag } from './useSheetDrag';
-
-async function copyText(value, successMessage) {
-  const text = String(value || '').trim();
-  if (!text) return;
-  try {
-    await navigator.clipboard.writeText(text);
-    showTopFloatNotification(successMessage);
-  } catch {
-    showTopFloatNotification('Could not copy.', 'danger');
-  }
-}
 
 function CopyRow({ label, value, successMessage }) {
   if (!value) return null;
@@ -38,7 +26,7 @@ function CopyRow({ label, value, successMessage }) {
       </div>
       <button
         type="button"
-        onClick={() => copyText(value, successMessage)}
+        onClick={() => copyToClipboard(value, successMessage)}
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-0 bg-white text-[#6b4228] shadow-sm ring-1 ring-[#eadfce]"
         aria-label={`Copy ${label}`}
       >
@@ -64,7 +52,6 @@ export default function MobileNotificationDetailSheet({ open, item, onClose }) {
   if (!open || !item) return null;
 
   const orderId = getNotificationOrderId(item);
-  const couponCode = getNotificationCouponCode(item);
   const productName = getNotificationProductName(item);
   const thumbSrc = getNotificationProductImage(item);
   const thumb = thumbSrc ? productImage(thumbSrc) : '';
@@ -126,21 +113,10 @@ export default function MobileNotificationDetailSheet({ open, item, onClose }) {
         </p>
 
         {productName ? (
-          <p className="mb-3 mt-0 text-[0.78rem] font-bold text-[#8b8178]">
-            {productName}
-          </p>
+          <p className="mb-3 mt-0 text-[0.78rem] font-bold text-[#8b8178]">{productName}</p>
         ) : null}
 
-        <CopyRow
-          label="Order ID"
-          value={orderId}
-          successMessage="Order ID copied."
-        />
-        <CopyRow
-          label="Coupon code"
-          value={couponCode}
-          successMessage="Coupon code copied."
-        />
+        <CopyRow label="Order ID" value={orderId} successMessage="Order ID copied." />
 
         <div className="mt-1 flex gap-2">
           <button

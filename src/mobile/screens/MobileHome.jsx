@@ -68,14 +68,13 @@ function ProductCard({ product, onOpen, onToggleWish, wishlisted }) {
             event.stopPropagation();
             onToggleWish(product);
           }}
-          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border-0 bg-white/90"
+          className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border-0 ${
+            wishlisted ? 'bg-[#fdecec] text-[#e11d48]' : 'bg-white/90 text-[#7b4a28]'
+          }`}
           aria-label="Wishlist"
+          aria-pressed={wishlisted}
         >
-          <i
-            className={`fa-heart text-[0.92rem] ${
-              wishlisted ? 'fa-solid text-[#e11d48]' : 'fa-regular text-[#7b4a28]'
-            }`}
-          />
+          <i className={`fa-heart text-[0.92rem] ${wishlisted ? 'fa-solid' : 'fa-regular'}`} />
         </button>
       </div>
       <div className="px-3 py-3">
@@ -99,7 +98,7 @@ function ProductRail({ products, onOpen, onToggleWish, isWishlisted }) {
           product={product}
           onOpen={onOpen}
           onToggleWish={onToggleWish}
-          wishlisted={isWishlisted?.(product.title)}
+          wishlisted={isWishlisted?.(product)}
         />
       ))}
     </div>
@@ -135,8 +134,9 @@ export default function MobileHome() {
   };
 
   const handleWish = (product) => {
-    const wasWishlisted = isWishlisted?.(product.title);
-    toggleWishlist?.(product.title);
+    const wasWishlisted = isWishlisted?.(product);
+    const ok = toggleWishlist?.(product);
+    if (ok === false) return;
     showTopFloatNotification(wasWishlisted ? 'Removed from wishlist' : 'Saved to wishlist');
   };
 

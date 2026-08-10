@@ -215,6 +215,9 @@ exports.updateContent = async (req, res) => {
       cms.hero = { ...(cms.hero.toObject?.() || cms.hero), ...hero };
       changedSections.push('hero');
     }
+    let couponCustomersNotified = 0;
+    let bannerCustomersNotified = 0;
+
     if (Array.isArray(banners)) {
       const previousBanners = cms.banners || [];
       const previousByKey = new Map(
@@ -229,7 +232,11 @@ exports.updateContent = async (req, res) => {
         const key = banner.id || banner.title;
         const previous = previousByKey.get(key);
         if (!previous || !previous.active) {
-          await onBannerActivated(banner);
+          try {
+            bannerCustomersNotified += (await onBannerActivated(banner)) || 0;
+          } catch (err) {
+            console.error('Banner notification failed:', err.message);
+          }
         }
       }
     }
@@ -255,10 +262,16 @@ exports.updateContent = async (req, res) => {
 
       for (const promo of processedPromos) {
         if (!promo?.active) continue;
+        if (!String(promo.code || '').trim()) continue;
         const key = promo.id || promo.code;
         const previous = previousByKey.get(key);
+        // Notify only when coupon is newly created or flipped from inactive → active
         if (!previous || !previous.active) {
-          await onPromotionActivated(promo);
+          try {
+            couponCustomersNotified += (await onPromotionActivated(promo)) || 0;
+          } catch (err) {
+            console.error('Coupon notification failed:', err.message);
+          }
         }
       }
     }
@@ -301,6 +314,8 @@ exports.updateContent = async (req, res) => {
       message: 'Site content updated.',
       cms: payload,
       updatedAt: cms.updatedAt,
+      couponCustomersNotified,
+      bannerCustomersNotified,
     });
   } catch (error) {
     console.error(error);

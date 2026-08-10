@@ -10,7 +10,8 @@ const ADMIN_BLOCKED_PATHS = new Set([
   '/register',
 ]);
 
-const DRIVER_ONLY_PATH = '/delivery';
+const DRIVER_PORTAL = '/app/driver';
+const DRIVER_WEB_PORTAL = '/delivery';
 const STAFF_ONLY_PATH = '/admin';
 
 /** Tabs staff may use on /admin (operations only) */
@@ -72,7 +73,12 @@ export function isAdminBlockedCustomerPath(pathname) {
 
 export function isDriverAllowedPath(pathname) {
   const path = pathname.split('?')[0];
-  return path === DRIVER_ONLY_PATH || path.startsWith(`${DRIVER_ONLY_PATH}/`);
+  if (path === DRIVER_PORTAL || path.startsWith(`${DRIVER_PORTAL}/`)) return true;
+  if (path === DRIVER_WEB_PORTAL || path.startsWith(`${DRIVER_WEB_PORTAL}/`)) return true;
+  if (path === '/app/login' || path.startsWith('/app/login')) return true;
+  // Web login — so a driver session can switch to admin/staff without being bounced to /app
+  if (path === '/login' || path === '/register') return true;
+  return false;
 }
 
 /** Staff may only use the operations dashboard — no customer storefront */

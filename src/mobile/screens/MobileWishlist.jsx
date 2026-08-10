@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useProducts } from '../../context/ProductsContext';
@@ -6,7 +6,6 @@ import { useWishlist } from '../../context/WishlistContext';
 import { formatMoney, productImage } from '../../utils/format';
 import { showTopFloatNotification } from '../../utils/notifications';
 import MobileBottomNav from '../MobileBottomNav';
-import { buildMockWishlistItems } from '../mockWishlist';
 
 const DELETE_WIDTH = 72;
 
@@ -164,25 +163,24 @@ function SwipeWishlistItem({ item, openId, setOpenId, onAddToCart, onRemove }) {
 
 export default function MobileWishlist({ fromProfile = false } = {}) {
   const navigate = useNavigate();
-  const { products } = useProducts();
+  const { products, loading: productsLoading } = useProducts();
   const { addToCart } = useCart();
   const { wishlist, removeFromWishlist } = useWishlist();
   const [openId, setOpenId] = useState(null);
-  const [mockHidden, setMockHidden] = useState(() => new Set());
 
-  const realItems = useMemo(() => {
-    const titles = Object.keys(wishlist || {}).filter((title) => wishlist[title]);
-    return titles
-      .map((title) => (products || []).find((product) => product.title === title && product.status !== 'Inactive'))
-      .filter(Boolean);
-  }, [wishlist, products]);
-
-  const usingMock = realItems.length === 0;
+  const savedTitles = useMemo(
+    () => Object.keys(wishlist || {}).filter((title) => wishlist[title]),
+    [wishlist]
+  );
 
   const wishlistItems = useMemo(() => {
-    if (!usingMock) return realItems;
-    return buildMockWishlistItems(products).filter((item) => !mockHidden.has(item.title));
-  }, [usingMock, realItems, products, mockHidden]);
+    if (!savedTitles.length) return [];
+    return savedTitles
+      .map((title) => (products || []).find((product) => product.title === title && product.status !== 'Inactive'))
+      .filter(Boolean);
+  }, [savedTitles, products]);
+
+  const waitingForCatalog = savedTitles.length > 0 && !wishlistItems.length && productsLoading;
 
   const handleAddToCart = (product) => {
     const added = addToCart(product, 1);
@@ -192,12 +190,7 @@ export default function MobileWishlist({ fromProfile = false } = {}) {
 
   const handleRemove = (title) => {
     setOpenId(null);
-    if (usingMock) {
-      setMockHidden((prev) => new Set(prev).add(title));
-      showTopFloatNotification('Removed from preview wishlist');
-      return;
-    }
-    removeFromWishlist(title);
+    if (!removeFromWishlist(title)) return;
     showTopFloatNotification('Removed from wishlist');
   };
 
@@ -210,67 +203,69 @@ export default function MobileWishlist({ fromProfile = false } = {}) {
       }`}
     >
       <div className="mx-auto min-h-[100dvh] w-full max-w-md">
-      <header className="sticky top-0 z-20 border-b border-[#f0e9df] bg-[#fff7ed] px-4 py-3 pt-[max(0.7rem,env(safe-area-inset-top))]">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate(fromProfile ? '/app/profile' : -1)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-white text-[#2f241a] shadow-sm"
-            aria-label={fromProfile ? 'Back to profile' : 'Back'}
-          >
-            <i className="fa-solid fa-chevron-left text-[0.85rem]" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="m-0 text-[1.1rem] font-black text-[#2f241a]">
-              {fromProfile ? 'Wishlist' : 'My Wishlist'}
-            </h1>
-            <p className="mb-0 mt-0.5 text-[0.78rem] font-semibold text-[#8b8178]">
-              {wishlistItems.length
-                ? `${wishlistItems.length} saved item${wishlistItems.length === 1 ? '' : 's'}`
-                : 'Saved furniture'}
-            </p>
-          </div>
-          <span className="h-10 w-10 shrink-0" aria-hidden="true" />
-        </div>
-      </header>
-
-      <main className="px-4 pb-4 pt-4">
-        {usingMock && wishlistItems.length > 0 ? (
-          <p className="mb-3 mt-0 text-[0.74rem] font-bold text-[#9a5b12]">
-            Preview data — sample wishlist for UI testing
-          </p>
-        ) : null}
-
-        {!wishlistItems.length ? (
-          <section className="px-2 py-16 text-center">
-            <i className="fa-regular fa-heart mb-4 text-4xl text-[#d8c8b6]" />
-            <h2 className="m-0 text-[1.2rem] font-black text-[#1c140e]">Your wishlist is empty</h2>
-            <p className="mx-auto mb-0 mt-2 max-w-xs text-[0.85rem] font-semibold leading-relaxed text-[#8b8178]">
-              Save furniture you like and add it to cart anytime.
-            </p>
-            <Link
-              to="/app/shop"
-              className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-full bg-[#6b4228] px-6 text-[0.86rem] font-black text-white no-underline"
+        <header className="sticky top-0 z-20 border-b border-[#f0e9df] bg-[#fff7ed] px-4 py-3 pt-[max(0.7rem,env(safe-area-inset-top))]">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate(fromProfile ? '/app/profile' : -1)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-white text-[#2f241a] shadow-sm"
+              aria-label={fromProfile ? 'Back to profile' : 'Back'}
             >
-              Go to Shop
-            </Link>
-          </section>
-        ) : (
-          <section className="space-y-3" onClick={() => setOpenId(null)}>
-            {wishlistItems.map((item) => (
-              <div key={item.id || item.title} onClick={(event) => event.stopPropagation()}>
-                <SwipeWishlistItem
-                  item={item}
-                  openId={openId}
-                  setOpenId={setOpenId}
-                  onAddToCart={handleAddToCart}
-                  onRemove={handleRemove}
-                />
-              </div>
-            ))}
-          </section>
-        )}
-      </main>
+              <i className="fa-solid fa-chevron-left text-[0.85rem]" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <h1 className="m-0 text-[1.1rem] font-black text-[#2f241a]">
+                {fromProfile ? 'Wishlist' : 'My Wishlist'}
+              </h1>
+              <p className="mb-0 mt-0.5 text-[0.78rem] font-semibold text-[#8b8178]">
+                {wishlistItems.length
+                  ? `${wishlistItems.length} saved item${wishlistItems.length === 1 ? '' : 's'}`
+                  : 'Saved furniture'}
+              </p>
+            </div>
+            <span className="h-10 w-10 shrink-0" aria-hidden="true" />
+          </div>
+        </header>
+
+        <main className="px-4 pb-4 pt-4">
+          {waitingForCatalog ? (
+            <p className="mb-0 mt-10 text-center text-[0.86rem] font-semibold text-[#8b8178]">
+              Loading saved items…
+            </p>
+          ) : null}
+
+          {!waitingForCatalog && !wishlistItems.length ? (
+            <section className="px-2 py-16 text-center">
+              <i className="fa-regular fa-heart mb-4 text-4xl text-[#d8c8b6]" />
+              <h2 className="m-0 text-[1.2rem] font-black text-[#1c140e]">Your wishlist is empty</h2>
+              <p className="mx-auto mb-0 mt-2 max-w-xs text-[0.85rem] font-semibold leading-relaxed text-[#8b8178]">
+                Save furniture you like and add it to cart anytime.
+              </p>
+              <Link
+                to="/app/shop"
+                className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-full bg-[#6b4228] px-6 text-[0.86rem] font-black text-white no-underline"
+              >
+                Go to Shop
+              </Link>
+            </section>
+          ) : null}
+
+          {wishlistItems.length > 0 ? (
+            <section className="space-y-3" onClick={() => setOpenId(null)}>
+              {wishlistItems.map((item) => (
+                <div key={item.id || item.title} onClick={(event) => event.stopPropagation()}>
+                  <SwipeWishlistItem
+                    item={item}
+                    openId={openId}
+                    setOpenId={setOpenId}
+                    onAddToCart={handleAddToCart}
+                    onRemove={handleRemove}
+                  />
+                </div>
+              ))}
+            </section>
+          ) : null}
+        </main>
       </div>
       {fromProfile ? null : <MobileBottomNav />}
     </div>

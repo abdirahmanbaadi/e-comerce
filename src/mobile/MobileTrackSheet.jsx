@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { fetchTrackedOrder, resolveTrackStatus } from '../features/tracking/orderTrackingShared';
+import { useIntervalWhenVisible } from '../hooks/useIntervalWhenVisible';
 import { apiUrl } from '../utils/data';
 import { productImage } from '../utils/format';
 import { showTopFloatNotification } from '../utils/notifications';
 import { canCustomerCancelOrder } from '../utils/orderCancel';
-import { findMockOrder } from './mockOrders';
+import { resolveOrderCoords } from '../utils/banadirCoords';
+import DriverCustomerChatSheet from './driver/DriverCustomerChatSheet';
+import DriverMap from './driver/DriverMap';
 
 const TIMELINE = [
   { key: 'placed', label: 'Placed' },
@@ -169,53 +172,72 @@ function QrOnlyOverlay({ open, onClose, order }) {
 }
 
 export default function MobileTrackSheet({ open, orderId, fallbackOrder = null, onClose, onOrderUpdated }) {
-  const [order, setOrder] = useState(fallbackOrder || findMockOrder(orderId));
+  const [order, setOrder] = useState(fallbackOrder || null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [qrOpen, setQrOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  const refreshTrack = async ({ quiet = false } = {}) => {
+    if (!orderId) return;
+    if (!quiet) setLoading(true);
+    try {
+      const result = await fetchTrackedOrder(orderId);
+      if (result.success) {
+        setOrder(result.order);
+        setLoadError('');
+      } else if (!quiet && !fallbackOrder) {
+        setOrder(null);
+        setLoadError(result.message || 'Order not found. Check the Order ID.');
+      }
+    } catch {
+      if (!quiet && !fallbackOrder) {
+        setOrder(null);
+        setLoadError('Could not connect to server.');
+      }
+    } finally {
+      if (!quiet) setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return undefined;
     setQrOpen(false);
+    setChatOpen(false);
     setLoadError('');
-    const seed = fallbackOrder || findMockOrder(orderId);
-    setOrder(seed || null);
-
-    let cancelled = false;
-    setLoading(true);
-    fetchTrackedOrder(orderId)
-      .then((result) => {
-        if (cancelled) return;
-        if (result.success) {
-          setOrder(result.order);
-          setLoadError('');
-        } else if (!seed) {
-          setOrder(null);
-          setLoadError(result.message || 'Order not found. Check the Order ID.');
-        }
-      })
-      .catch(() => {
-        if (!cancelled && !seed) {
-          setOrder(null);
-          setLoadError('Could not connect to server.');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const seed = fallbackOrder || null;
+    setOrder(seed);
+    refreshTrack({ quiet: Boolean(seed) });
 
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      cancelled = true;
       document.body.style.overflow = original;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fallbackOrder, open, orderId]);
 
   const status = order ? resolveTrackStatus(order) : 'processing';
   const current = timelineIndex(status);
   const driver = driverFromOrder(order);
+  const canChat =
+    Boolean(localStorage.getItem('token')) &&
+    Boolean(driver) &&
+    status !== 'cancelled' &&
+    Boolean(order?.assignedDriverId || order?.driverInfo?.id);
+  const driverLocation = order?.driverLocation;
+  const customerCoords = useMemo(() => (order ? resolveOrderCoords(order) : null), [order]);
+  const liveDriverPos =
+    driverLocation && Number.isFinite(Number(driverLocation.lat))
+      ? { lat: Number(driverLocation.lat), lng: Number(driverLocation.lng) }
+      : null;
+
+  useIntervalWhenVisible(
+    () => refreshTrack({ quiet: true }),
+    8000,
+    Boolean(open && orderId && (status === 'shipped' || liveDriverPos))
+  );
   const canCancel = canCustomerCancelOrder(order);
   const qrReady =
     Boolean(order?.deliveryQrPending) ||
@@ -429,7 +451,16 @@ export default function MobileTrackSheet({ open, orderId, fallbackOrder = null, 
                         <i className="fa-solid fa-phone text-[0.85rem]" />
                       </a>
                     ) : null}
-                    {smsHref ? (
+                    {canChat ? (
+                      <button
+                        type="button"
+                        onClick={() => setChatOpen(true)}
+                        className="flex h-10 w-10 items-center justify-center rounded-full border-0 bg-[#f3ebe3] text-[#6b4228]"
+                        aria-label="Message driver"
+                      >
+                        <i className="fa-solid fa-comment text-[0.85rem]" />
+                      </button>
+                    ) : smsHref ? (
                       <a
                         href={smsHref}
                         className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f3ebe3] text-[#6b4228] no-underline"
@@ -439,6 +470,27 @@ export default function MobileTrackSheet({ open, orderId, fallbackOrder = null, 
                       </a>
                     ) : null}
                   </div>
+                  {liveDriverPos && status === 'shipped' ? (
+                    <div className="mt-3 overflow-hidden rounded-[18px] ring-1 ring-[#eadfce]">
+                      <div className="h-40 w-full">
+                        <DriverMap
+                          customer={customerCoords}
+                          driver={liveDriverPos}
+                          followDriver
+                          className="h-full w-full"
+                        />
+                      </div>
+                      <p className="mb-0 bg-[#faf7f2] px-3 py-2 text-[0.7rem] font-semibold text-[#8b8178]">
+                        Live driver location
+                        {driverLocation?.updatedAt
+                          ? ` · updated ${new Date(driverLocation.updatedAt).toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}`
+                          : ''}
+                      </p>
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 
@@ -481,6 +533,13 @@ export default function MobileTrackSheet({ open, orderId, fallbackOrder = null, 
       </aside>
 
       <QrOnlyOverlay open={qrOpen && qrReady} onClose={() => setQrOpen(false)} order={order} />
+      <DriverCustomerChatSheet
+        order={order}
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        selfRole="customer"
+        peerName={driver?.name || 'Driver'}
+      />
     </div>
   );
 }

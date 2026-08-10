@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/orderController');
+const deliveryChatRoutes = require('./deliveryChatRoutes');
 const { protect, optionalProtect, authorize } = require('../middleware/authMiddleware');
 const { rejectStaffShopping } = require('../middleware/staffShoppingMiddleware');
 
@@ -15,6 +16,7 @@ router.patch('/:orderId/address', protect, rejectStaffShopping, orderController.
 router.get('/stats', protect, authorize('admin', 'staff'), orderController.getOrderStats);
 router.get('/', protect, orderController.getOrders);
 router.get('/:orderId/details', protect, orderController.getOrderDetails);
+router.use('/:orderId/delivery-chat', deliveryChatRoutes);
 router.patch('/:id/assign', protect, authorize('admin'), orderController.assignDriver);
 router.put('/:id', protect, authorize('admin', 'staff', 'delivery'), orderController.updateOrder);
 

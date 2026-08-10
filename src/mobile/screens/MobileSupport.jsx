@@ -7,6 +7,7 @@ import {
   HELP_PHONE_HREF as PHONE_HREF,
   HELP_WHATSAPP_HREF as WHATSAPP_HREF,
 } from '../../utils/helpCenterContent';
+import { useProfileHome } from '../useProfileHome';
 
 function FaqRow({ item, open, onToggle }) {
   return (
@@ -61,6 +62,7 @@ function ContactRow({ icon, iconClass, label, onClick, href }) {
 
 export default function MobileSupport() {
   const navigate = useNavigate();
+  const profileHome = useProfileHome();
   const { user } = useAuth();
   const [category, setCategory] = useState('general');
   const [query, setQuery] = useState('');
@@ -68,9 +70,9 @@ export default function MobileSupport() {
 
   useEffect(() => {
     if (!user?.isLoggedIn) {
-      navigate('/app/login', { replace: true, state: { from: '/app/profile/support' } });
+      navigate('/app/login', { replace: true, state: { from: `${profileHome}/support` } });
     }
-  }, [user, navigate]);
+  }, [user, navigate, profileHome]);
 
   const filteredFaqs = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -92,7 +94,7 @@ export default function MobileSupport() {
         <header className="sticky top-0 z-20 flex items-center gap-3 bg-white px-4 py-3.5 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <button
             type="button"
-            onClick={() => navigate('/app/profile')}
+            onClick={() => navigate(profileHome)}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent text-[#111111]"
             aria-label="Back"
           >
@@ -161,7 +163,7 @@ export default function MobileSupport() {
               icon="fa-headset"
               iconClass="fa-solid"
               label="Customer Service"
-              onClick={() => navigate('/app/profile/support/chat')}
+              onClick={() => navigate(`${profileHome}/support/chat`)}
             />
             <ContactRow
               icon="fa-whatsapp"

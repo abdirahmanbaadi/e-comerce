@@ -72,7 +72,7 @@ export default function MobileProductDetails() {
   if (!product) return <Navigate to="/app/shop" replace />;
 
   const images = product.images?.length ? product.images : [product.image].filter(Boolean);
-  const wishlisted = isWishlisted?.(product.title);
+  const wishlisted = isWishlisted?.(product);
   const inStock = isProductInStock(product);
   const category =
     product.label ||
@@ -160,9 +160,14 @@ export default function MobileProductDetails() {
           </h2>
           <button
             type="button"
-            onClick={() => toggleWishlist?.(product.title)}
-            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#eee8e2] bg-white text-[1.05rem] text-red-500 shadow-sm"
+            onClick={() => toggleWishlist?.(product)}
+            className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border shadow-sm text-[1.05rem] ${
+              wishlisted
+                ? 'border-[#f6c7cf] bg-[#fdecec] text-[#e11d48]'
+                : 'border-[#eee8e2] bg-white text-[#8b8178]'
+            }`}
             aria-label="Wishlist"
+            aria-pressed={wishlisted}
           >
             <i className={`${wishlisted ? 'fa-solid' : 'fa-regular'} fa-heart`} />
           </button>

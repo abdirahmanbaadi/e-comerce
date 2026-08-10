@@ -360,6 +360,57 @@
   html.mmf-dark .mmf-pwa .mmf-contact-icon i {
     color: #f3eee6 !important;
   }
+
+  /* Driver app keeps its own light green palette (not customer dark mode) */
+  html.mmf-dark .mmf-driver {
+    color-scheme: light;
+    color: #1a1a1a !important;
+    background-color: #f7f4ef !important;
+  }
+
+  html.mmf-dark .mmf-driver .bg-white,
+  html.mmf-dark .mmf-driver .bg-white\/95 {
+    background-color: #ffffff !important;
+  }
+
+  html.mmf-dark .mmf-driver .bg-\[\#f4f6f5\],
+  html.mmf-dark .mmf-driver .bg-\[\#fafcfb\] {
+    background-color: #f4f6f5 !important;
+  }
+
+  html.mmf-dark .mmf-driver .bg-\[\#e8f5ee\] {
+    background-color: #e8f5ee !important;
+  }
+
+  html.mmf-dark .mmf-driver .bg-\[\#e8f0fa\] {
+    background-color: #e8f0fa !important;
+  }
+
+  html.mmf-dark .mmf-driver .bg-\[\#fff4e6\] {
+    background-color: #fff4e6 !important;
+  }
+
+  html.mmf-dark .mmf-driver .text-\[\#10241f\],
+  html.mmf-dark .mmf-driver .text-\[\#1c3028\],
+  html.mmf-dark .mmf-driver .text-\[\#1c4038\] {
+    color: #10241f !important;
+  }
+
+  html.mmf-dark .mmf-driver .text-\[\#7a8a86\],
+  html.mmf-dark .mmf-driver .text-\[\#6b7f79\] {
+    color: #6b7f79 !important;
+  }
+
+  html.mmf-dark .mmf-driver .text-\[\#9aa8a4\] {
+    color: #9aa8a4 !important;
+  }
+
+  html.mmf-dark .mmf-driver .ring-\[\#e8eeeb\],
+  html.mmf-dark .mmf-driver .border-\[\#e8eeeb\],
+  html.mmf-dark .mmf-driver .border-\[\#eef2f0\] {
+    --tw-ring-color: #e8eeeb;
+    border-color: #e8eeeb !important;
+  }
 }
 
 @layer components {

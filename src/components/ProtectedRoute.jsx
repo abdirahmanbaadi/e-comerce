@@ -20,8 +20,12 @@ export default function ProtectedRoute({ children, roles = [] }) {
   }
 
   if (roles.length > 0 && !roles.includes(role)) {
+    // Wrong account for this page (e.g. driver opening /admin) → web login to switch
+    if (roles.includes('admin') || roles.includes('staff')) {
+      return <Navigate to="/login" replace state={{ from: location.pathname, switchAccount: true }} />;
+    }
     if (role === 'admin' || role === 'staff') return <Navigate to="/admin" replace />;
-    if (role === 'delivery') return <Navigate to="/delivery" replace />;
+    if (role === 'delivery') return <Navigate to="/app/driver" replace />;
     return <Navigate to="/" replace />;
   }
 

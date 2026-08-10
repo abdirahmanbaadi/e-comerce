@@ -78,6 +78,10 @@ export const NOTIF_TYPE_TONE = {
   order_delivered: { icon: 'fa-check-double', iconStyle: 'fa-solid', tone: 'bg-[#e8f5ef] text-[#0b6b45]' },
   order_cancelled: { icon: 'fa-ban', iconStyle: 'fa-solid', tone: 'bg-[#fdecec] text-[#c0392b]' },
   driver_assigned: { icon: 'fa-user-check', iconStyle: 'fa-solid', tone: 'bg-[#e8f0ff] text-[#2456c8]' },
+  delivery_assigned: { icon: 'fa-bell', iconStyle: 'fa-solid', tone: 'bg-[#fff1e8] text-[#c45c26]' },
+  delivery_unassigned: { icon: 'fa-circle-xmark', iconStyle: 'fa-solid', tone: 'bg-[#fdecec] text-[#c0392b]' },
+  delivery_accepted: { icon: 'fa-circle-check', iconStyle: 'fa-solid', tone: 'bg-[#e8f5ef] text-[#0b6b45]' },
+  driver_rejected: { icon: 'fa-circle-xmark', iconStyle: 'fa-solid', tone: 'bg-[#fdecec] text-[#c0392b]' },
   delivery_qr_ready: { icon: 'fa-qrcode', iconStyle: 'fa-solid', tone: 'bg-[#e8f5ef] text-[#0b6b45]' },
   delivery_delayed: { icon: 'fa-clock', iconStyle: 'fa-solid', tone: 'bg-[#fff1e6] text-[#b45309]' },
   delivery_pickup: { icon: 'fa-warehouse', iconStyle: 'fa-solid', tone: 'bg-[#e8f0ff] text-[#2456c8]' },
@@ -143,11 +147,29 @@ export function getNotificationTitle(item) {
 }
 
 export function getNotificationOrderId(item) {
-  return String(item?.orderId || item?.metadata?.orderId || item?.relatedId || '').trim();
+  const fromMeta = String(item?.metadata?.orderId || '').trim();
+  if (fromMeta) return fromMeta;
+
+  const type = String(item?.type || '').toLowerCase();
+  // Coupon / promo / offer notifications use relatedId as promo id — never show as Order ID.
+  if (
+    type.includes('coupon') ||
+    type.includes('promo') ||
+    type.includes('offer') ||
+    type.includes('weekend') ||
+    type.includes('wish')
+  ) {
+    return '';
+  }
+
+  const related = String(item?.orderId || item?.relatedId || '').trim();
+  if (!related || related.startsWith('promo-') || related.startsWith('banner-')) return '';
+  return related;
 }
 
-export function getNotificationCouponCode(item) {
-  return String(item?.couponCode || item?.metadata?.promoCode || '').trim();
+/** Coupon codes are not shown in notification UI (checkout is the place to enter them). */
+export function getNotificationCouponCode() {
+  return '';
 }
 
 export function getNotificationProductImage(item) {

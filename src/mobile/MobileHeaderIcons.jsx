@@ -1,10 +1,15 @@
 import { useNavigate } from 'react-router-dom';
-import { getMockUnreadCount } from './mockNotifications';
+import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../hooks/useNotifications';
 
 /** Header right icons — notifications only (orders/wishlist live under Profile). */
 export default function MobileHeaderIcons({ plain = false }) {
   const navigate = useNavigate();
-  const unreadCount = getMockUnreadCount();
+  const { user } = useAuth();
+  const { unreadCount } = useNotifications({
+    enabled: Boolean(user?.isLoggedIn),
+    pollMs: 45000,
+  });
 
   return (
     <div className={`flex shrink-0 items-center ${plain ? 'gap-3' : 'gap-2.5'}`}>

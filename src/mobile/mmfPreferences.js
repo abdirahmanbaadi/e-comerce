@@ -30,6 +30,10 @@ export function getAppAppearanceScope() {
   return 'all';
 }
 
+function isDriverAppPath(pathname = '') {
+  return pathname === '/app/driver' || pathname.startsWith('/app/driver/');
+}
+
 function isProfilePath(pathname = '') {
   return (
     pathname === '/app/profile' ||
@@ -55,6 +59,7 @@ export function shouldApplyDarkMode(
   scope = getAppAppearanceScope()
 ) {
   if (mode !== 'dark') return false;
+  if (isDriverAppPath(pathname)) return false;
   if (scope === 'profile') return isProfilePath(pathname);
   if (scope === 'customer') return isCustomerAppPath(pathname);
   return true; // all

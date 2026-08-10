@@ -8,6 +8,7 @@ import {
   storeNotificationPreferences,
 } from '../../utils/notifications';
 import MobileProfileSubpage from '../MobileProfileSubpage';
+import { useProfileHome } from '../useProfileHome';
 import {
   applyAppAppearance,
   appearanceScopeLabel,
@@ -146,6 +147,7 @@ function LegalDocumentScreen({ title, onBack, children }) {
 
 export default function MobileSettings() {
   const navigate = useNavigate();
+  const profileHome = useProfileHome();
   const { user, updateProfile, logout } = useAuth();
   const [panel, setPanel] = useState('hub');
   const [password, setPassword] = useState({
@@ -175,7 +177,7 @@ export default function MobileSettings() {
 
   useEffect(() => {
     if (!user?.isLoggedIn) {
-      navigate('/app/login', { replace: true, state: { from: '/app/profile/settings' } });
+      navigate('/app/login', { replace: true, state: { from: `${profileHome}/settings` } });
       return;
     }
     const p = user.notificationPreferences || {};
@@ -657,7 +659,7 @@ export default function MobileSettings() {
   }
 
   return (
-    <MobileProfileSubpage title="Settings">
+    <MobileProfileSubpage title="Settings" backTo={profileHome}>
       <SectionLabel>Notifications</SectionLabel>
       <SettingsCard>
         <SettingsRow

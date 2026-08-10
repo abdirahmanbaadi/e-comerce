@@ -7,8 +7,6 @@ import { formatMoney, productImage } from '../../utils/format';
 import { downloadInvoice } from '../../utils/invoiceActions';
 import { showTopFloatNotification } from '../../utils/notifications';
 import { resolveOrderStatus } from '../../utils/orderStatus';
-import { findMockOrder, updateMockOrderAddress } from '../mockOrders';
-import { MOCK_REVIEW_INBOX } from '../mockReviewInbox';
 import MobileReviewSheet from '../MobileReviewSheet';
 
 const STATUS_META = {
@@ -56,8 +54,8 @@ export default function MobileOrderDetails() {
     typeof location.state?.from === 'string' && location.state.from.startsWith('/app/')
       ? location.state.from
       : '/app/profile/orders';
-  const [order, setOrder] = useState(() => findMockOrder(orderId));
-  const [loading, setLoading] = useState(!findMockOrder(orderId));
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reviewSession, setReviewSession] = useState(null);
   const [sheetTarget, setSheetTarget] = useState(null);
@@ -68,14 +66,6 @@ export default function MobileOrderDetails() {
 
   useEffect(() => {
     let cancelled = false;
-    const mock = findMockOrder(orderId);
-    if (mock) {
-      setOrder(mock);
-      setLoading(false);
-      setLoadError('');
-      return undefined;
-    }
-
     setLoading(true);
     setLoadError('');
     fetchTrackedOrder(orderId)
@@ -106,17 +96,9 @@ export default function MobileOrderDetails() {
 
   const loadReviewSession = async () => {
     const token = localStorage.getItem('token');
-    if (!orderId) {
+    if (!orderId || !token || !user?.isLoggedIn) {
       setReviewSession(null);
       return null;
-    }
-
-    const mockSession =
-      (MOCK_REVIEW_INBOX.toRate || []).find((s) => String(s.orderId) === String(orderId)) || null;
-
-    if (!token || !user?.isLoggedIn) {
-      setReviewSession(mockSession);
-      return mockSession;
     }
     try {
       const res = await fetch(apiUrl('/api/reviews/inbox'), {
@@ -126,17 +108,15 @@ export default function MobileOrderDetails() {
       if (data.success) {
         const session =
           (data.toRate || []).find((s) => String(s.orderId) === String(orderId)) || null;
-        if (session) {
-          setReviewSession(session);
-          return session;
-        }
+        setReviewSession(session);
+        return session;
       }
     } catch {
-      /* use mock fallback */
+      /* keep null */
     }
 
-    setReviewSession(mockSession);
-    return mockSession;
+    setReviewSession(null);
+    return null;
   };
 
   useEffect(() => {
@@ -220,15 +200,6 @@ export default function MobileOrderDetails() {
 
     setSavingAddress(true);
     try {
-      const mock = findMockOrder(order.id);
-      if (mock) {
-        const updated = updateMockOrderAddress(order.id, next);
-        if (updated) setOrder(updated);
-        showTopFloatNotification('Delivery address updated.');
-        setEditingAddress(false);
-        return;
-      }
-
       const token = localStorage.getItem('token');
       if (!token) {
         showTopFloatNotification('Please sign in to update the address.', 'danger');
@@ -282,13 +253,11 @@ export default function MobileOrderDetails() {
       navigate(`/app/profile/reviews?orderId=${encodeURIComponent(orderId)}`);
       return;
     }
-    const localOnly = String(reviewSession.orderId || '').startsWith('ORD-2024-');
     if (reviewSession.delivery?.status === 'missing') {
       setSheetTarget({
         type: 'delivery',
         orderId: reviewSession.orderId,
         driverName: reviewSession.delivery?.driverName,
-        localOnly,
       });
       return;
     }
@@ -300,24 +269,13 @@ export default function MobileOrderDetails() {
         productId: nextProduct.productId,
         title: nextProduct.title,
         image: nextProduct.image,
-        localOnly,
       });
       return;
     }
     navigate(`/app/profile/reviews?orderId=${encodeURIComponent(orderId)}`);
   };
 
-  const afterSubmit = async (target, rating, comment) => {
-    if (target?.localOnly) {
-      setSheetTarget(null);
-      // Refresh from static mock shape for next missing item
-      const session =
-        (MOCK_REVIEW_INBOX.toRate || []).find((s) => String(s.orderId) === String(orderId)) || null;
-      setReviewSession(session);
-      navigate(`/app/profile/reviews?orderId=${encodeURIComponent(orderId)}`);
-      return;
-    }
-
+  const afterSubmit = async () => {
     const session = await loadReviewSession();
     if (!session) {
       setSheetTarget(null);

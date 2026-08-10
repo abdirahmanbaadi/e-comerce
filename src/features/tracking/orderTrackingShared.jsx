@@ -547,16 +547,19 @@ export async function fetchTrackedOrder(rawCode) {
   const data = await res.json();
 
   if (data.success && data.order) {
+    const driverLocation = data.driverLocation || data.order.driverLocation || null;
     return {
       success: true,
       order: {
         ...data.order,
         status: resolveTrackStatus(data.order),
         driverInfo: data.driverInfo || data.order.driverInfo || null,
+        driverLocation,
       },
       activities: Array.isArray(data.activities) ? data.activities : [],
       orderId: data.order.id || code,
       driverInfo: data.driverInfo || data.order.driverInfo || null,
+      driverLocation,
     };
   }
 

@@ -11,10 +11,22 @@ router.put('/my-status', protect, authorize('delivery'), driverController.update
 router.post('/assignments/:orderId/accept', protect, authorize('delivery'), driverController.acceptAssignment);
 router.post('/assignments/:orderId/reject', protect, authorize('delivery'), driverController.rejectAssignment);
 router.post(
+  '/assignments/:orderId/start-delivery',
+  protect,
+  authorize('delivery'),
+  driverController.startDelivery
+);
+router.post(
   '/assignments/:orderId/confirm-delivery',
   protect,
   authorize('delivery'),
   driverController.confirmDeliveryByQr
+);
+router.put(
+  '/assignments/:orderId/location',
+  protect,
+  authorize('delivery'),
+  driverController.updateDeliveryLocation
 );
 
 router.get('/applications', protect, authorize('admin'), driverController.listApplications);

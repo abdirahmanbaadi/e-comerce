@@ -8,8 +8,10 @@ import {
   fetchOrderForNotification,
   showTopFloatNotification,
 } from '../../utils/notifications';
+import { copyToClipboard } from '../../utils/clipboard';
 import { apiUrl } from '../../utils/data';
 import { formatMoney, productImage } from '../../utils/format';
+import { getNotificationOrderId } from '../../utils/notificationTypes';
 
 /* ═══ SECTION: MODAL SHELL ═══ */
 export function ModalBackdrop({ children, onClose, maxWidth = 'max-w-lg', className = '' }) {
@@ -628,18 +630,8 @@ function DeliveryAssignedModal({ onClose, item }) {
 }
 
 function GenericNotificationModal({ item, onClose }) {
-  const orderId = item?.orderId || item?.metadata?.orderId || '';
-  const couponCode = item?.couponCode || item?.metadata?.promoCode || '';
+  const orderId = getNotificationOrderId(item);
   const productImg = item?.productImage || item?.metadata?.image || '';
-
-  const copyValue = async (value, message) => {
-    try {
-      await navigator.clipboard.writeText(String(value));
-      showTopFloatNotification(message);
-    } catch {
-      showTopFloatNotification('Could not copy.', 'danger');
-    }
-  };
 
   return (
     <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
@@ -659,7 +651,7 @@ function GenericNotificationModal({ item, onClose }) {
         ) : null}
         <p className="mx-auto mb-6 max-w-[360px] text-[0.92rem] leading-relaxed text-[#666666]">{item?.desc || ''}</p>
         {orderId ? (
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-[#f7f2eb] px-4 py-3 text-left">
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-[#f7f2eb] px-4 py-3 text-left">
             <div>
               <p className="mb-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-[#9a8d80]">Order ID</p>
               <p className="mb-0 text-[0.9rem] font-extrabold text-[#2b3a30]">{orderId}</p>
@@ -668,23 +660,7 @@ function GenericNotificationModal({ item, onClose }) {
               type="button"
               className="flex h-9 w-9 items-center justify-center rounded-full border-0 bg-white text-[#4a6454] shadow-sm"
               aria-label="Copy Order ID"
-              onClick={() => copyValue(orderId, 'Order ID copied.')}
-            >
-              <i className="fa-regular fa-copy" />
-            </button>
-          </div>
-        ) : null}
-        {couponCode ? (
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-[#f7f2eb] px-4 py-3 text-left">
-            <div>
-              <p className="mb-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-[#9a8d80]">Coupon code</p>
-              <p className="mb-0 text-[0.9rem] font-extrabold text-[#2b3a30]">{couponCode}</p>
-            </div>
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-full border-0 bg-white text-[#4a6454] shadow-sm"
-              aria-label="Copy coupon code"
-              onClick={() => copyValue(couponCode, 'Coupon code copied.')}
+              onClick={() => copyToClipboard(orderId, 'Order ID copied.')}
             >
               <i className="fa-regular fa-copy" />
             </button>
@@ -762,7 +738,7 @@ function SupportRepliedModal({ onClose, userName, notificationItem, onSendFollow
 
     const ok = await onSendFollowUp(ticketId, text);
     if (ok) {
-      showTopFloatNotification('✅ Fariintaada waa la diray!');
+      showTopFloatNotification('Your message was sent.');
       setReplyText('');
     }
   };
@@ -881,13 +857,16 @@ function WishlistAvailableModal({ onClose, navigate, item }) {
 
 function WeekendOfferModal({ onClose, navigate, item }) {
   const meta = item?.metadata || {};
-  const promoCode = meta.promoCode || 'WEEKEND15';
-  const description = meta.description || 'Make your weekends more comfortable with timeless sofas at a special price.';
+  const description =
+    item?.desc ||
+    item?.body ||
+    meta.description ||
+    'Make your weekends more comfortable with timeless sofas at a special price.';
   const discountLabel = meta.discountPercent
     ? `${meta.discountPercent}% OFF`
     : meta.discountAmount
       ? `${formatMoney(meta.discountAmount)} OFF`
-      : '15% OFF';
+      : 'Special offer';
 
   const productTitle = meta.productTitle || WEEKEND_OFFER.productTitle;
   const image = meta.image ? productImage(meta.image) : WEEKEND_OFFER.image;
@@ -916,16 +895,8 @@ function WeekendOfferModal({ onClose, navigate, item }) {
             </h2>
             <hr className="my-3.5 h-0.5 w-[60px] border-0 bg-[#d4cebc]" />
             <p className="mb-5 text-left text-[0.92rem] leading-relaxed text-[#666666]">{description}</p>
-            <div className="mb-6 flex max-w-[320px] overflow-hidden rounded-xl border-[1.5px] border-dashed border-[#ebdcb9] bg-white">
-              <div className="border-r border-dashed border-[#ebdcb9] bg-base px-4 py-2.5 text-[0.8rem] font-bold uppercase tracking-wide text-[#888888]">
-                Use Code
-              </div>
-              <div className="flex-1 px-4 py-2.5 text-center text-[1.15rem] font-extrabold tracking-widest text-[#8c7a6b]">
-                {promoCode}
-              </div>
-            </div>
             <div className="mb-4 flex items-center gap-2 text-left text-[0.86rem] text-[#555555]">
-              <i className="fa-regular fa-clock" /> Valid until Sunday, 11:59 PM
+              <i className="fa-regular fa-clock" /> Limited-time weekend offer
             </div>
             <div className="mb-2.5 text-left text-[0.76rem] font-extrabold uppercase tracking-wide text-[#888888]">Includes:</div>
             <ul className="mb-5 list-none space-y-1.5 p-0 text-left">
@@ -964,45 +935,40 @@ function WeekendOfferModal({ onClose, navigate, item }) {
 
 function CouponNotificationModal({ onClose, navigate, item }) {
   const meta = item?.metadata || {};
-  const promoCode = meta.promoCode || '';
-  const description = meta.description || 'Qiimo dhimis gaar ah oo kuu diyaar ah.';
-  
+  const description =
+    item?.desc ||
+    item?.body ||
+    item?.message ||
+    meta.description ||
+    'A special discount is now available. Open the shop and apply your offer at checkout to save.';
+
   const discountLabel = meta.discountPercent
     ? `${meta.discountPercent}% OFF`
     : meta.discountAmount
       ? `${formatMoney(meta.discountAmount)} OFF`
-      : 'Qiimo Dhimis';
+      : 'Special offer';
 
-  // Format restrictions message
   let restrictionMsg = '';
   if (meta.applicableCategory || meta.applicableProduct) {
-    const catText = meta.applicableCategory ? `qaybta "${meta.applicableCategory}"` : '';
-    const prodText = meta.applicableProduct ? `alaabta "${meta.applicableProduct}"` : '';
-    restrictionMsg = `Kuuboonkan wuxuu u shaqeeyaa oo kaliya ${[catText, prodText].filter(Boolean).join(' ama ')}.`;
+    const parts = [];
+    if (meta.applicableCategory) parts.push(`category "${meta.applicableCategory}"`);
+    if (meta.applicableProduct) parts.push(`product "${meta.applicableProduct}"`);
+    restrictionMsg = `This offer applies only to ${parts.join(' or ')}.`;
   }
 
-  // Format expiration message
-  let expiryMsg = 'Waqtigeedu waa xadidan yahay.';
+  let expiryMsg = '';
   if (meta.expiresAt) {
     const expDate = new Date(meta.expiresAt);
-    if (!isNaN(expDate.getTime())) {
-      expiryMsg = `Wuxuu shaqaynayaa ilaa: ${expDate.toLocaleDateString('so-SO', {
+    if (!Number.isNaN(expDate.getTime())) {
+      expiryMsg = `Valid until ${expDate.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
-        year: 'numeric'
-      })}`;
+        year: 'numeric',
+      })}.`;
     }
   } else if (meta.durationDays) {
-    expiryMsg = `Wuxuu shaqaynayaa ${meta.durationDays} maalmood oo kaliya.`;
+    expiryMsg = `Valid for ${meta.durationDays} day${Number(meta.durationDays) === 1 ? '' : 's'}.`;
   }
-
-  const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(promoCode);
-    setCopied(true);
-    showTopFloatNotification('Koodhka kuuboonka waa la koobbiyeeyay! ✅');
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   return (
     <ModalBackdrop onClose={onClose} maxWidth="max-w-[500px]">
@@ -1013,70 +979,50 @@ function CouponNotificationModal({ onClose, navigate, item }) {
             <i className="fa-solid fa-ticket text-[2rem] text-gold" />
           </SuccessCircle>
         </PremiumDeco>
-        
+
         <h2 className="mb-1 font-display text-[2.1rem] font-bold text-deepGreen">
-          {item?.title || 'Kuuboon Cusub!'}
+          {item?.title || 'New discount available'}
         </h2>
-        <span className="inline-block rounded-full bg-gold/15 px-3 py-1 text-[0.78rem] font-extrabold uppercase tracking-wider text-gold mb-3">
+        <span className="mb-3 inline-block rounded-full bg-gold/15 px-3 py-1 text-[0.78rem] font-extrabold uppercase tracking-wider text-gold">
           {discountLabel}
         </span>
         <GoldStarSeparator />
-        
+
         <p className="mx-auto mb-5 max-w-[360px] text-[0.92rem] leading-relaxed text-[#666666]">
           {description}
         </p>
 
-        {/* Styled Coupon Card */}
-        <div className="mb-5 rounded-2xl border-2 border-dashed border-[#e6dfcc] bg-[#FAF8F5] p-5 relative overflow-hidden flex flex-col items-center">
-          {/* Half circles on sides for ticket effect */}
-          <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-base" />
-          <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-base" />
-          
-          <span className="text-[0.72rem] font-bold text-[#a0947e] uppercase tracking-widest mb-1.5">
-            KOODHKA QIIMO DHIMISTA
-          </span>
-          <div className="font-mono text-2xl font-extrabold tracking-widest text-[#4a3e35] bg-white px-6 py-2 rounded-xl border border-black/[0.05] shadow-sm select-all">
-            {promoCode}
-          </div>
-          
-          <button 
-            type="button" 
-            onClick={handleCopy} 
-            className="mt-3.5 inline-flex items-center gap-1.5 border-0 bg-transparent text-[0.82rem] font-extrabold text-deepGreen hover:text-teal transition"
-          >
-            <i className={copied ? "fa-solid fa-check" : "fa-regular fa-copy"} />
-            {copied ? 'Waa la koobbiyeeyay' : 'Koobbi koodhka'}
-          </button>
-        </div>
-
-        {/* Constraints Info Box */}
         {(restrictionMsg || expiryMsg) && (
           <div className="mb-6 rounded-[14px] border border-black/[0.04] bg-black/[0.015] px-4.5 py-3 text-left">
-            {restrictionMsg && (
-              <div className="flex gap-2 text-[0.82rem] text-[#666666] mb-1.5 last:mb-0">
-                <span className="text-gold text-[0.9rem]"><i className="fa-solid fa-circle-info" /></span>
+            {restrictionMsg ? (
+              <div className="mb-1.5 flex gap-2 text-[0.82rem] text-[#666666] last:mb-0">
+                <span className="text-[0.9rem] text-gold">
+                  <i className="fa-solid fa-circle-info" />
+                </span>
                 <span className="font-semibold leading-normal">{restrictionMsg}</span>
               </div>
-            )}
-            {expiryMsg && (
+            ) : null}
+            {expiryMsg ? (
               <div className="flex gap-2 text-[0.82rem] text-[#666666] last:mb-0">
-                <span className="text-[#a0947e] text-[0.9rem]"><i className="fa-regular fa-clock" /></span>
+                <span className="text-[0.9rem] text-[#a0947e]">
+                  <i className="fa-regular fa-clock" />
+                </span>
                 <span className="font-semibold leading-normal">{expiryMsg}</span>
               </div>
-            )}
+            ) : null}
           </div>
         )}
 
         <div className="flex gap-3">
-          <BtnPrimary 
+          <BtnPrimary
             onClick={() => {
               navigate('/products');
               onClose();
             }}
           >
-            Ku Isticmaal Hadda (Shop)
+            Browse shop
           </BtnPrimary>
-          <BtnSecondary onClick={onClose}>Xir (Close)</BtnSecondary>
+          <BtnSecondary onClick={onClose}>Close</BtnSecondary>
         </div>
       </div>
     </ModalBackdrop>
@@ -1524,12 +1470,6 @@ export default function ProfileNotificationsTab({
           </button>
         </div>
       </div>
-
-      {Array.isArray(items) && items.some((n) => n?.isPreview || n?.metadata?.preview) ? (
-        <p className={`mb-3 mt-0 text-[0.78rem] font-bold text-[#9a5b12] ${showMobileDetail ? 'max-[899px]:hidden' : ''}`}>
-          Preview data — sample notifications for UI testing
-        </p>
-      ) : null}
 
       <div className="grid min-h-[560px] flex-1 overflow-hidden rounded-2xl border border-[#ebe4da] bg-white shadow-sm min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
         {/* List pane */}

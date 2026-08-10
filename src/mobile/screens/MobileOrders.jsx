@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { useProducts } from '../../context/ProductsContext';
+import { apiUrl } from '../../utils/data';
 import { formatMoney, productImage } from '../../utils/format';
 import { resolveOrderStatus } from '../../utils/orderStatus';
-import { MOCK_ORDERS } from '../mockOrders';
 import MobileBottomNav from '../MobileBottomNav';
 import MobileHeaderIcons from '../MobileHeaderIcons';
 import MobileTrackSheet from '../MobileTrackSheet';
@@ -63,6 +64,7 @@ function formatOrderTotal(order) {
 
 export default function MobileOrders({ fromProfile = false } = {}) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { products } = useProducts();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -77,10 +79,39 @@ export default function MobileOrders({ fromProfile = false } = {}) {
   const ordersListPath = '/app/profile/orders';
 
   const loadOrders = useCallback(async () => {
-    setOrders(MOCK_ORDERS);
-    setLoading(false);
+    const token = localStorage.getItem('token');
+    if (!token || !user?.isLoggedIn) {
+      setOrders([]);
+      setLoading(false);
+      setLoadError('Please sign in to view your orders.');
+      return;
+    }
+
+    setLoading(true);
     setLoadError('');
-  }, []);
+    try {
+      const response = await fetch(apiUrl('/api/orders'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (data.success) {
+        setOrders(
+          (data.orders || []).map((order) => ({
+            ...order,
+            status: resolveOrderStatus(order),
+          }))
+        );
+      } else {
+        setOrders([]);
+        setLoadError(data.message || 'Could not load your orders.');
+      }
+    } catch {
+      setOrders([]);
+      setLoadError('Could not connect to the server.');
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.isLoggedIn]);
 
   useEffect(() => {
     loadOrders();

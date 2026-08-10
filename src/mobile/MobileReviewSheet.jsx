@@ -73,12 +73,6 @@ export default function MobileReviewSheet({ open, target, onClose, onSubmitted }
 
     setSaving(true);
     try {
-      if (target.localOnly) {
-        showTopFloatNotification(isDelivery ? 'Delivery rated.' : 'Product rated.');
-        await onSubmitted?.(target, rating, comment.trim());
-        return;
-      }
-
       const url = isDelivery
         ? apiUrl(`/api/reviews/delivery/${encodeURIComponent(target.orderId)}`)
         : apiUrl('/api/reviews');

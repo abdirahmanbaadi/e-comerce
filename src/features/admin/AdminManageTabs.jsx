@@ -306,7 +306,16 @@ export function CmsAdminTab() {
         setUpdatedAt(data.updatedAt || data.cms?.updatedAt || new Date().toISOString());
         clearDeliveryDistrictsCache();
         window.dispatchEvent(new Event('delivery-fees-updated'));
-        showTopFloatNotification('Site content updated successfully!');
+        const notified = Number(data.couponCustomersNotified) || 0;
+        if (notified > 0) {
+          showTopFloatNotification(
+            `Saved. Coupon notification sent to ${notified} customer${notified === 1 ? '' : 's'}.`
+          );
+        } else {
+          showTopFloatNotification(
+            'Site content updated. Tip: new/re-activated coupons notify customer accounts only — sign in as a customer on the app to see them.'
+          );
+        }
       } else {
         showTopFloatNotification(data.message || 'Failed to save CMS content', 'danger');
       }

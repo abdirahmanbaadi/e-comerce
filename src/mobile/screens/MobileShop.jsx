@@ -85,14 +85,13 @@ function ShopProductCard({ product, view, onAdd, onOpen, onToggleWish, wishliste
                 event.stopPropagation();
                 onToggleWish(product);
               }}
-              className="shrink-0 border-0 bg-transparent p-1 text-[#8b8178]"
+              className={`shrink-0 border-0 bg-transparent p-1 ${
+                wishlisted ? 'text-[#e11d48]' : 'text-[#8b8178]'
+              }`}
               aria-label="Wishlist"
+              aria-pressed={wishlisted}
             >
-              <i
-                className={`fa-heart text-[1rem] ${
-                  wishlisted ? 'fa-solid text-[#e11d48]' : 'fa-regular'
-                }`}
-              />
+              <i className={`fa-heart text-[1rem] ${wishlisted ? 'fa-solid' : 'fa-regular'}`} />
             </button>
           </div>
           <p className="mb-1 mt-2 text-[0.82rem] font-black text-[#2f241a]">{formatMoney(product.price)}</p>
@@ -130,12 +129,15 @@ function ShopProductCard({ product, view, onAdd, onOpen, onToggleWish, wishliste
             event.stopPropagation();
             onToggleWish(product);
           }}
-          className="absolute right-1.5 top-1.5 border-0 bg-transparent p-1"
+          className={`absolute right-1.5 top-1.5 border-0 bg-transparent p-1 ${
+            wishlisted ? 'text-[#e11d48]' : 'text-white'
+          }`}
           aria-label="Wishlist"
+          aria-pressed={wishlisted}
         >
           <i
             className={`fa-heart text-[1.12rem] drop-shadow-[0_1px_3px_rgba(0,0,0,0.55)] ${
-              wishlisted ? 'fa-solid text-[#e11d48]' : 'fa-regular text-white'
+              wishlisted ? 'fa-solid' : 'fa-regular'
             }`}
           />
         </button>
@@ -367,11 +369,12 @@ export default function MobileShop() {
                 onAdd={handleAdd}
                 onOpen={openProduct}
                 onToggleWish={(item) => {
-                  const wasWishlisted = isWishlisted?.(item.title);
-                  toggleWishlist?.(item.title);
+                  const wasWishlisted = isWishlisted?.(item);
+                  const ok = toggleWishlist?.(item);
+                  if (ok === false) return;
                   showTopFloatNotification(wasWishlisted ? 'Removed from wishlist' : 'Saved to wishlist');
                 }}
-                wishlisted={isWishlisted?.(product.title)}
+                wishlisted={isWishlisted?.(product)}
               />
             ))}
           </section>

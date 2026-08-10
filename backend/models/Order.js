@@ -169,6 +169,18 @@ const orderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    driverLat: {
+      type: Number,
+      default: null,
+    },
+    driverLng: {
+      type: Number,
+      default: null,
+    },
+    driverLocationUpdatedAt: {
+      type: Date,
+      default: null,
+    },
     deliveryConfirmStatus: {
       type: String,
       enum: ['none', 'pending', 'confirmed'],

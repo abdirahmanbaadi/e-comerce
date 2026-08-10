@@ -17,7 +17,7 @@ function redirectAfterAuth(user, navigate, from) {
     return;
   }
   if (role === 'delivery') {
-    window.location.replace('/delivery');
+    window.location.replace('/app/driver');
     return;
   }
   navigate(from || '/app/home', { replace: true });

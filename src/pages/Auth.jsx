@@ -176,7 +176,7 @@ const REMEMBER_KEY = 'rememberedLogin';
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, loginWithGoogle, user } = useAuth();
+  const { login, loginWithGoogle, user, logout } = useAuth();
   const [alert, setAlert] = useState({ message: '', type: 'danger' });
   const [submitting, setSubmitting] = useState(false);
   const [invalid, setInvalid] = useState(false);
@@ -186,12 +186,26 @@ export function LoginPage() {
     password: '',
     remember: false,
   });
+  const switchingAccount = Boolean(location.state?.switchAccount);
 
   const closeForgotModal = useCallback(() => setForgotOpen(false), []);
   const handleResetSuccess = useCallback(
     () => setAlert({ message: 'Your password has been changed. Please login.', type: 'success' }),
     []
   );
+
+  // Clear driver/customer session when switching into admin login
+  useEffect(() => {
+    if (!switchingAccount) return;
+    const role = user?.role || localStorage.getItem('userRole') || '';
+    if (role === 'delivery' || role === 'user') {
+      logout();
+      setAlert({
+        message: 'Signed out of your previous account. Login with admin@gmail.com for the dashboard.',
+        type: 'success',
+      });
+    }
+  }, [switchingAccount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const finishAuthRedirect = useCallback(
     (authUser) => {
@@ -200,7 +214,7 @@ export function LoginPage() {
         return;
       }
       if (authUser?.role === 'delivery') {
-        window.location.replace('/delivery');
+        window.location.replace('/app/driver');
         return;
       }
       setAlert({ message: 'Login successful. Redirecting...', type: 'success' });
@@ -244,17 +258,27 @@ export function LoginPage() {
   }, []);
 
   // Already logged in as dashboard/driver → leave login page
+  // Exception: switchAccount (e.g. driver opening /admin) → stay so they can sign in as admin
   useEffect(() => {
     const role = user?.role || localStorage.getItem('userRole') || '';
     if (!user?.isLoggedIn && localStorage.getItem('isLoggedIn') !== 'true') return;
+
+    if (switchingAccount) {
+      if (role === 'admin' || role === 'staff') {
+        window.location.replace('/admin');
+      }
+      return;
+    }
+
     if (role === 'admin' || role === 'staff') {
       window.location.replace('/admin');
       return;
     }
     if (role === 'delivery') {
-      window.location.replace('/delivery');
+      window.location.replace('/app/driver');
+      return;
     }
-  }, [user?.isLoggedIn, user?.role]);
+  }, [user?.isLoggedIn, user?.role, switchingAccount]);
 
   const update = (field) => (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -284,7 +308,7 @@ export function LoginPage() {
           return;
         }
         if (data.user?.role === 'delivery') {
-          window.location.replace('/delivery');
+          window.location.replace('/app/driver');
           return;
         }
 
@@ -323,7 +347,9 @@ export function LoginPage() {
             Welcome Back
           </h1>
           <p className="mb-7 text-center text-[0.88rem] font-semibold text-[#7A8585]">
-            Login with email or phone
+            {switchingAccount
+              ? 'Switch account — use admin email for the dashboard'
+              : 'Login with email or phone'}
           </p>
 
           <AuthAlert

@@ -462,7 +462,6 @@ export default function StoreNavbar({ cartActive = false }) {
     enabled: user.isLoggedIn,
     pollMs: 30000,
     onNewItems: handleNewNotifications,
-    previewMocks: true,
   });
 
   const wishlistRef = useRef(null);

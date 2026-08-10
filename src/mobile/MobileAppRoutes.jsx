@@ -17,6 +17,15 @@ import MobileSupport from './screens/MobileSupport';
 import MobileCustomerService from './screens/MobileCustomerService';
 import MobileSettings from './screens/MobileSettings';
 import MobileNotifications from './screens/MobileNotifications';
+import DriverShell from './driver/DriverShell';
+import DriverHome from './driver/screens/DriverHome';
+import DriverJobs from './driver/screens/DriverJobs';
+import DriverJobDetail from './driver/screens/DriverJobDetail';
+import DriverActiveDelivery from './driver/screens/DriverActiveDelivery';
+import DriverQrScan from './driver/screens/DriverQrScan';
+import DriverProfile from './driver/screens/DriverProfile';
+import DriverEarnings from './driver/screens/DriverEarnings';
+import DriverNotifications from './driver/screens/DriverNotifications';
 
 export const mobileAppRoutes = (
   <>
@@ -46,6 +55,24 @@ export const mobileAppRoutes = (
       <Route path="support/chat" element={<MobileCustomerService />} />
       <Route path="settings" element={<MobileSettings />} />
     </Route>
+
+    <Route path="driver" element={<DriverShell />}>
+      <Route index element={<DriverHome />} />
+      <Route path="jobs" element={<DriverJobs />} />
+      <Route path="jobs/:orderId" element={<DriverJobDetail />} />
+      <Route path="jobs/:orderId/active" element={<DriverActiveDelivery />} />
+      <Route path="jobs/:orderId/scan" element={<DriverQrScan />} />
+      <Route path="notifications" element={<DriverNotifications />} />
+      <Route path="profile">
+        <Route index element={<DriverProfile />} />
+        <Route path="personal" element={<MobilePersonalInfo />} />
+        <Route path="earnings" element={<DriverEarnings />} />
+        <Route path="support" element={<MobileSupport />} />
+        <Route path="support/chat" element={<MobileCustomerService />} />
+        <Route path="settings" element={<MobileSettings />} />
+      </Route>
+    </Route>
+
     <Route path="*" element={<Navigate to="/app/home" replace />} />
   </>
 );

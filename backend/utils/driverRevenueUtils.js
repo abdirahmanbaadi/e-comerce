@@ -1,15 +1,15 @@
 /**
- * Driver earnings = delivery fees only on completed (delivered + paid) orders they fulfilled.
- * Admin dashboard revenue = full order total (products + delivery fee − discount).
+ * Driver earnings = delivery fees on completed deliveries they fulfilled.
+ * Counts delivered work even if customer payment later failed (driver still did the trip).
+ * Admin dashboard revenue stays separate (paid orders only).
  */
-const { PAID_ORDER_MATCH, parseMoney } = require('./revenueUtils');
+const { parseMoney } = require('./revenueUtils');
 
 function buildDriverEarningsMatch(driverId) {
   return {
     assignedDriverId: String(driverId || '').trim(),
-    currentStep: { $gte: 5 },
     status: { $ne: 'cancelled' },
-    ...PAID_ORDER_MATCH,
+    $or: [{ currentStep: { $gte: 5 } }, { status: 'delivered' }],
   };
 }
 

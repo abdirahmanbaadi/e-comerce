@@ -656,12 +656,11 @@ async function onCouponExpiring(promo) {
       audience: 'user',
       userId,
       type: 'coupon_expiring',
-      title: 'Coupon expires soon',
-      message: `Code ${code} expires soon. Use it at checkout before it ends.`,
+      title: 'Offer expires soon',
+      message: 'A checkout discount is ending soon. Complete your order before it expires.',
       relatedId: promo.id || code,
       read: false,
       metadata: {
-        promoCode: code,
         expiresAt: promo.expiresAt || null,
         description: promo.description || '',
       },
@@ -669,22 +668,34 @@ async function onCouponExpiring(promo) {
   );
 }
 
-async function onPromotionActivated(promo) {
-  const code = promo.code || '';
-  const description = promo.description || 'Qiimo dhimis cusub';
-  const title = 'Qiimo Dhimis Cusub!';
-  const message = `Koodhka qiimo dhimista: ${code}. Fadlan macamiil ka faaideyso fursadan gaarka ah ee qiimo dhimista!`;
-
+async function findActiveCustomerIds() {
   const customers = await User.find({
     status: { $ne: 'Inactive' },
+    role: 'user',
   }).select('id');
+  return customers.map((u) => u.id).filter(Boolean);
+}
 
-  const userIds = customers.map((u) => u.id).filter(Boolean);
-  if (userIds.length === 0) return;
+/** Notify every active customer when a coupon becomes active (new or re-activated). */
+async function onPromotionActivated(promo) {
+  const code = String(promo?.code || '').trim().toUpperCase();
+  if (!code) return 0;
 
+  const description = String(promo.description || '').trim() || 'A new discount is available at checkout.';
+  const title = 'New discount available';
+  const message =
+    'A special discount is now available. Open the shop and apply your offer at checkout to save.';
+
+  const userIds = await findActiveCustomerIds();
+  if (userIds.length === 0) {
+    console.warn(`Coupon ${code}: no customer accounts to notify (role=user).`);
+    return 0;
+  }
+
+  const stamp = Date.now();
   await Notification.insertMany(
     userIds.map((userId, index) => ({
-      id: `NTF-${Date.now()}-${index}-${Math.floor(Math.random() * 9000 + 1000)}`,
+      id: `NTF-${stamp}-${index}-${Math.floor(Math.random() * 9000 + 1000)}`,
       audience: 'user',
       userId,
       type: 'coupon_offer',
@@ -693,8 +704,8 @@ async function onPromotionActivated(promo) {
       relatedId: promo.id || code,
       read: false,
       metadata: {
-        promoCode: code,
-        description: `${description}. Isticmaal koodhka qiimo dhimista marka aad checkout-ka joogto si aad u hesho dhimis.`,
+        // Promo code intentionally omitted from customer notification UI.
+        description,
         discountAmount: promo.discountAmount || 0,
         discountPercent: promo.discountPercent || 0,
         applicableCategory: promo.applicableCategory || '',
@@ -704,23 +715,23 @@ async function onPromotionActivated(promo) {
       },
     }))
   );
+
+  console.log(`Coupon ${code}: notified ${userIds.length} customer(s).`);
+  return userIds.length;
 }
 
 async function onBannerActivated(banner) {
-  const title = banner.title || 'Dallacsiin Cusub!';
-  const message = banner.subtitle || 'Ka faa\'iideyso qiimo dhimis gaar ah oo hadda firfircoon!';
+  const title = banner.title || 'New promotion';
+  const message = banner.subtitle || 'A special offer is live now. Browse the shop to learn more.';
   const image = banner.image || '';
 
-  const customers = await User.find({
-    status: { $ne: 'Inactive' },
-  }).select('id');
+  const userIds = await findActiveCustomerIds();
+  if (userIds.length === 0) return 0;
 
-  const userIds = customers.map((u) => u.id).filter(Boolean);
-  if (userIds.length === 0) return;
-
+  const stamp = Date.now();
   await Notification.insertMany(
     userIds.map((userId, index) => ({
-      id: `NTF-${Date.now()}-${index}-${Math.floor(Math.random() * 9000 + 1000)}`,
+      id: `NTF-${stamp}-${index}-${Math.floor(Math.random() * 9000 + 1000)}`,
       audience: 'user',
       userId,
       type: 'weekend_offer',
@@ -729,13 +740,14 @@ async function onBannerActivated(banner) {
       relatedId: banner.id || '',
       read: false,
       metadata: {
-        promoCode: 'OFFER',
-        description: banner.subtitle || 'Dallacsiin gaar ah oo ku saabsan alaabteena.',
+        description: banner.subtitle || 'A special store promotion is available.',
         image,
-        productTitle: banner.title || 'Alaabta Dallacsiinta',
+        productTitle: banner.title || 'Featured offer',
       },
     }))
   );
+
+  return userIds.length;
 }
 
 module.exports = {

@@ -11,9 +11,10 @@ const {
 } = require('../services/driverService');
 const {
   buildDriverEarningsMatch,
+  driverDeliveryFeeAmount,
   sumDriverDeliveryFees,
 } = require('../utils/driverRevenueUtils');
-const { verifyDeliveryQr, verifyDeliveryPin, clearDeliveryQr, publicDeliveryQrState } = require('../utils/deliveryQrUtils');
+const { verifyDeliveryQr, verifyDeliveryPin, clearDeliveryQr, publicDeliveryQrState, issueDeliveryQr, isDeliveryQrPending } = require('../utils/deliveryQrUtils');
 const { onOrderUpdated } = require('../services/notificationService');
 const { stampDeliveredAt } = require('../services/reviewPromptService');
 
@@ -318,19 +319,85 @@ exports.getMyEarnings = async (req, res) => {
 
     const match = buildDriverEarningsMatch(user.id);
     const completedOrders = await Order.find(match)
-      .select('id deliveryFee amount subtotal discount deliveredAt updatedAt currentStep')
+      .select('id deliveryFee amount subtotal discount deliveredAt updatedAt currentStep tipAmount bonusAmount')
       .lean();
 
     const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - 7);
-    weekStart.setHours(0, 0, 0, 0);
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // Monday
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const orderWhen = (order) => new Date(order.deliveredAt || order.updatedAt || 0);
+
+    const inRange = (orders, from) => orders.filter((o) => orderWhen(o) >= from);
+
+    const buildPeriod = (orders, label) => {
+      const deliveryEarnings = Math.round(sumDriverDeliveryFees(orders) * 100) / 100;
+      const tips = Math.round(
+        orders.reduce((sum, o) => sum + (Number(o.tipAmount) || 0), 0) * 100
+      ) / 100;
+      const bonus = Math.round(
+        orders.reduce((sum, o) => sum + (Number(o.bonusAmount) || 0), 0) * 100
+      ) / 100;
+      const total = Math.round((deliveryEarnings + tips + bonus) * 100) / 100;
+      const deliveries = orders.length;
+      const average = deliveries > 0 ? Math.round((total / deliveries) * 100) / 100 : 0;
+      return {
+        label,
+        total,
+        deliveries,
+        average,
+        breakdown: {
+          deliveryEarnings,
+          tips,
+          bonus,
+        },
+      };
+    };
+
+    const todayOrders = inRange(completedOrders, startOfToday);
+    const weekOrders = inRange(completedOrders, startOfWeek);
+    const monthOrders = inRange(completedOrders, startOfMonth);
+    const allOrders = completedOrders;
+
+    const dayKey = (d) => {
+      const x = new Date(d);
+      if (Number.isNaN(x.getTime())) return '';
+      const y = x.getFullYear();
+      const m = String(x.getMonth() + 1).padStart(2, '0');
+      const day = String(x.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    const historyMap = new Map();
+    completedOrders.forEach((order) => {
+      const when = orderWhen(order);
+      const key = dayKey(when);
+      if (!key) return;
+      const fee = driverDeliveryFeeAmount(order);
+      const tip = Number(order.tipAmount) || 0;
+      const bonus = Number(order.bonusAmount) || 0;
+      const prev = historyMap.get(key) || { date: key, total: 0, deliveries: 0 };
+      prev.total += fee + tip + bonus;
+      prev.deliveries += 1;
+      historyMap.set(key, prev);
+    });
+
+    const history = Array.from(historyMap.values())
+      .map((row) => ({
+        date: row.date,
+        total: Math.round(row.total * 100) / 100,
+        deliveries: row.deliveries,
+      }))
+      .sort((a, b) => (a.date < b.date ? 1 : -1))
+      .slice(0, 30);
 
     const totalRevenue = Math.round(sumDriverDeliveryFees(completedOrders) * 100) / 100;
-    const weekOrders = completedOrders.filter((order) => {
-      const when = new Date(order.deliveredAt || order.updatedAt || 0);
-      return when >= weekStart;
-    });
     const weekRevenue = Math.round(sumDriverDeliveryFees(weekOrders) * 100) / 100;
 
     return res.status(200).json({
@@ -340,6 +407,13 @@ exports.getMyEarnings = async (req, res) => {
         weekRevenue,
         completedDeliveries: completedOrders.length,
         weekDeliveries: weekOrders.length,
+        periods: {
+          today: buildPeriod(todayOrders, 'Today'),
+          week: buildPeriod(weekOrders, 'This Week'),
+          month: buildPeriod(monthOrders, 'This Month'),
+          all: buildPeriod(allOrders, 'All'),
+        },
+        history,
       },
     });
   } catch (error) {
@@ -494,6 +568,79 @@ exports.rejectAssignment = async (req, res) => {
   }
 };
 
+/**
+ * Driver starts the trip: Out for Delivery (step 4).
+ * Issues customer QR/PIN and notifies customer + admin (same as admin step-4 path).
+ */
+exports.startDelivery = async (req, res) => {
+  try {
+    const orderId = String(req.params.orderId || '').trim();
+    const order = await Order.findOne({ id: orderId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+    if (order.assignedDriverId !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'This delivery is not assigned to you.' });
+    }
+    if ((order.assignmentStatus || 'none') !== 'accepted') {
+      return res.status(400).json({
+        success: false,
+        message: 'Accept the assignment before starting delivery.',
+      });
+    }
+
+    const prevStep = typeof order.currentStep === 'number' ? order.currentStep : 1;
+    const prevStatus = order.status;
+
+    if (prevStep >= 5 || String(order.status || '').toLowerCase() === 'delivered') {
+      return res.status(400).json({ success: false, message: 'This order is already delivered.' });
+    }
+    if (prevStep >= 4) {
+      return res.status(200).json({
+        success: true,
+        message: 'Delivery is already out for delivery.',
+        order: withResolvedStatus(order),
+        alreadyStarted: true,
+      });
+    }
+
+    order.driverArrivedAt = null;
+    issueDeliveryQr(order);
+    order.currentStep = 4;
+    order.status = 'shipped';
+    order.estimate = 'Out for delivery — customer QR ready';
+    await order.save();
+
+    await syncDriverStatus(req.user.id);
+    await onOrderUpdated(order, {
+      currentStep: 4,
+      currentStepChanged: prevStep !== 4,
+      status: 'shipped',
+      statusChanged: prevStatus !== 'shipped',
+      deliveryQrIssued: isDeliveryQrPending(order),
+    });
+
+    await logOrderActivity({
+      orderId: order.id,
+      action: 'driver_started_delivery',
+      description: `${req.user.firstName || 'Driver'} marked the order out for delivery.`,
+      actorId: req.user.id,
+      actorRole: 'delivery',
+      metadata: { fromStep: prevStep, toStep: 4 },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Out for delivery. Customer QR / PIN is ready.',
+      order: withResolvedStatus(order),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to start delivery.' });
+  }
+};
+
 /** Driver scans customer QR or enters 6-digit code → marks delivered */
 exports.confirmDeliveryByQr = async (req, res) => {
   try {
@@ -572,5 +719,55 @@ exports.confirmDeliveryByQr = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to confirm delivery QR.' });
+  }
+};
+
+/** Driver live GPS ping while out for delivery. */
+exports.updateDeliveryLocation = async (req, res) => {
+  try {
+    const orderId = String(req.params.orderId || '').trim();
+    const lat = Number(req.body?.lat);
+    const lng = Number(req.body?.lng);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ success: false, message: 'Valid lat and lng are required.' });
+    }
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ success: false, message: 'Coordinates out of range.' });
+    }
+
+    const order = await Order.findOne({ id: orderId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+    if (order.assignedDriverId !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'This delivery is not assigned to you.' });
+    }
+    if ((order.assignmentStatus || 'none') !== 'accepted') {
+      return res.status(400).json({ success: false, message: 'Accept the assignment first.' });
+    }
+    if ((order.currentStep || 0) < 4 || String(order.status || '').toLowerCase() === 'delivered') {
+      return res.status(400).json({
+        success: false,
+        message: 'Location updates are only available while out for delivery.',
+      });
+    }
+
+    order.driverLat = lat;
+    order.driverLng = lng;
+    order.driverLocationUpdatedAt = new Date();
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      location: {
+        lat: order.driverLat,
+        lng: order.driverLng,
+        updatedAt: order.driverLocationUpdatedAt,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to update location.' });
   }
 };

@@ -27,7 +27,6 @@ export default function Profile() {
   const notifications = useNotifications({
     enabled: user?.isLoggedIn,
     pollMs: 45000,
-    previewMocks: true,
   });
 
   const refreshNotifications = notifications.refresh;

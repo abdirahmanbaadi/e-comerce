@@ -9,6 +9,7 @@ import {
   HEADER_COLOR_PRESETS,
   setProfileHeaderColor,
 } from '../profileHeaderColor';
+import { useProfileHome } from '../useProfileHome';
 
 const inputClass =
   'h-12 w-full rounded-xl border border-[#e5e0d8] bg-white px-4 text-[0.9rem] font-semibold text-[#1c140e] outline-none placeholder:text-[#b0a498] focus:border-[#6b4228]';
@@ -78,6 +79,7 @@ async function fileToAvatarDataUrl(file) {
 
 export default function MobilePersonalInfo() {
   const navigate = useNavigate();
+  const profileHome = useProfileHome();
   const { user, updateProfile } = useAuth();
   const fileRef = useRef(null);
   const [editing, setEditing] = useState(false);
@@ -90,9 +92,9 @@ export default function MobilePersonalInfo() {
 
   useEffect(() => {
     if (!user?.isLoggedIn) {
-      navigate('/app/login', { replace: true, state: { from: '/app/profile/personal' } });
+      navigate('/app/login', { replace: true, state: { from: `${profileHome}/personal` } });
     }
-  }, [user, navigate]);
+  }, [user, navigate, profileHome]);
 
   useEffect(() => {
     if (!user?.isLoggedIn) return undefined;
@@ -423,7 +425,7 @@ export default function MobilePersonalInfo() {
           <div className="mb-5 flex items-center justify-between">
             <button
               type="button"
-              onClick={() => navigate('/app/profile')}
+              onClick={() => navigate(profileHome)}
               className="flex h-10 w-10 items-center justify-center rounded-full border-0 bg-white/15 text-white"
               aria-label="Back"
             >
